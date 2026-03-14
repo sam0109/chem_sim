@@ -22,7 +22,7 @@ This document defines the process by which an AI agent claims, plans, implements
 gh issue list --assignee "" --limit 20 --json number,title,labels
 
 # 2. Pick the highest-priority unclaimed issue
-#    Priority order: P1 > P2 > P3 > guardrails > P4 > P6 > P5
+#    Priority order: guardrails > P1 > P2 > P3 > P4 > P6 > P5
 
 # 3. Claim it by self-assigning (idempotent — safe if already assigned to you)
 gh issue edit <NUMBER> --add-assignee "@me"
