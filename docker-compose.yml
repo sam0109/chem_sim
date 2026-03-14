@@ -7,8 +7,8 @@
 #   - Uses the dev container image (Node 20 + gh CLI + Claude Code)
 #   - Mounts your gh CLI auth (read-only) so the agent can use gh commands
 #   - Connects to the host's Anthropic proxy on port 4141
-#   - Clones the repo, creates a feature branch, and installs dependencies
-#   - Drops you into a shell ready for Claude Code to take over
+#   - Clones the repo, creates a feature branch, installs dependencies
+#   - Launches Claude Code which follows AGENTS.md automatically
 
 services:
   agent:
@@ -33,4 +33,4 @@ services:
     working_dir: /workspace
     stdin_open: true
     tty: true
-    command: bash -c "git clone https://github.com/sam0109/chem_sim.git /workspace/chem_sim && cd /workspace/chem_sim && ./scripts/agent-start.sh $$ISSUE && exec bash"
+    command: bash -c "git clone https://github.com/sam0109/chem_sim.git /workspace/chem_sim && cd /workspace/chem_sim && exec ./scripts/agent-start.sh $$ISSUE"
