@@ -47,18 +47,15 @@ jobs:
       - run: npx vite build
 
   physics-tests:
-    name: Physics Tests
+    name: Physics Tests (Ratchet)
     runs-on: ubuntu-latest
-    # Allow failure until ratchet is implemented (issue #52).
-    # Pre-existing failures (17/22 passing) cause exit code 1.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - run: npm ci
-      - run: npx tsx src/engine/tests.ts
+      - run: bash scripts/check-physics-ratchet.sh
 
   unit-tests:
     name: Unit Tests
