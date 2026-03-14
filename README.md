@@ -207,21 +207,22 @@ ChemSim uses AI agents to implement features from GitHub Issues. See [AGENTS.md]
 
 2. **Start an agent** in an isolated environment:
 
-   **Option A — Dev container (recommended, once [#55](https://github.com/sam0109/chem_sim/issues/55) is set up):**
+   **Option A — Dev container (recommended):**
    ```bash
+   # Ensure your Anthropic proxy is running on localhost:4141
    # Build and launch a container for issue 42
-   docker compose run --rm agent-42
-   # Container auto-clones the repo, creates a branch, installs deps
-   # Then hand off to your AI agent inside the container
+   ISSUE=42 docker compose run --rm agent
+   # Container auto-clones the repo, creates a branch, installs deps,
+   # and launches Claude Code which follows AGENTS.md automatically
    ```
 
-   **Option B — Git worktree (works now):**
+   **Option B — Git worktree (no Docker needed):**
    ```bash
    cd chem_sim
    git worktree add ../chem_sim-42 -b 42-my-feature main
    cd ../chem_sim-42
    npm install
-   # Point your AI agent at this directory
+   claude --print "Follow AGENTS.md"
    ```
 
 3. **The agent follows AGENTS.md** — claims the issue, writes a plan, implements step-by-step, opens a PR, gets it reviewed by a sub-agent, merges, and writes a reflection.
