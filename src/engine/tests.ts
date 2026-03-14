@@ -268,7 +268,7 @@ function runNVETests(): void {
 // ---- Geometry / structural invariant tests ----
 
 function runGeometryTest(
-  id: string, name: string, atoms: Atom[], steps: number, dt: number,
+  id: string, atoms: Atom[], steps: number, dt: number,
   check: (s: SimState, step: number, accumulator: Record<string, number[]>) => void,
   evaluate: (accumulator: Record<string, number[]>) => void,
 ): void {
@@ -302,7 +302,7 @@ function runGeometryTests(): void {
   console.log('\n=== STRUCTURAL INVARIANT TESTS (NVT 300K) ===\n');
 
   // --- Water ---
-  runGeometryTest('GEO-01', 'Water angle mean ~104.5 deg', waterMolecule(), 6000, 0.5,
+  runGeometryTest('GEO-01', waterMolecule(), 6000, 0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'angle', angle(s.pos, 1, 0, 2)); // H-O-H
     },
@@ -313,7 +313,7 @@ function runGeometryTests(): void {
     }
   );
 
-  runGeometryTest('GEO-02', 'Water O-H mean ~0.99 A', waterMolecule(), 6000, 0.5,
+  runGeometryTest('GEO-02', waterMolecule(), 6000, 0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'oh1', dist(s.pos, 0, 1));
       pushAcc(acc, 'oh2', dist(s.pos, 0, 2));
@@ -325,7 +325,7 @@ function runGeometryTests(): void {
     }
   );
 
-  runGeometryTest('GEO-03', 'Water: no H-H bond', waterMolecule(), 6000, 0.5,
+  runGeometryTest('GEO-03', waterMolecule(), 6000, 0.5,
     (s, _step, acc) => {
       const hh = s.bonds.find(b => s.Z[b.atomA] === 1 && s.Z[b.atomB] === 1);
       pushAcc(acc, 'hh', hh ? 1 : 0);
@@ -336,7 +336,7 @@ function runGeometryTests(): void {
     }
   );
 
-  runGeometryTest('GEO-04', 'Water: always 2 bonds', waterMolecule(), 6000, 0.5,
+  runGeometryTest('GEO-04', waterMolecule(), 6000, 0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'nbonds', s.bonds.filter(b => b.type === 'covalent').length);
     },
@@ -349,7 +349,7 @@ function runGeometryTests(): void {
   );
 
   // --- Methane ---
-  runGeometryTest('GEO-05', 'Methane HCH angle mean ~109.5 deg', methaneMolecule(), 6000, 0.5,
+  runGeometryTest('GEO-05', methaneMolecule(), 6000, 0.5,
     (s, _step, acc) => {
       // Central C is atom 0; H atoms are 1,2,3,4
       pushAcc(acc, 'angle', angle(s.pos, 1, 0, 2));
@@ -361,7 +361,7 @@ function runGeometryTests(): void {
     }
   );
 
-  runGeometryTest('GEO-06', 'Methane C-H mean ~1.09 A', methaneMolecule(), 6000, 0.5,
+  runGeometryTest('GEO-06', methaneMolecule(), 6000, 0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'ch', dist(s.pos, 0, 1));
     },
@@ -372,7 +372,7 @@ function runGeometryTests(): void {
     }
   );
 
-  runGeometryTest('GEO-07', 'Methane: always 4 bonds', methaneMolecule(), 6000, 0.5,
+  runGeometryTest('GEO-07', methaneMolecule(), 6000, 0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'nbonds', s.bonds.filter(b => b.type === 'covalent').length);
     },
@@ -385,7 +385,7 @@ function runGeometryTests(): void {
   );
 
   // --- CO2 ---
-  runGeometryTest('GEO-08', 'CO2 OCO angle mean ~180 deg', co2Molecule(), 6000, 0.5,
+  runGeometryTest('GEO-08', co2Molecule(), 6000, 0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'angle', angle(s.pos, 1, 0, 2)); // O-C-O
     },
@@ -396,7 +396,7 @@ function runGeometryTests(): void {
     }
   );
 
-  runGeometryTest('GEO-09', 'CO2 C=O mean ~1.16 A', co2Molecule(), 6000, 0.5,
+  runGeometryTest('GEO-09', co2Molecule(), 6000, 0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'co', (dist(s.pos, 0, 1) + dist(s.pos, 0, 2)) / 2);
     },
@@ -408,7 +408,7 @@ function runGeometryTests(): void {
   );
 
   // --- NaCl ---
-  runGeometryTest('GEO-11', 'NaCl distance mean ~2.36 A', naclPair(), 6000, 0.5,
+  runGeometryTest('GEO-11', naclPair(), 6000, 0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'd', dist(s.pos, 0, 1));
     },
