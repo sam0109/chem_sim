@@ -205,7 +205,13 @@ ChemSim uses AI agents to implement features from GitHub Issues. See [AGENTS.md]
 
 **Option A — Dev container (recommended):**
 ```bash
-# Ensure your Anthropic proxy is running on localhost:4141
+# 1. Copy .env.example to .env and add your GitHub PAT
+cp .env.example .env
+# Edit .env and set GH_TOKEN=ghp_...
+
+# 2. Ensure your Anthropic proxy is running on localhost:4141
+
+# 3. Launch the agent
 docker compose run --rm agent
 ```
 
