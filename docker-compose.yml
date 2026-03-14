@@ -1,0 +1,25 @@
+# docker-compose.yml — Launch an isolated agent container for a given issue.
+#
+# Usage:
+#   ISSUE=42 docker compose run --rm agent
+#
+# The container:
+#   - Uses the dev container image (Node 20 + gh CLI)
+#   - Mounts your gh CLI auth (read-only) so the agent can use gh commands
+#   - Clones the repo, creates a feature branch, and installs dependencies
+#   - Drops you into a shell ready for an AI agent to take over
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    environment:
+      - ISSUE=${ISSUE:?Set ISSUE=<number> before running}
+    volumes:
+      # Mount gh CLI auth so the container can use gh commands
+      - ${HOME}/.config/gh:/home/node/.config/gh:ro
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    command: bash -c "git clone https://github.com/sam0109/chem_sim.git /workspace/chem_sim && cd /workspace/chem_sim && ./scripts/agent-start.sh $$ISSUE && exec bash"
