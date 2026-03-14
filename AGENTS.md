@@ -125,6 +125,10 @@ cd ../chem_sim
 git worktree remove ../chem_sim-<NUMBER>
 ```
 
+**If using dev containers (ideal for full isolation — see issue #55):**
+
+Each agent runs in its own container with a fresh clone. See the README for human instructions on launching an agent in a dev container. Once dev containers are set up (`.devcontainer/`), the container handles cloning, branching, and dependency installation automatically.
+
 ---
 
 ## Step 3: Implement — One Step at a Time

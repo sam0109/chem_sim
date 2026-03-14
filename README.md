@@ -176,7 +176,7 @@ npx tsx src/engine/tests.ts       # Physics invariant test suite
 npx tsx src/engine/debug.ts       # Interactive water molecule debug harness
 ```
 
-See [IMPROVEMENTS.md](IMPROVEMENTS.md) for details on the test suite and roadmap.
+See [GitHub Issues](https://github.com/sam0109/chem_sim/issues) for the full roadmap and test suite details.
 
 ## Dependencies
 
@@ -196,3 +196,34 @@ See [IMPROVEMENTS.md](IMPROVEMENTS.md) for details on the test suite and roadmap
 - Rappé, A.K. *et al.* "UFF, a Full Periodic Table Force Field." *J. Am. Chem. Soc.* **114**, 10024–10035 (1992).
 - Blue Obelisk Data Repository — atomic radii, CPK colors, electronegativities
 - NIST CCCBDB — experimental bond lengths and angles for validation
+
+## Running an Agent
+
+ChemSim uses AI agents to implement features from GitHub Issues. See [AGENTS.md](AGENTS.md) for the full workflow.
+
+### Launching an agent (for humans)
+
+1. **Pick an issue** from [GitHub Issues](https://github.com/sam0109/chem_sim/issues) (prioritize `guardrails` label)
+
+2. **Start an agent** in an isolated environment:
+
+   **Option A — Dev container (recommended, once [#55](https://github.com/sam0109/chem_sim/issues/55) is set up):**
+   ```bash
+   # Build and launch a container for issue 42
+   docker compose run --rm agent-42
+   # Container auto-clones the repo, creates a branch, installs deps
+   # Then hand off to your AI agent inside the container
+   ```
+
+   **Option B — Git worktree (works now):**
+   ```bash
+   cd chem_sim
+   git worktree add ../chem_sim-42 -b 42-my-feature main
+   cd ../chem_sim-42
+   npm install
+   # Point your AI agent at this directory
+   ```
+
+3. **The agent follows AGENTS.md** — claims the issue, writes a plan, implements step-by-step, opens a PR, gets it reviewed by a sub-agent, merges, and writes a reflection.
+
+4. **Review the reflection** on the closed issue to improve the workflow over time.
