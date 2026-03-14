@@ -4,8 +4,16 @@
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-  "postCreateCommand": "npm install",
+  "postCreateCommand": "npm install && npm install -g @anthropic-ai/claude-code",
   "forwardPorts": [5173],
+  "remoteEnv": {
+    "ANTHROPIC_BASE_URL": "http://host.docker.internal:4141",
+    "ANTHROPIC_AUTH_TOKEN": "dummy",
+    "ANTHROPIC_MODEL": "claude-opus-4.6-1m",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-opus-4.6-1m",
+    "ANTHROPIC_SMALL_FAST_MODEL": "claude-opus-4.6-1m",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-opus-4.6-1m"
+  },
   "customizations": {
     "vscode": {
       "settings": {
