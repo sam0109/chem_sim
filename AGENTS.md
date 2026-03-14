@@ -125,9 +125,19 @@ cd ../chem_sim
 git worktree remove ../chem_sim-<NUMBER>
 ```
 
-**If using dev containers (ideal for full isolation — see issue #55):**
+**If using dev containers (recommended for full isolation):**
 
-Each agent runs in its own container with a fresh clone. See the README for human instructions on launching an agent in a dev container. Once dev containers are set up (`.devcontainer/`), the container handles cloning, branching, and dependency installation automatically.
+Each agent runs in its own container with a fresh clone, Claude Code pre-installed, and access to the host's Anthropic proxy.
+
+```bash
+# Launch a container for issue 42 — clones repo, creates branch, installs deps,
+# then starts Claude Code which follows this AGENTS.md workflow automatically.
+ISSUE=42 docker compose run --rm agent
+```
+
+The container connects to the host's Anthropic proxy on port 4141 via `host.docker.internal`. Ensure your proxy is running before launching.
+
+When done (after merge), the `--rm` flag automatically removes the container.
 
 ---
 
