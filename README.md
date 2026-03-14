@@ -227,3 +227,12 @@ claude --dangerously-skip-permissions --print "Follow AGENTS.md"
 ```
 
 The agent follows AGENTS.md end-to-end: claim issue, plan, implement, PR, review, merge, and reflect.
+
+### Launching multiple agents in parallel
+
+```bash
+./scripts/launch-agents.sh 3         # launches 3 agents, staggered 30s apart
+./scripts/launch-agents.sh --loop 3  # same, but starts a new batch when all finish
+```
+
+The 30-second delay between launches gives each agent time to claim its GitHub issue before the next one starts, preventing duplicate claims. With `--loop`, the script waits for every container in a batch to exit, then automatically launches a fresh batch. Ctrl-C once stops new launches but lets running agents finish; Ctrl-C twice stops running containers immediately.
