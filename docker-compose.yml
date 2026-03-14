@@ -1,14 +1,14 @@
-# docker-compose.yml — Launch an isolated agent container for a given issue.
+# docker-compose.yml — Launch an isolated Claude Code agent in a container.
 #
 # Usage:
-#   ISSUE=42 docker compose run --rm agent
+#   docker compose run --rm agent
 #
 # The container:
 #   - Uses the dev container image (Node 20 + gh CLI + Claude Code)
 #   - Mounts your gh CLI auth (read-only) so the agent can use gh commands
 #   - Connects to the host's Anthropic proxy on port 4141
-#   - Clones the repo, creates a feature branch, installs dependencies
-#   - Launches Claude Code which follows AGENTS.md automatically
+#   - Clones the repo, then launches Claude Code pointed at AGENTS.md
+#   - Claude Code handles everything: issue selection, branching, implementation, PR
 
 services:
   agent:
@@ -16,7 +16,6 @@ services:
       context: .
       dockerfile: .devcontainer/Dockerfile
     environment:
-      - ISSUE=${ISSUE:?Set ISSUE=<number> before running}
       # Claude Code connects to the host's Anthropic proxy
       - ANTHROPIC_BASE_URL=http://host.docker.internal:4141
       - ANTHROPIC_AUTH_TOKEN=dummy
@@ -33,4 +32,4 @@ services:
     working_dir: /workspace
     stdin_open: true
     tty: true
-    command: bash -c "git clone https://github.com/sam0109/chem_sim.git /workspace/chem_sim && cd /workspace/chem_sim && exec ./scripts/agent-start.sh $$ISSUE"
+    command: bash -c "git clone https://github.com/sam0109/chem_sim.git /workspace/chem_sim && cd /workspace/chem_sim && npm install && exec claude --dangerously-skip-permissions --print 'Follow AGENTS.md'"

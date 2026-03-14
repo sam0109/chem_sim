@@ -201,30 +201,23 @@ See [GitHub Issues](https://github.com/sam0109/chem_sim/issues) for the full roa
 
 ChemSim uses AI agents to implement features from GitHub Issues. See [AGENTS.md](AGENTS.md) for the full workflow.
 
-### Launching an agent (for humans)
+### Launching an agent
 
-1. **Pick an issue** from [GitHub Issues](https://github.com/sam0109/chem_sim/issues) (prioritize `guardrails` label)
+**Option A — Dev container (recommended):**
+```bash
+# Ensure your Anthropic proxy is running on localhost:4141
+docker compose run --rm agent
+```
 
-2. **Start an agent** in an isolated environment:
+The container clones the repo, installs dependencies, and launches Claude Code with `--dangerously-skip-permissions`. Claude Code follows AGENTS.md autonomously — it selects an unclaimed issue, claims it, creates a branch, implements the fix, opens a PR, reviews it, and merges.
 
-   **Option A — Dev container (recommended):**
-   ```bash
-   # Ensure your Anthropic proxy is running on localhost:4141
-   # Build and launch a container for issue 42
-   ISSUE=42 docker compose run --rm agent
-   # Container auto-clones the repo, creates a branch, installs deps,
-   # and launches Claude Code which follows AGENTS.md automatically
-   ```
+**Option B — Git worktree (no Docker needed):**
+```bash
+cd chem_sim
+git worktree add ../chem_sim-42 -b 42-my-feature main
+cd ../chem_sim-42
+npm install
+claude --dangerously-skip-permissions --print "Follow AGENTS.md"
+```
 
-   **Option B — Git worktree (no Docker needed):**
-   ```bash
-   cd chem_sim
-   git worktree add ../chem_sim-42 -b 42-my-feature main
-   cd ../chem_sim-42
-   npm install
-   claude --print "Follow AGENTS.md"
-   ```
-
-3. **The agent follows AGENTS.md** — claims the issue, writes a plan, implements step-by-step, opens a PR, gets it reviewed by a sub-agent, merges, and writes a reflection.
-
-4. **Review the reflection** on the closed issue to improve the workflow over time.
+The agent follows AGENTS.md end-to-end: claim issue, plan, implement, PR, review, merge, and reflect.
