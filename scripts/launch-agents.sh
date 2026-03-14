@@ -20,8 +20,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+REPO="sam0109/chem_sim"
+
 CONTAINER_IDS=()
 STOP_REQUESTED=false
+
+# Returns the number of open, unassigned issues.
+unclaimed_issue_count() {
+  gh issue list --repo "$REPO" --assignee "" --state open --json number --jq 'length'
+}
 
 # First Ctrl-C: set flag to stop new launches, let running containers finish.
 # Second Ctrl-C: kill running containers and exit.
@@ -51,18 +58,33 @@ launch_batch() {
   local batch="$1"
   CONTAINER_IDS=()
 
-  echo "=== Batch $batch: launching $COUNT agent(s) ==="
+  # Check for available work before launching
+  local available
+  available=$(unclaimed_issue_count)
+  if [ "$available" -eq 0 ]; then
+    echo "No open unclaimed issues — nothing to do."
+    STOP_REQUESTED=true
+    return
+  fi
+  # Don't launch more agents than there are issues
+  local to_launch=$COUNT
+  if [ "$available" -lt "$to_launch" ]; then
+    to_launch=$available
+    echo "Only $available unclaimed issue(s) — launching $to_launch agent(s) instead of $COUNT."
+  fi
 
-  for i in $(seq 1 "$COUNT"); do
+  echo "=== Batch $batch: launching $to_launch agent(s) ==="
+
+  for i in $(seq 1 "$to_launch"); do
     if $STOP_REQUESTED; then
       echo "[Batch $batch] Stop requested — skipping remaining launches."
       break
     fi
-    echo "[Batch $batch] Launching agent $i of $COUNT..."
+    echo "[Batch $batch] Launching agent $i of $to_launch..."
     cid=$(docker compose run --rm -d agent)
     CONTAINER_IDS+=("$cid")
     echo "  Container: ${cid:0:12}"
-    if [ "$i" -lt "$COUNT" ] && ! $STOP_REQUESTED; then
+    if [ "$i" -lt "$to_launch" ] && ! $STOP_REQUESTED; then
       echo "  Waiting 30s before next agent..."
       sleep 30 || true
     fi
