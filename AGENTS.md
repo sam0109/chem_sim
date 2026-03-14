@@ -104,6 +104,27 @@ git checkout -b <NUMBER>-short-description
 # Example: git checkout -b 3-double-bond-params
 ```
 
+**If using git worktrees (recommended for concurrent agents):**
+
+Each agent should work in its own worktree so multiple agents can operate on different branches simultaneously without interfering with each other's working directory.
+
+```bash
+# From the main repo directory, create a worktree for this issue
+git worktree add ../chem_sim-<NUMBER> -b <NUMBER>-short-description main
+
+# Enter the worktree
+cd ../chem_sim-<NUMBER>
+
+# Install dependencies (each worktree needs its own node_modules)
+npm install
+```
+
+When done (after merge), clean up the worktree:
+```bash
+cd ../chem_sim
+git worktree remove ../chem_sim-<NUMBER>
+```
+
 ---
 
 ## Step 3: Implement — One Step at a Time
