@@ -291,9 +291,23 @@ gh issue close <NUMBER> --comment "<reflection markdown above>"
 
 ### Create follow-up issues (if any):
 
+Before creating a follow-up issue, **check that it doesn't duplicate or overlap with an existing issue:**
+
 ```bash
+# 1. Search existing issues for related keywords
+gh issue list --limit 100 --json number,title,labels --jq '.[] | "\(.number) \(.title)"' | grep -i "<keyword>"
+
+# 2. If a matching issue exists, comment on it instead of creating a new one
+gh issue comment <EXISTING-NUMBER> --body "Additional context from #<YOUR-NUMBER>: <what you discovered>"
+
+# 3. Only create a new issue if no existing issue covers this work
 gh issue create --title "<follow-up title>" --label "<appropriate label>" --body "Discovered during #<NUMBER>. <description>"
 ```
+
+**Rules for follow-up issues:**
+- Search existing issues by keyword before creating. If in doubt, don't create — comment on the closest existing issue instead.
+- Never create an issue that is a subset of an existing issue. Add a comment to the existing issue noting the new detail.
+- If the follow-up overlaps partially with an existing issue, reference both in the new issue body and explain what is distinct.
 
 ---
 
