@@ -37,7 +37,8 @@ echo "$output"
 echo ""
 
 # --- Parse the PASSED: X/Y line ---
-passed_line=$(echo "$output" | grep -oP 'PASSED:\s+\K[0-9]+(?=/[0-9]+)')
+# Use tail -1 for robustness in case of multiple matches
+passed_line=$(echo "$output" | grep -oP 'PASSED:\s+\K[0-9]+(?=/[0-9]+)' | tail -1)
 
 if [ -z "$passed_line" ]; then
   echo "ERROR: Could not parse passing count from test output."
