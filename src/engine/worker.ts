@@ -45,6 +45,7 @@ import { CellList } from './neighborList';
 import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
 import { detectHybridization } from './hybridization';
 import { findMolecules, computeMoleculeInfo } from './moleculeTracker';
+import { wrapPositions } from './pbc';
 
 // ---- Simulation state ----
 let nAtoms = 0;
@@ -68,6 +69,7 @@ let config: SimulationConfig = {
   running: false,
 };
 let step = 0;
+let box: SimulationBox = { size: [50, 50, 50], periodic: false };
 
 // Cached force-field parameters
 let bondParams: Array<{
@@ -467,10 +469,11 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
 function initSimulation(
   atoms: Atom[],
   inputBonds: Bond[],
-  _box: SimulationBox,
+  inputBox: SimulationBox,
   cfg: SimulationConfig,
 ): void {
   config = { ...config, ...cfg };
+  box = { ...inputBox };
   nAtoms = atoms.length;
 
   atomicNumbers = new Int32Array(nAtoms);
@@ -580,6 +583,11 @@ function runSteps(nSteps: number): void {
       config.timestep,
       computeAllForces,
     );
+
+    // Wrap positions into primary cell if PBC is enabled
+    if (box.periodic) {
+      wrapPositions(positions, nAtoms, box.size);
+    }
 
     // Apply thermostat
     if (config.thermostat === 'berendsen') {
@@ -710,6 +718,10 @@ function minimize(maxSteps: number, tolerance: number): void {
     maxSteps,
     tolerance,
   );
+  // Wrap positions into primary cell if PBC is enabled
+  if (box.periodic) {
+    wrapPositions(positions, nAtoms, box.size);
+  }
   // Zero velocities after minimization
   velocities.fill(0);
   rebuildTopology();
@@ -749,6 +761,7 @@ function sendState(): void {
     temperature,
     moleculeIds: moleculeIds.slice(),
     molecules: [...moleculeInfo],
+    box: { ...box },
   };
 
   self.postMessage(msg);
@@ -830,6 +843,15 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
           velocities[idx * 3 + 1] = entry.velocity[1];
           velocities[idx * 3 + 2] = entry.velocity[2];
         }
+      }
+      sendState();
+      break;
+
+    case 'box':
+      box = { ...box, ...msg.box };
+      // Wrap positions immediately when enabling PBC
+      if (box.periodic) {
+        wrapPositions(positions, nAtoms, box.size);
       }
       sendState();
       break;

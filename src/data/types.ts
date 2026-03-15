@@ -239,6 +239,11 @@ export interface WorkerSetVelocitiesMessage {
   entries: Array<{ atomIndex: number; velocity: Vector3Tuple }>;
 }
 
+export interface WorkerBoxMessage {
+  type: 'box';
+  box: Partial<SimulationBox>;
+}
+
 export type WorkerInMessage =
   | WorkerInitMessage
   | WorkerStepMessage
@@ -247,7 +252,8 @@ export type WorkerInMessage =
   | WorkerRemoveAtomMessage
   | WorkerDragMessage
   | WorkerMinimizeMessage
-  | WorkerSetVelocitiesMessage;
+  | WorkerSetVelocitiesMessage
+  | WorkerBoxMessage;
 
 export interface WorkerStateUpdate {
   type: 'state';
@@ -266,6 +272,8 @@ export interface WorkerStateUpdate {
   moleculeIds: Int32Array;
   /** Per-molecule computed properties */
   molecules: MoleculeInfo[];
+  /** Current simulation box (for PBC rendering) */
+  box?: SimulationBox;
 }
 
 export interface WorkerReadyMessage {
