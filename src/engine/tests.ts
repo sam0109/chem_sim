@@ -58,8 +58,6 @@ const KNOWN_FAILURES: Record<string, string> = {
   'GEO-05': 'Methane HCH angle — needs torsion potential (#1)',
   'GEO-06': 'Methane C-H distance — needs torsion potential (#1)',
   'GEO-07': 'Methane bond count — needs torsion potential (#1)',
-  'GEO-09':
-    'CO2 C=O distance — needs double bond params (#3) for correct bond detection',
 };
 
 // ---- Test infrastructure ----
@@ -188,7 +186,13 @@ function rebuildTopo(s: SimState): void {
       Math.min(b.atomA, b.atomB) + '-' + Math.max(b.atomA, b.atomB),
     );
     if (b.type === 'hydrogen' || b.type === 'vanderwaals') continue;
-    const p = getMorseBondParams(s.Z[b.atomA], s.Z[b.atomB], b.order);
+    const p = getMorseBondParams(
+      s.Z[b.atomA],
+      s.Z[b.atomB],
+      b.order,
+      s.hybridizations[b.atomA],
+      s.hybridizations[b.atomB],
+    );
     s.bondParams.push({ i: b.atomA, j: b.atomB, ...p });
   }
   for (const [i, , k] of s.angles) {
