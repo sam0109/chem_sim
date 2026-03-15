@@ -174,7 +174,17 @@ function rebuildTopology(): void {
   const previousHBonds = bonds.filter((b) => b.type === 'hydrogen');
 
   // Detect bonds with hysteresis (existing bonds get wider break tolerance)
-  bonds = detectBonds(positions, Array.from(atomicNumbers), 1.2, bonds, 1.5);
+  // When PBC is active, pass box dimensions so minimum image convention is
+  // applied to interatomic distances — this detects bonds across boundaries.
+  const pbcBox = box.periodic ? box.size : undefined;
+  bonds = detectBonds(
+    positions,
+    Array.from(atomicNumbers),
+    1.2,
+    bonds,
+    1.5,
+    pbcBox,
+  );
 
   // Add hydrogen bonds (with hysteresis from previous frame)
   const hBonds = detectHydrogenBonds(
@@ -182,6 +192,7 @@ function rebuildTopology(): void {
     Array.from(atomicNumbers),
     bonds,
     previousHBonds,
+    pbcBox,
   );
   bonds = [...bonds.filter((b) => b.type !== 'hydrogen'), ...hBonds];
 
