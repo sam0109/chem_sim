@@ -8,6 +8,8 @@ import { useSimulationStore } from '../store/simulationStore';
 export const SimulationControls: React.FC = () => {
   const config = useSimulationStore((s) => s.config);
   const setConfig = useSimulationStore((s) => s.setConfig);
+  const box = useSimulationStore((s) => s.box);
+  const setBox = useSimulationStore((s) => s.setBox);
   const toggleRunning = useSimulationStore((s) => s.toggleRunning);
   const minimize = useSimulationStore((s) => s.minimize);
   const step = useSimulationStore((s) => s.step);
@@ -162,6 +164,68 @@ export const SimulationControls: React.FC = () => {
           <option value="none">None (NVE)</option>
           <option value="berendsen">Berendsen</option>
         </select>
+      </div>
+
+      {/* Periodic Boundary Conditions */}
+      <div style={{ marginBottom: 10 }}>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            cursor: 'pointer',
+            marginBottom: 4,
+          }}
+        >
+          <input
+            data-testid="pbc-toggle"
+            type="checkbox"
+            checked={box.periodic}
+            onChange={(e) => setBox({ periodic: e.target.checked })}
+            style={{ accentColor: '#aa88ff' }}
+          />
+          <span>Periodic Boundaries</span>
+        </label>
+        {box.periodic && (
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: 2,
+              }}
+            >
+              <span>Box Size</span>
+              <span style={{ color: '#aa88ff' }}>
+                {box.size[0].toFixed(0)} Å
+              </span>
+            </div>
+            <input
+              data-testid="box-size-slider"
+              type="range"
+              min={10}
+              max={100}
+              step={5}
+              value={box.size[0]}
+              onChange={(e) => {
+                const s = Number(e.target.value);
+                setBox({ size: [s, s, s] });
+              }}
+              style={{ width: '100%', accentColor: '#aa88ff' }}
+            />
+            {config.cutoff >= box.size[0] / 2 && (
+              <div
+                style={{
+                  color: '#ff8844',
+                  fontSize: 10,
+                  marginTop: 2,
+                }}
+              >
+                Warning: cutoff must be {'<'} box/2
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Stats */}
