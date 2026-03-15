@@ -80,16 +80,29 @@ export function velocityVerletStep(
 }
 
 /**
+ * Compute translational degrees of freedom for a system of N atoms.
+ *
+ * Nf = 3N − 3 for N > 1 (subtract 3 conserved COM momentum components).
+ * For N ≤ 1, returns 3 to avoid zero or negative DOF.
+ *
+ * Source: Allen & Tildesley, "Computer Simulation of Liquids",
+ *   2nd ed., Section 2.6 — subtract 3 for conserved COM momentum.
+ *
+ * @param nAtoms number of atoms
+ * @returns number of translational degrees of freedom
+ */
+export function computeDOF(nAtoms: number): number {
+  return nAtoms > 1 ? 3 * nAtoms - 3 : 3;
+}
+
+/**
  * Compute instantaneous temperature from kinetic energy.
  *
- * T = 2 * KE / (Nf * k_B)   where Nf = 3N - 3 for N > 1, Nf = 3 for N ≤ 1.
+ * T = 2 * KE / (Nf * k_B)   where Nf = computeDOF(nAtoms).
  *
- * The 3N - 3 DOF correction accounts for the removal of center-of-mass
+ * The DOF correction accounts for the removal of center-of-mass
  * translational momentum (3 conserved components → 3 fewer DOF).
  * This is consistent with the Nosé-Hoover thermostat DOF (see thermostat.ts).
- *
- * DOF correction: Allen & Tildesley, "Computer Simulation of Liquids",
- *   2nd ed., Section 2.6 — subtract 3 for conserved COM momentum.
  *
  * @param kineticEnergy kinetic energy in eV
  * @param nAtoms number of atoms
@@ -101,9 +114,7 @@ export function computeTemperature(
 ): number {
   const kB = 8.617333262e-5; // eV/K — CODATA 2018
   if (nAtoms <= 0) return 0;
-  // Subtract 3 translational DOF for conserved COM momentum.
-  // Guard: for a single atom (N = 1) use Nf = 3 to avoid zero/negative DOF.
-  const Nf = nAtoms > 1 ? 3 * nAtoms - 3 : 3;
+  const Nf = computeDOF(nAtoms);
   return (2.0 * kineticEnergy) / (Nf * kB);
 }
 
