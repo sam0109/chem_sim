@@ -71,6 +71,8 @@ export const Toolbar: React.FC = () => {
   const toggleEncounterPanel = useUIStore((s) => s.toggleEncounterPanel);
   const showReactionLog = useUIStore((s) => s.showReactionLog);
   const toggleReactionLog = useUIStore((s) => s.toggleReactionLog);
+  const bondColorMode = useUIStore((s) => s.bondColorMode);
+  const toggleBondColorMode = useUIStore((s) => s.toggleBondColorMode);
 
   // When selecting the place-molecule tool, show the encounter panel
   const handleToolSelect = useCallback(
@@ -277,6 +279,30 @@ export const Toolbar: React.FC = () => {
         }}
       >
         Mol
+      </button>
+      <button
+        data-testid="toggle-bond-type-colors"
+        onClick={toggleBondColorMode}
+        title="Toggle Bond Type Coloring (color bonds by type: covalent, ionic, metallic, hydrogen)"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border:
+            bondColorMode === 'bondType'
+              ? '2px solid #ff8888'
+              : '1px solid rgba(255,255,255,0.15)',
+          background:
+            bondColorMode === 'bondType'
+              ? 'rgba(255,100,100,0.3)'
+              : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        Bnd
       </button>
 
       {/* Separator */}
