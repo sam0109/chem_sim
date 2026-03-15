@@ -16,6 +16,7 @@ import { ElectronDensityRenderer } from './ElectronDensityRenderer';
 import { ChargeAnnotations } from './ChargeAnnotations';
 import { BondEnergyAnnotations } from './BondEnergyAnnotations';
 import { DipoleAnnotations } from './DipoleAnnotations';
+import { NEBPathRenderer } from './NEBPathRenderer';
 import { useSimContextStoreApi } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
@@ -254,6 +255,7 @@ export const Scene: React.FC = () => {
       <ChargeAnnotations />
       <BondEnergyAnnotations />
       <DipoleAnnotations />
+      <NEBPathRenderer />
 
       {/* Controls */}
       <OrbitControls
