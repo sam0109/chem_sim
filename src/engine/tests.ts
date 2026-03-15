@@ -57,7 +57,7 @@ const KNOWN_FAILURES: Record<string, string> = {
   'GEO-06': 'Methane C-H distance — needs torsion potential (#1)',
   'GEO-07': 'Methane bond count — needs torsion potential (#1)',
   'GEO-09':
-    'CO2 C=O distance — needs linear angle handling (#2) and double bond params (#3)',
+    'CO2 C=O distance — needs double bond params (#3) for correct bond detection',
 };
 
 // ---- Test infrastructure ----
