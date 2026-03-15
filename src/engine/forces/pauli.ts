@@ -5,6 +5,8 @@
 // This acts as a hard-core repulsion below ~0.5× vdW radius.
 // ==============================================================
 
+import type { Vector3Tuple } from '../../data/types';
+
 /**
  * Compute short-range repulsive force between two atoms.
  * Only significant when atoms are very close (< ~1.0 Å).
@@ -16,6 +18,7 @@
  * @param j         atom index B
  * @param rMin      minimum allowed approach distance (Å) — typically ~0.6
  * @param strength  repulsion strength (eV) — typically ~10-50
+ * @param boxSize   box dimensions for PBC minimum image (undefined = no PBC)
  */
 export function pauliRepulsion(
   positions: Float64Array,
@@ -24,13 +27,22 @@ export function pauliRepulsion(
   j: number,
   rMin: number,
   strength: number,
+  boxSize?: Vector3Tuple,
 ): number {
   const i3 = i * 3;
   const j3 = j * 3;
 
-  const dx = positions[j3] - positions[i3];
-  const dy = positions[j3 + 1] - positions[i3 + 1];
-  const dz = positions[j3 + 2] - positions[i3 + 2];
+  let dx = positions[j3] - positions[i3];
+  let dy = positions[j3 + 1] - positions[i3 + 1];
+  let dz = positions[j3 + 2] - positions[i3 + 2];
+
+  // Apply minimum image convention for periodic boundaries
+  // Reference: Allen & Tildesley, "Computer Simulation of Liquids", Ch. 1.5.2
+  if (boxSize) {
+    dx -= boxSize[0] * Math.round(dx / boxSize[0]);
+    dy -= boxSize[1] * Math.round(dy / boxSize[1]);
+    dz -= boxSize[2] * Math.round(dz / boxSize[2]);
+  }
 
   const r2 = dx * dx + dy * dy + dz * dz;
   // Only activate below 2×rMin for performance

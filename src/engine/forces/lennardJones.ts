@@ -4,6 +4,8 @@
 // F(r) = 24ε/r [2(σ/r)^12 - (σ/r)^6] * (r_vec/r)
 // ==============================================================
 
+import type { Vector3Tuple } from '../../data/types';
+
 /**
  * Compute LJ force between two atoms and add to force arrays.
  * Returns potential energy contribution (eV).
@@ -16,6 +18,7 @@
  * @param sigma     LJ sigma (Å)
  * @param epsilon   LJ epsilon (eV)
  * @param cutoff    interaction cutoff (Å)
+ * @param boxSize   box dimensions for PBC minimum image (undefined = no PBC)
  */
 export function ljForce(
   positions: Float64Array,
@@ -25,13 +28,22 @@ export function ljForce(
   sigma: number,
   epsilon: number,
   cutoff: number,
+  boxSize?: Vector3Tuple,
 ): number {
   const i3 = i * 3;
   const j3 = j * 3;
 
-  const dx = positions[j3] - positions[i3];
-  const dy = positions[j3 + 1] - positions[i3 + 1];
-  const dz = positions[j3 + 2] - positions[i3 + 2];
+  let dx = positions[j3] - positions[i3];
+  let dy = positions[j3 + 1] - positions[i3 + 1];
+  let dz = positions[j3 + 2] - positions[i3 + 2];
+
+  // Apply minimum image convention for periodic boundaries
+  // Reference: Allen & Tildesley, "Computer Simulation of Liquids", Ch. 1.5.2
+  if (boxSize) {
+    dx -= boxSize[0] * Math.round(dx / boxSize[0]);
+    dy -= boxSize[1] * Math.round(dy / boxSize[1]);
+    dz -= boxSize[2] * Math.round(dz / boxSize[2]);
+  }
 
   const r2 = dx * dx + dy * dy + dz * dz;
   const rc2 = cutoff * cutoff;
