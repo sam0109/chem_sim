@@ -30,6 +30,7 @@ import { torsionForce } from './forces/torsion';
 import { inversionForce } from './forces/inversion';
 import {
   detectBonds,
+  detectHydrogenBonds,
   buildAngleList,
   buildDihedralList,
   buildInversionList,
@@ -2329,6 +2330,110 @@ function runBondDetectionTests(): void {
       passed,
       `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}, order=${bonds[0]?.order ?? 'N/A'}`,
       'exactly 1 ionic bond with order=1',
+    );
+  }
+
+  // BD-06: O-H bond detected across periodic boundary
+  // O near x=0, H near x=Lx — they're bonded across the boundary.
+  // Box size 10 Å. O at x=0.2, H at x=9.76 → minimum image distance = 0.44 Å
+  // Wait, that's too short. Let's use typical O-H distance ~0.96 Å across boundary.
+  // O at x=0.3, H at x=9.34 → min image dx = 0.3 - 9.34 + 10 = 0.96 Å
+  // covR(O) + covR(H) = 0.66 + 0.31 = 0.97 Å, threshold at 1.2× = 1.164 Å
+  // dist = 0.96 < 1.164 → bond detected with PBC, not detected without.
+  {
+    const boxSize: Vector3Tuple = [10, 10, 10];
+    const pos = new Float64Array([0.3, 5, 5, 9.34, 5, 5]);
+    const Z = [8, 1]; // O, H
+
+    // With PBC: should detect bond (minimum image distance ~0.96 Å)
+    const bondsWithPBC = detectBonds(pos, Z, 1.2, [], 1.5, boxSize);
+    // Without PBC: should NOT detect bond (raw distance ~9.04 Å)
+    const bondsNoPBC = detectBonds(pos, Z, 1.2, [], 1.5);
+
+    const passed = bondsWithPBC.length === 1 && bondsNoPBC.length === 0;
+    report(
+      'BD-06',
+      'O-H bond detected across periodic boundary via minimum image',
+      passed,
+      `withPBC=${bondsWithPBC.length} bonds, noPBC=${bondsNoPBC.length} bonds`,
+      '1 bond with PBC, 0 without',
+    );
+  }
+
+  // BD-07: Water molecule bonds detected when split across boundary
+  // O at center, H1 at typical position, H2 wrapped across boundary.
+  // Box size 10 Å. O at (5, 5, 5), H1 at (5.96, 5, 5), H2 at (4.04, 5, 5)
+  // But let's put H2 across the boundary: O at (0.3, 5, 5), H2 at (9.34, 5, 5)
+  // and H1 at (1.26, 5, 5) — both within bonding distance via min image.
+  {
+    const boxSize: Vector3Tuple = [10, 10, 10];
+    const pos = new Float64Array([
+      0.3,
+      5,
+      5, // O at x=0.3
+      1.26,
+      5,
+      5, // H1 at x=1.26 (direct distance 0.96 Å)
+      9.34,
+      5,
+      5, // H2 at x=9.34 (min image distance 0.96 Å)
+    ]);
+    const Z = [8, 1, 1]; // O, H, H
+
+    const bondsWithPBC = detectBonds(pos, Z, 1.2, [], 1.5, boxSize);
+    const bondsNoPBC = detectBonds(pos, Z, 1.2, [], 1.5);
+
+    // With PBC: both O-H bonds should be detected
+    // Without PBC: only the direct O-H1 bond should be detected
+    const passed = bondsWithPBC.length === 2 && bondsNoPBC.length === 1;
+    report(
+      'BD-07',
+      'Water molecule bonds detected when split across periodic boundary',
+      passed,
+      `withPBC=${bondsWithPBC.length} bonds, noPBC=${bondsNoPBC.length} bonds`,
+      '2 bonds with PBC, 1 without',
+    );
+  }
+
+  // BD-08: Hydrogen bond detected across periodic boundary
+  // D-O at (0.5, 5, 5), H at (1.46, 5, 5), acceptor O at (9.0, 5, 5)
+  // H···A min image distance = 1.46 - 9.0 + 10 = 2.46 Å (< 2.5 form threshold)
+  // D→H vector = (0.96, 0, 0), H→A min image vector = (-2.46, 0, 0)
+  // Angle = angle between (0.96, 0, 0) and (-2.46, 0, 0) = 180° > 120° ✓
+  {
+    const boxSize: Vector3Tuple = [10, 10, 10];
+    const pos = new Float64Array([
+      0.5,
+      5,
+      5, // atom 0: donor O
+      1.46,
+      5,
+      5, // atom 1: H
+      9.0,
+      5,
+      5, // atom 2: acceptor O
+    ]);
+    const Z = [8, 1, 8]; // O, H, O
+    const covalentBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+    ];
+
+    const hBondsWithPBC = detectHydrogenBonds(
+      pos,
+      Z,
+      covalentBonds,
+      [],
+      boxSize,
+    );
+    const hBondsNoPBC = detectHydrogenBonds(pos, Z, covalentBonds, []);
+
+    const passed = hBondsWithPBC.length === 1 && hBondsNoPBC.length === 0;
+    report(
+      'BD-08',
+      'Hydrogen bond detected across periodic boundary via minimum image',
+      passed,
+      `withPBC=${hBondsWithPBC.length} H-bonds, noPBC=${hBondsNoPBC.length} H-bonds`,
+      '1 H-bond with PBC, 0 without',
     );
   }
 }
