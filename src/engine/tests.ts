@@ -678,6 +678,151 @@ function runGradientTests(): void {
       4,
     );
   }
+
+  // ---- PBC gradient tests ----
+  // Place bonded atoms across a periodic boundary to verify that
+  // minimum image convention is correctly applied in each bonded
+  // force function. Atoms are near opposite edges of a 10 Å box
+  // so the unwrapped distance (~9 Å) is wrong, but the minimum
+  // image distance (~1 Å) is correct.
+  // Reference: Allen & Tildesley, Ch. 1.5.2
+
+  const pbcBox: [number, number, number] = [10, 10, 10];
+
+  // GRAD-11: Morse with PBC
+  // Atom 0 at x=9.5, atom 1 at x=0.5 → raw dx=−9, MIC dx=+1
+  // Equilibrium O-H bond ~0.96 Å, so MIC distance of 1.0 Å is near equilibrium.
+  const morsePbcPos = new Float64Array([9.5, 5.0, 5.0, 0.5, 5.0, 5.0]);
+  const morsePbcP = getMorseBondParams(8, 1, 1);
+  testGradient(
+    'GRAD-11',
+    'Morse O-H gradient with PBC',
+    (p, f) =>
+      morseBondForce(
+        p,
+        f,
+        0,
+        1,
+        morsePbcP.De,
+        morsePbcP.alpha,
+        morsePbcP.re,
+        pbcBox,
+      ),
+    morsePbcPos,
+    2,
+  );
+
+  // GRAD-12: Harmonic angle with PBC
+  // Terminal atom i across boundary: i at x=9.5, j (center) at x=0.0, k at y=1.0
+  // MIC vector j→i: (−0.5, 0, 0), j→k: (0, 1, 0) → 90° angle
+  const anglePbcPos = new Float64Array([
+    9.5,
+    5.0,
+    5.0, // atom i (terminal, across boundary)
+    0.0,
+    5.0,
+    5.0, // atom j (central)
+    0.0,
+    6.0,
+    5.0, // atom k (terminal)
+  ]);
+  const anglePbcK = getUFFAngleK(1, 8, 1);
+  testGradient(
+    'GRAD-12',
+    'Angle H-O-H gradient with PBC',
+    (p, f) =>
+      harmonicAngleForce(
+        p,
+        f,
+        0,
+        1,
+        2,
+        anglePbcK.kAngle,
+        anglePbcK.theta0,
+        pbcBox,
+      ),
+    anglePbcPos,
+    3,
+  );
+
+  // GRAD-13: Torsion with PBC
+  // H(0)-C(1)-C(2)-H(3) with atom 0 across the boundary
+  // atom 0 at x=9.0 (MIC: −1.0 from atom 1 at x=0.0)
+  const torsionPbcPos = new Float64Array([
+    9.0,
+    0.63,
+    5.0, // H across boundary
+    0.0,
+    0.0,
+    5.0, // C at edge
+    1.52,
+    0.0,
+    5.0, // C along x
+    2.61,
+    0.315,
+    5.546, // H at 60° dihedral
+  ]);
+  const torsionPbcP = getUFFTorsionParams(6, 6, 'sp3', 'sp3', 1);
+  testGradient(
+    'GRAD-13',
+    'Torsion H-C-C-H gradient with PBC',
+    (p, f) =>
+      torsionForce(
+        p,
+        f,
+        0,
+        1,
+        2,
+        3,
+        torsionPbcP.V,
+        torsionPbcP.n,
+        torsionPbcP.phi0,
+        pbcBox,
+      ),
+    torsionPbcPos,
+    4,
+  );
+
+  // GRAD-14: Inversion with PBC (sp2 center)
+  // OOP atom 0 across boundary from center atom 1.
+  // Atoms 2 and 3 (in-plane) form a non-degenerate triangle with atom 1.
+  const invPbcPos = new Float64Array([
+    9.7,
+    5.1,
+    5.0, // atom 0 (OOP, across boundary from center)
+    0.0,
+    5.0,
+    5.0, // atom 1 (C center)
+    -0.65,
+    5.0,
+    6.12, // atom 2 (in plane)
+    -0.65,
+    5.0,
+    3.88, // atom 3 (in plane)
+  ]);
+  const invPbcP = getUFFInversionParams(6, 'sp2');
+  if (invPbcP) {
+    testGradient(
+      'GRAD-14',
+      'Inversion sp2 C gradient with PBC',
+      (p, f) =>
+        inversionForce(
+          p,
+          f,
+          0,
+          1,
+          2,
+          3,
+          invPbcP.K / 3,
+          invPbcP.C0,
+          invPbcP.C1,
+          invPbcP.C2,
+          pbcBox,
+        ),
+      invPbcPos,
+      4,
+    );
+  }
 }
 
 // ---- NVE energy conservation tests ----
