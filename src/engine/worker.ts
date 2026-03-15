@@ -849,15 +849,7 @@ function sendState(): void {
   forces.fill(0);
   const potentialEnergy = computeAllForces(positions, forces);
 
-  const CONV = 103.6427;
-  let kineticEnergy = 0;
-  for (let i = 0; i < nAtoms; i++) {
-    const i3 = i * 3;
-    const vx = velocities[i3];
-    const vy = velocities[i3 + 1];
-    const vz = velocities[i3 + 2];
-    kineticEnergy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz) * CONV;
-  }
+  const kineticEnergy = computeKineticEnergy();
 
   const temperature = computeTemperature(kineticEnergy, nAtoms);
 
