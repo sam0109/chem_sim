@@ -22,6 +22,7 @@ import {
 import type { SimulationStoreState } from './store/simulationStore';
 import { SimulationContext } from './store/SimulationContext';
 import { ReactionLog } from './ui/ReactionLog';
+import { QuantityDashboard } from './ui/QuantityDashboard';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
 import { parseXYZ } from './io/xyz';
@@ -689,6 +690,7 @@ const App: React.FC = () => {
         <ChallengePanel />
         <EncounterPanel />
         <ReactionLog />
+        <QuantityDashboard />
 
         <div
           data-testid="status-bar"

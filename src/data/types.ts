@@ -299,6 +299,22 @@ export type WorkerInMessage =
   | WorkerBoxMessage
   | WorkerTransmuteAtomMessage;
 
+/** Per-force-type potential energy decomposition (all values in eV) */
+export interface EnergyBreakdown {
+  /** Morse bond stretch energy */
+  morse: number;
+  /** Harmonic angle bending energy */
+  angle: number;
+  /** Dihedral torsion energy */
+  torsion: number;
+  /** Out-of-plane inversion energy */
+  inversion: number;
+  /** Lennard-Jones van der Waals energy */
+  lj: number;
+  /** Coulomb electrostatic energy */
+  coulomb: number;
+}
+
 export interface WorkerStateUpdate {
   type: 'state';
   /** Flat Float64Array: [x0,y0,z0,x1,y1,z1,...] */
@@ -316,6 +332,8 @@ export interface WorkerStateUpdate {
     total: number;
     thermostat: number;
   };
+  /** Per-force-type potential energy decomposition */
+  energyBreakdown: EnergyBreakdown;
   temperature: number;
   /** Molecule ID per atom (from union-find on bond graph) */
   moleculeIds: Int32Array;
