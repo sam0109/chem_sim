@@ -89,6 +89,19 @@ interface UIStore {
   /** Impact parameter (perpendicular offset) in Å */
   encounterImpactParam: number;
   setEncounterImpactParam: (b: number) => void;
+
+  // ---- Orbital visualization ----
+  /** Whether orbital isosurfaces are displayed */
+  showOrbitals: boolean;
+  toggleOrbitals: () => void;
+  /** Currently selected orbital quantum numbers, or null for none */
+  selectedOrbital: { n: number; l: number; m: number } | null;
+  setSelectedOrbital: (
+    orbital: { n: number; l: number; m: number } | null,
+  ) => void;
+  /** Isosurface threshold for orbital rendering (default 0.02) */
+  orbitalIsovalue: number;
+  setOrbitalIsovalue: (v: number) => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
@@ -177,4 +190,12 @@ export const useUIStore = create<UIStore>((set, get) => ({
   setEncounterSeparation: (d) => set({ encounterSeparation: d }),
   setEncounterSpeed: (v) => set({ encounterSpeed: v }),
   setEncounterImpactParam: (b) => set({ encounterImpactParam: b }),
+
+  // Orbital visualization
+  showOrbitals: false,
+  selectedOrbital: null,
+  orbitalIsovalue: 0.02,
+  toggleOrbitals: () => set({ showOrbitals: !get().showOrbitals }),
+  setSelectedOrbital: (orbital) => set({ selectedOrbital: orbital }),
+  setOrbitalIsovalue: (v) => set({ orbitalIsovalue: v }),
 }));
