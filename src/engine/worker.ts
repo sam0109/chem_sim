@@ -25,7 +25,6 @@ import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
 import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
-import { pauliRepulsion } from './forces/pauli';
 import { torsionForce } from './forces/torsion';
 import { inversionForce } from './forces/inversion';
 import {
@@ -33,7 +32,12 @@ import {
   computeTemperature,
   initializeVelocities,
 } from './integrator';
-import { berendsenThermostat } from './thermostat';
+import {
+  berendsenThermostat,
+  noseHooverChainStep,
+  createNoseHooverChainState,
+} from './thermostat';
+import type { NoseHooverChainState } from './thermostat';
 import { steepestDescent } from './minimizer';
 import {
   detectBonds,
@@ -61,6 +65,9 @@ let hybridizations: Hybridization[] = [];
 let bonds: Bond[] = [];
 let angles: Array<[number, number, number]> = [];
 let dihedrals: Array<[number, number, number, number]> = [];
+
+// Nosé-Hoover chain thermostat state (initialized on simulation start)
+let nhChainState: NoseHooverChainState | null = null;
 let config: SimulationConfig = {
   timestep: 0.5,
   temperature: 300,
@@ -82,16 +89,6 @@ let bondParams: Array<{
 const ljCache: Map<string, { sigma: number; epsilon: number }> = new Map();
 let cellList: CellList | null = null;
 
-// Pauli repulsion cell list — uses a much shorter cutoff than LJ/Coulomb.
-// Max Pauli rCut = 2 × rMin, where rMin = 0.5 × max covalent radius (~2.03 Å for K).
-// 2.5 Å provides margin for all element pairs.
-// Source: rCut formula from src/engine/forces/pauli.ts, radii from Blue Obelisk / NIST.
-const PAULI_CUTOFF = 2.5;
-let pauliCellList: CellList | null = null;
-
-// Pre-computed per-atom Pauli rMin values to avoid element lookups in the hot loop.
-// pauliRMin[i] = 0.5 × covalentRadius[i], floored at 0.15 Å.
-let pauliRMin: Float64Array = new Float64Array(0);
 // Cached angle parameters (precomputed once per topology rebuild)
 let angleParams: Array<{
   i: number;
@@ -124,6 +121,12 @@ let inversionParams: Array<{
 
 // --- Exclusion set: skip 1-2 (bonded) AND 1-3 (angle) pairs from LJ/Coulomb ---
 const exclusionSet: Set<string> = new Set();
+
+// --- 1-4 scaling set: dihedral terminal pairs get 0.5× LJ and Coulomb ---
+// Standard AMBER/OPLS convention: 1-4 pairs are scaled by 0.5.
+// Source: Cornell et al., JACS 117, 5179 (1995); Jorgensen et al., JACS 118, 11225 (1996).
+const SCALE_14 = 0.5;
+const scale14Set: Set<string> = new Set();
 
 // Drag force target
 let dragAtomId = -1;
@@ -203,6 +206,17 @@ function rebuildTopology(): void {
 
   buildTorsionParams();
 
+  // Build 1-4 scaling set from dihedral terminal atoms.
+  // Pairs that are both 1-3 (in exclusionSet) and 1-4 are fully excluded
+  // (1-3 takes precedence), so we skip those here.
+  scale14Set.clear();
+  for (const [di, , , dl] of dihedrals) {
+    const key = `${Math.min(di, dl)}-${Math.max(di, dl)}`;
+    if (!exclusionSet.has(key)) {
+      scale14Set.add(key);
+    }
+  }
+
   // Compute Gasteiger partial charges from bond topology.
   // This replaces the hardcoded/zero charges with physically meaningful
   // values based on orbital electronegativity equilibration.
@@ -219,9 +233,6 @@ function rebuildTopology(): void {
   // Rebuild cell list
   if (!cellList) {
     cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
-  }
-  if (!pauliCellList) {
-    pauliCellList = new CellList(PAULI_CUTOFF, Math.max(nAtoms, 100));
   }
 
   // Detect reactions by comparing current topology with previous snapshot.
@@ -353,9 +364,6 @@ function buildTorsionParams(): void {
   if (!cellList) {
     cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
   }
-  if (!pauliCellList) {
-    pauliCellList = new CellList(PAULI_CUTOFF, Math.max(nAtoms, 100));
-  }
 
   // Identify molecules (connected components of the bond graph)
   moleculeIds = findMolecules(bonds, nAtoms);
@@ -445,20 +453,34 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   }
 
   // 3. Non-bonded forces (LJ + Coulomb) using cell list or brute force
+  // 1-2 and 1-3 pairs are fully excluded; 1-4 pairs get SCALE_14 (0.5×).
+  // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
   const cutoff = config.cutoff;
   const pairCallback = (i: number, j: number): void => {
     // Skip 1-2 (bonded) and 1-3 (angle) pairs
     const key = `${Math.min(i, j)}-${Math.max(i, j)}`;
     if (exclusionSet.has(key)) return;
 
+    // 1-4 pairs: scale LJ epsilon and Coulomb by SCALE_14
+    const is14 = scale14Set.has(key);
+    const scaleFactor = is14 ? SCALE_14 : 1.0;
+
     const { sigma, epsilon } = getLJCached(atomicNumbers[i], atomicNumbers[j]);
-    potentialEnergy += ljForce(pos, frc, i, j, sigma, epsilon, cutoff);
+    potentialEnergy += ljForce(
+      pos,
+      frc,
+      i,
+      j,
+      sigma,
+      epsilon * scaleFactor,
+      cutoff,
+    );
     potentialEnergy += coulombForce(
       pos,
       frc,
       i,
       j,
-      charges[i],
+      charges[i] * scaleFactor,
       charges[j],
       cutoff,
     );
@@ -471,22 +493,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
     cellList!.forEachPair(pos, cutoff, pairCallback);
   }
 
-  // 4. Pauli repulsion — prevents atomic overlap for ALL pairs
-  // This is a short-range exponential wall that acts regardless of bonding.
-  // Uses a dedicated cell list with short cutoff (2.5 Å) for O(N) scaling.
-  const pauliCallback = (i: number, j: number): void => {
-    const rMin = Math.min(pauliRMin[i], pauliRMin[j]);
-    potentialEnergy += pauliRepulsion(pos, frc, i, j, rMin, 20.0);
-  };
-
-  if (nAtoms < 50) {
-    CellList.forEachPairBrute(pos, nAtoms, PAULI_CUTOFF, pauliCallback);
-  } else {
-    pauliCellList!.build(pos, nAtoms);
-    pauliCellList!.forEachPair(pos, PAULI_CUTOFF, pauliCallback);
-  }
-
-  // 5. Drag force (spring to target position)
+  // 4. Drag force (spring to target position)
   if (dragAtomId >= 0 && dragAtomId < nAtoms) {
     const i3 = dragAtomId * 3;
     const dx = dragTarget[0] - pos[i3];
@@ -537,14 +544,6 @@ function initSimulation(
   }
 
   cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
-  pauliCellList = new CellList(PAULI_CUTOFF, Math.max(nAtoms, 100));
-
-  // Pre-compute per-atom Pauli rMin values
-  pauliRMin = new Float64Array(nAtoms);
-  for (let i = 0; i < nAtoms; i++) {
-    const el = elements[atomicNumbers[i]];
-    pauliRMin[i] = Math.max(0.5 * (el ? el.covalentRadius : 0.5), 0.15);
-  }
 
   // Use provided bonds or detect them
   if (inputBonds.length > 0) {
@@ -584,6 +583,14 @@ function initSimulation(
       angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
     }
     buildTorsionParams();
+    // Build 1-4 scaling set for provided bonds
+    scale14Set.clear();
+    for (const [di, , , dl] of dihedrals) {
+      const key = `${Math.min(di, dl)}-${Math.max(di, dl)}`;
+      if (!exclusionSet.has(key)) {
+        scale14Set.add(key);
+      }
+    }
   } else {
     rebuildTopology();
   }
@@ -608,6 +615,13 @@ function initSimulation(
   prevMoleculeIds = new Int32Array(0);
   prevMoleculeInfo = [];
   pendingReactionEvents = [];
+
+  // Initialize Nosé-Hoover chain state for the new system
+  nhChainState = createNoseHooverChainState(
+    nAtoms,
+    config.temperature,
+    config.thermostatTau,
+  );
 
   sendState();
 }
@@ -636,6 +650,16 @@ function runSteps(nSteps: number): void {
         config.timestep,
         config.thermostatTau,
       );
+    } else if (config.thermostat === 'nose-hoover' && nhChainState) {
+      noseHooverChainStep(
+        velocities,
+        masses,
+        fixed,
+        kineticEnergy,
+        config.temperature,
+        config.timestep,
+        nhChainState,
+      );
     }
 
     step++;
@@ -661,7 +685,6 @@ function addAtom(atom: Atom): void {
   const newMasses = new Float64Array(newN);
   const newCharges = new Float64Array(newN);
   const newFixed = new Uint8Array(newN);
-  const newPauliRMin = new Float64Array(newN);
 
   newAtomicNumbers.set(atomicNumbers);
   newPositions.set(positions);
@@ -669,7 +692,6 @@ function addAtom(atom: Atom): void {
   newMasses.set(masses);
   newCharges.set(charges);
   newFixed.set(fixed);
-  newPauliRMin.set(pauliRMin);
 
   const i = nAtoms;
   newAtomicNumbers[i] = atom.elementNumber;
@@ -680,7 +702,6 @@ function addAtom(atom: Atom): void {
   newMasses[i] = el ? el.mass : 1.0;
   newCharges[i] = atom.charge;
   newFixed[i] = atom.fixed ? 1 : 0;
-  newPauliRMin[i] = Math.max(0.5 * (el ? el.covalentRadius : 0.5), 0.15);
 
   atomicNumbers = newAtomicNumbers;
   positions = newPositions;
@@ -689,7 +710,6 @@ function addAtom(atom: Atom): void {
   masses = newMasses;
   charges = newCharges;
   fixed = newFixed;
-  pauliRMin = newPauliRMin;
   hybridizations.push(atom.hybridization);
   nAtoms = newN;
 
@@ -709,7 +729,6 @@ function removeAtom(atomId: number): void {
   const newMasses = new Float64Array(newN);
   const newCharges = new Float64Array(newN);
   const newFixed = new Uint8Array(newN);
-  const newPauliRMin = new Float64Array(newN);
 
   let dst = 0;
   for (let src = 0; src < nAtoms; src++) {
@@ -724,7 +743,6 @@ function removeAtom(atomId: number): void {
     newMasses[dst] = masses[src];
     newCharges[dst] = charges[src];
     newFixed[dst] = fixed[src];
-    newPauliRMin[dst] = pauliRMin[src];
     dst++;
   }
 
@@ -735,7 +753,6 @@ function removeAtom(atomId: number): void {
   masses = newMasses;
   charges = newCharges;
   fixed = newFixed;
-  pauliRMin = newPauliRMin;
   hybridizations.splice(atomId, 1);
   nAtoms = newN;
 
@@ -846,7 +863,22 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
 
     case 'config': {
       const wasRunning = config.running;
+      // Only reset NH chain state when thermostat parameters actually change value
+      const needsNHReset =
+        (msg.config.thermostat !== undefined &&
+          msg.config.thermostat !== config.thermostat) ||
+        (msg.config.temperature !== undefined &&
+          msg.config.temperature !== config.temperature) ||
+        (msg.config.thermostatTau !== undefined &&
+          msg.config.thermostatTau !== config.thermostatTau);
       Object.assign(config, msg.config);
+      if (needsNHReset && nAtoms > 0) {
+        nhChainState = createNoseHooverChainState(
+          nAtoms,
+          config.temperature,
+          config.thermostatTau,
+        );
+      }
       if (config.running && !wasRunning) startLoop();
       if (!config.running && wasRunning) stopLoop();
       break;
