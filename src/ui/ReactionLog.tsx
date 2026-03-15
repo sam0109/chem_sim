@@ -3,7 +3,7 @@
 // ==============================================================
 
 import React, { useRef, useEffect } from 'react';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimContextStore } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
 import type { MoleculeInfo, ReactionEvent } from '../data/types';
@@ -72,8 +72,8 @@ function formatReaction(
 
 export const ReactionLog: React.FC = () => {
   const showReactionLog = useUIStore((s) => s.showReactionLog);
-  const reactionLog = useSimulationStore((s) => s.reactionLog);
-  const atoms = useSimulationStore((s) => s.atoms);
+  const reactionLog = useSimContextStore((s) => s.reactionLog);
+  const atoms = useSimContextStore((s) => s.atoms);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new events arrive

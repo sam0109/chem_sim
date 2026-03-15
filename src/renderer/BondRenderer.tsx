@@ -6,7 +6,7 @@
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimContextStoreApi } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
 
@@ -24,6 +24,7 @@ const MAX_BONDS = 4000; // 2 halves per bond
 export const BondRenderer: React.FC = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const colorArrayRef = useRef(new Float32Array(MAX_BONDS * 3));
+  const simStore = useSimContextStoreApi();
   const renderMode = useUIStore((s) => s.renderMode);
 
   const geometry = useMemo(() => {
@@ -34,7 +35,7 @@ export const BondRenderer: React.FC = () => {
     const mesh = meshRef.current;
     if (!mesh) return;
 
-    const { atoms, bonds, positions } = useSimulationStore.getState();
+    const { atoms, bonds, positions } = simStore.getState();
     if (atoms.length === 0 || bonds.length === 0) {
       mesh.count = 0;
       return;

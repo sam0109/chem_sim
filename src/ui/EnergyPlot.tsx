@@ -3,7 +3,7 @@
 // ==============================================================
 
 import React, { useRef, useEffect } from 'react';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimContextStore } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 
 const WIDTH = 320;
@@ -13,7 +13,7 @@ const MARGIN = { top: 20, right: 10, bottom: 25, left: 50 };
 export const EnergyPlot: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const showEnergyPlot = useUIStore((s) => s.showEnergyPlot);
-  const energyHistory = useSimulationStore((s) => s.energyHistory);
+  const energyHistory = useSimContextStore((s) => s.energyHistory);
 
   useEffect(() => {
     if (!showEnergyPlot) return;

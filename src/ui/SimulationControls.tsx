@@ -3,18 +3,18 @@
 // ==============================================================
 
 import React from 'react';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimContextStore } from '../store/SimulationContext';
 
 export const SimulationControls: React.FC = () => {
-  const config = useSimulationStore((s) => s.config);
-  const setConfig = useSimulationStore((s) => s.setConfig);
-  const toggleRunning = useSimulationStore((s) => s.toggleRunning);
-  const minimize = useSimulationStore((s) => s.minimize);
-  const step = useSimulationStore((s) => s.step);
-  const energy = useSimulationStore((s) => s.energy);
-  const temperature = useSimulationStore((s) => s.temperature);
-  const atoms = useSimulationStore((s) => s.atoms);
-  const bonds = useSimulationStore((s) => s.bonds);
+  const config = useSimContextStore((s) => s.config);
+  const setConfig = useSimContextStore((s) => s.setConfig);
+  const toggleRunning = useSimContextStore((s) => s.toggleRunning);
+  const minimize = useSimContextStore((s) => s.minimize);
+  const step = useSimContextStore((s) => s.step);
+  const energy = useSimContextStore((s) => s.energy);
+  const temperature = useSimContextStore((s) => s.temperature);
+  const atoms = useSimContextStore((s) => s.atoms);
+  const bonds = useSimContextStore((s) => s.bonds);
 
   return (
     <div
