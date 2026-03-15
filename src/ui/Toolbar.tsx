@@ -57,6 +57,8 @@ export const Toolbar: React.FC = () => {
   const toggleEnergyPlot = useUIStore((s) => s.toggleEnergyPlot);
   const colorMode = useUIStore((s) => s.colorMode);
   const setColorMode = useUIStore((s) => s.setColorMode);
+  const toggleChallengePanel = useUIStore((s) => s.toggleChallengePanel);
+  const showChallengePanel = useUIStore((s) => s.showChallengePanel);
 
   // Keyboard shortcuts
   React.useEffect(() => {
@@ -249,6 +251,38 @@ export const Toolbar: React.FC = () => {
         }}
       >
         Mol
+      </button>
+
+      {/* Separator */}
+      <div
+        style={{
+          height: 1,
+          background: 'rgba(255,255,255,0.1)',
+          margin: '4px 0',
+        }}
+      />
+
+      {/* Challenge mode */}
+      <button
+        data-testid="toggle-challenge-mode"
+        onClick={toggleChallengePanel}
+        title="Challenge Mode"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showChallengePanel
+            ? '2px solid #fbbf24'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showChallengePanel
+            ? 'rgba(251,191,36,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 14,
+        }}
+      >
+        🏆
       </button>
     </div>
   );

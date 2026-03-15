@@ -9,6 +9,7 @@ import { SimulationControls } from './ui/SimulationControls';
 import { PropertyPanel } from './ui/PropertyPanel';
 import { Toolbar } from './ui/Toolbar';
 import { EnergyPlot } from './ui/EnergyPlot';
+import { ChallengePanel } from './ui/ChallengePanel';
 import { useSimulationStore } from './store/simulationStore';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
@@ -336,6 +337,7 @@ const App: React.FC = () => {
       <PropertyPanel />
       <PeriodicTable />
       <EnergyPlot />
+      <ChallengePanel />
 
       <div
         data-testid="status-bar"
