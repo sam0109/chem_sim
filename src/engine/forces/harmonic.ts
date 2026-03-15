@@ -1,24 +1,34 @@
 // ==============================================================
-// Harmonic angle potential
-// V(θ) = 0.5 * k * (θ - θ₀)²
+// Angle bending potential
+// General case: V(θ) = 0.5 * kcos * (cosθ - cosθ₀)²
+// Linear case:  V(θ) = kA * (1 + cosθ)   [UFF Eq. 10, n=1]
 // ==============================================================
 
+// Threshold above which θ₀ is treated as linear (radians).
+// 170° ≈ 2.967 rad. Source: Rappé et al., JACS 114, 10024 (1992).
+const LINEAR_THRESHOLD = (170 * Math.PI) / 180;
+
 /**
- * Compute angle bending force using cosine-based potential:
- *   V = 0.5 * k * (cosθ - cosθ₀)²
+ * Compute angle bending force for a triplet i-j-k (j = central atom).
  *
- * This avoids the acos singularity and 1/sin(θ) division
- * that causes numerical instability near θ=0 or θ=π.
+ * For non-linear angles (θ₀ ≤ 170°):
+ *   V = 0.5 * kcos * (cosθ - cosθ₀)²
+ *   kcos = k_angle / sin²(θ₀), matching harmonic behaviour near θ₀.
  *
- * The force constant k_cos relates to harmonic k_angle as:
- *   k_cos ≈ k_angle / sin²(θ₀) for small displacements
+ * For linear angles (θ₀ > 170°):
+ *   V = k_angle * (1 + cosθ)
+ *   This form has a non-vanishing restoring force at θ = 180°:
+ *   dV/dθ = -k_angle * sinθ ≠ 0 for any θ ≠ 0, π.
+ *   Source: Rappé et al., JACS 114, 10024 (1992), Eq. 10 with n = 1.
+ *
+ * Both branches use the same Cartesian chain-rule gradient for cosθ.
  *
  * @param positions  flat position array
  * @param forces     flat force array (accumulated)
  * @param i          terminal atom 1
  * @param j          central atom (vertex)
  * @param k          terminal atom 2
- * @param k_angle    force constant (eV/rad²) — converted internally
+ * @param k_angle    force constant (eV/rad² for general; eV for linear)
  * @param theta0     equilibrium angle (radians)
  * @returns potential energy (eV)
  */
@@ -59,18 +69,27 @@ export function harmonicAngleForce(
 
   // Clamp for safety
   const cosT = Math.max(-0.999999, Math.min(0.999999, cosTheta));
-  const cosTheta0 = Math.cos(theta0);
 
-  // Cosine-based potential: V = 0.5 * kcos * (cosθ - cosθ₀)²
-  // where kcos = k_angle / sin²(θ₀) to match harmonic behavior near θ₀
-  const sinTheta0 = Math.sin(theta0);
-  const kcos = k_angle / Math.max(sinTheta0 * sinTheta0, 0.01);
+  // ---- Compute energy and dV/d(cosθ) depending on angle type ----
+  let energy: number;
+  let dVdcos: number;
 
-  const dcos = cosT - cosTheta0;
-  const energy = 0.5 * kcos * dcos * dcos;
-
-  // dV/d(cosθ) = kcos * (cosθ - cosθ₀)
-  const dVdcos = kcos * dcos;
+  if (theta0 > LINEAR_THRESHOLD) {
+    // Linear penalty: V = kA * (1 + cosθ)
+    // dV/d(cosθ) = kA
+    // At θ=180° (cosθ=−1): V=0, but any deviation gives V>0 and a
+    // restoring force proportional to sinθ.
+    energy = k_angle * (1.0 + cosT);
+    dVdcos = k_angle;
+  } else {
+    // General cosine-based potential: V = 0.5 * kcos * (cosθ − cosθ₀)²
+    const cosTheta0 = Math.cos(theta0);
+    const sinTheta0 = Math.sin(theta0);
+    const kcos = k_angle / Math.max(sinTheta0 * sinTheta0, 0.01);
+    const dcos = cosT - cosTheta0;
+    energy = 0.5 * kcos * dcos * dcos;
+    dVdcos = kcos * dcos;
+  }
 
   // d(cosθ)/dr_i = (r_jk/(|r_ji|*|r_jk|)) - cosθ * (r_ji/|r_ji|²)
   //             = invRjk * (rjk_hat) - cosT * invRji * (rji_hat)
