@@ -89,6 +89,9 @@ import {
   DEFAULT_NEB_CONFIG,
 } from './neb';
 import { steepestDescent } from './minimizer';
+import { softCoreLJForce } from './forces/softCoreLJ';
+import { blockAverage, computeTI, computeZwanzig } from './fep';
+import type { FEPSample } from '../data/types';
 
 // ---- Deterministic PRNG for reproducible tests ----
 // Mulberry32: a simple 32-bit seeded PRNG (public domain)
@@ -3972,6 +3975,438 @@ function runAngularMomentumTests(): void {
   }
 }
 
+// ==============================================================
+// Free Energy Perturbation Tests
+// ==============================================================
+
+function runFEPTests(): void {
+  console.log('\n--- Free Energy Perturbation Tests ---');
+
+  // FEP-01: Soft-core LJ is singularity-free at r→0
+  {
+    const id = 'FEP-01';
+    if (!isSkipped(id)) {
+      // At very small r with λ < 1, soft-core should NOT blow up
+      const positions = new Float64Array([0, 0, 0, 0.01, 0, 0]); // r = 0.01 Å
+      const forces = new Float64Array(6);
+      const sigma = 3.4; // Å (typical LJ σ for Ar)
+      const epsilon = 0.0104; // eV (typical LJ ε for Ar)
+      // Source: Rahman, Phys. Rev. 136, A405 (1964) — Ar LJ params
+
+      const [energy, dVdL] = softCoreLJForce(
+        positions,
+        forces,
+        0,
+        1,
+        sigma,
+        epsilon,
+        0.5, // λ = 0.5
+        0.5, // α = 0.5
+        1, // p = 1
+        10.0,
+      );
+
+      const isFinite =
+        Number.isFinite(energy) &&
+        Number.isFinite(dVdL) &&
+        Number.isFinite(forces[0]) &&
+        Number.isFinite(forces[3]);
+      const isReasonable = Math.abs(energy) < 100; // should be small, not 1e30
+
+      const passed = isFinite && isReasonable;
+      report(
+        id,
+        'Soft-core LJ is singularity-free at r=0.01 Å, λ=0.5',
+        passed,
+        `E=${energy.toFixed(6)} eV, dV/dλ=${dVdL.toFixed(6)} eV, |F|=${Math.abs(forces[0]).toFixed(6)} eV/Å`,
+        'All values finite, |E| < 100 eV',
+      );
+    }
+  }
+
+  // FEP-02: Soft-core reduces to standard LJ at λ=1 for large r
+  {
+    const id = 'FEP-02';
+    if (!isSkipped(id)) {
+      const r = 4.0; // Å — well beyond the singularity region
+      const positions = new Float64Array([0, 0, 0, r, 0, 0]);
+      const forcesSC = new Float64Array(6);
+      const forcesStd = new Float64Array(6);
+      const sigma = 3.4; // Å — Ar LJ (Rahman, Phys. Rev. 136, A405 (1964))
+      const epsilon = 0.0104; // eV — Ar LJ
+
+      const [energySC] = softCoreLJForce(
+        positions,
+        forcesSC,
+        0,
+        1,
+        sigma,
+        epsilon,
+        1.0, // λ = 1
+        0.5,
+        1,
+        10.0,
+      );
+      const energyStd = ljForce(
+        positions,
+        forcesStd,
+        0,
+        1,
+        sigma,
+        epsilon,
+        10.0,
+      );
+
+      // At λ=1, soft-core has r_eff⁶ = α·σ⁶ + r⁶
+      // For r ≈ σ, this is NOT exactly standard LJ (the α term adds).
+      // But for r >> σ, the α·σ⁶ term becomes negligible.
+      // At r = 4.0 Å and σ = 3.4 Å: r⁶ = 4096, α·σ⁶ ≈ 0.5·1544 ≈ 772
+      // So r_eff⁶ ≈ 4868 vs r⁶ = 4096 → ~19% difference at r/σ ≈ 1.18
+      // Use a looser tolerance that accounts for the soft-core correction
+      const relErr =
+        Math.abs(energyStd) > 1e-15
+          ? Math.abs(energySC - energyStd) / Math.abs(energyStd)
+          : Math.abs(energySC - energyStd);
+
+      // At this r/σ ratio, allow up to 50% relative error due to soft-core
+      const passed = relErr < 0.5;
+      report(
+        id,
+        'Soft-core approximates standard LJ at λ=1, r=4.0 Å',
+        passed,
+        `E_sc=${energySC.toExponential(4)}, E_std=${energyStd.toExponential(4)}, relErr=${relErr.toExponential(3)}`,
+        'Relative error < 50% (soft-core α correction expected)',
+      );
+    }
+  }
+
+  // FEP-03: Soft-core energy is zero at λ=0
+  {
+    const id = 'FEP-03';
+    if (!isSkipped(id)) {
+      const positions = new Float64Array([0, 0, 0, 2.0, 0, 0]);
+      const forces = new Float64Array(6);
+      const sigma = 3.4; // Å — Ar LJ
+      const epsilon = 0.0104; // eV — Ar LJ
+
+      const [energy] = softCoreLJForce(
+        positions,
+        forces,
+        0,
+        1,
+        sigma,
+        epsilon,
+        0.0, // λ = 0
+        0.5,
+        1,
+        10.0,
+      );
+
+      const passed =
+        Math.abs(energy) < 1e-14 &&
+        Math.abs(forces[0]) < 1e-14 &&
+        Math.abs(forces[3]) < 1e-14;
+      report(
+        id,
+        'Soft-core LJ energy and forces are zero at λ=0',
+        passed,
+        `E=${energy.toExponential(3)}, F0=${forces[0].toExponential(3)}`,
+        '|E| < 1e-14, |F| < 1e-14',
+      );
+    }
+  }
+
+  // FEP-04: Gradient consistency of soft-core potential
+  {
+    const id = 'FEP-04';
+    if (!isSkipped(id)) {
+      // Numerical gradient: F_x ≈ −[V(x+h) − V(x−h)] / (2h)
+      const r0 = 3.0;
+      const h = 1e-5;
+      const sigma = 3.4; // Å — Ar LJ
+      const epsilon = 0.0104; // eV — Ar LJ
+      const lambda = 0.6;
+
+      // V(x + h)
+      const posFwd = new Float64Array([0, 0, 0, r0 + h, 0, 0]);
+      const frcFwd = new Float64Array(6);
+      const [eFwd] = softCoreLJForce(
+        posFwd,
+        frcFwd,
+        0,
+        1,
+        sigma,
+        epsilon,
+        lambda,
+        0.5,
+        1,
+        10.0,
+      );
+
+      // V(x - h)
+      const posBwd = new Float64Array([0, 0, 0, r0 - h, 0, 0]);
+      const frcBwd = new Float64Array(6);
+      const [eBwd] = softCoreLJForce(
+        posBwd,
+        frcBwd,
+        0,
+        1,
+        sigma,
+        epsilon,
+        lambda,
+        0.5,
+        1,
+        10.0,
+      );
+
+      // Analytical force at r0
+      const posCenter = new Float64Array([0, 0, 0, r0, 0, 0]);
+      const frcCenter = new Float64Array(6);
+      softCoreLJForce(
+        posCenter,
+        frcCenter,
+        0,
+        1,
+        sigma,
+        epsilon,
+        lambda,
+        0.5,
+        1,
+        10.0,
+      );
+
+      // F_j(x) = +fPrefactor * dx, and F_i(x) = -fPrefactor * dx
+      // So the force on atom j in the +x direction is frcCenter[3]
+      const numericalGrad = -(eFwd - eBwd) / (2 * h);
+      const analyticalForce = frcCenter[3]; // force on j in x
+
+      const relErr =
+        Math.abs(analyticalForce) > 1e-15
+          ? Math.abs(numericalGrad - analyticalForce) /
+            Math.abs(analyticalForce)
+          : Math.abs(numericalGrad - analyticalForce);
+
+      const passed = relErr < 1e-4;
+      report(
+        id,
+        'Soft-core LJ gradient consistency (numerical vs analytical)',
+        passed,
+        `F_num=${numericalGrad.toExponential(6)}, F_ana=${analyticalForce.toExponential(6)}, relErr=${relErr.toExponential(3)}`,
+        'Relative error < 1e-4',
+      );
+    }
+  }
+
+  // FEP-05: TI on a known analytical integral
+  {
+    const id = 'FEP-05';
+    if (!isSkipped(id)) {
+      // If ∂V/∂λ = constant c at all λ, then ΔG = ∫₀¹ c dλ = c
+      // Use c = 2.5 eV
+      const c = 2.5;
+      const lambdaSchedule = [0.0, 0.25, 0.5, 0.75, 1.0];
+      const samples: FEPSample[] = [];
+
+      // Generate 100 samples per window with the constant value
+      for (const lam of lambdaSchedule) {
+        for (let i = 0; i < 100; i++) {
+          samples.push({
+            lambda: lam,
+            dVdLambda: c,
+            deltaV: c,
+            step: i,
+          });
+        }
+      }
+
+      const result = computeTI(samples, lambdaSchedule);
+      const relErr = Math.abs(result.deltaG - c) / c;
+
+      const passed = relErr < 1e-10;
+      report(
+        id,
+        'TI recovers exact integral of constant ∂V/∂λ = 2.5 eV',
+        passed,
+        `ΔG=${result.deltaG.toFixed(6)} eV, expected=${c.toFixed(6)} eV, relErr=${relErr.toExponential(3)}`,
+        'Relative error < 1e-10',
+      );
+    }
+  }
+
+  // FEP-06: TI on a linear ∂V/∂λ = λ (integral = 0.5)
+  {
+    const id = 'FEP-06';
+    if (!isSkipped(id)) {
+      // ∂V/∂λ = λ → ΔG = ∫₀¹ λ dλ = 0.5
+      const lambdaSchedule = [
+        0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+      ];
+      const samples: FEPSample[] = [];
+
+      for (const lam of lambdaSchedule) {
+        for (let i = 0; i < 100; i++) {
+          samples.push({
+            lambda: lam,
+            dVdLambda: lam, // ∂V/∂λ = λ
+            deltaV: lam,
+            step: i,
+          });
+        }
+      }
+
+      const result = computeTI(samples, lambdaSchedule);
+      const expected = 0.5;
+      const relErr = Math.abs(result.deltaG - expected) / expected;
+
+      const passed = relErr < 1e-10;
+      report(
+        id,
+        'TI recovers ΔG=0.5 for linear ∂V/∂λ = λ',
+        passed,
+        `ΔG=${result.deltaG.toFixed(6)} eV, expected=${expected.toFixed(6)} eV, relErr=${relErr.toExponential(3)}`,
+        'Relative error < 1e-10 (trapezoidal rule is exact for linear functions)',
+      );
+    }
+  }
+
+  // FEP-07: Zwanzig on known ΔG (constant energy difference)
+  {
+    const id = 'FEP-07';
+    if (!isSkipped(id)) {
+      // If ΔV = constant c at all λ windows, then
+      // ΔG = −kT·ln⟨exp(−c·Δλ/kT)⟩ summed over windows = c
+      // Because ⟨exp(−c·Δλ/kT)⟩ = exp(−c·Δλ/kT) when ΔV is deterministic
+      const c = 1.0; // eV
+      const T = 300; // K
+      const lambdaSchedule = [0.0, 0.25, 0.5, 0.75, 1.0];
+      const samples: FEPSample[] = [];
+
+      for (const lam of lambdaSchedule) {
+        for (let i = 0; i < 200; i++) {
+          samples.push({
+            lambda: lam,
+            dVdLambda: c,
+            deltaV: c, // V_B − V_A = c at every configuration
+            step: i,
+          });
+        }
+      }
+
+      const result = computeZwanzig(samples, lambdaSchedule, T);
+      const relErr = Math.abs(result.deltaG - c) / c;
+
+      const passed = relErr < 1e-6;
+      report(
+        id,
+        'Zwanzig recovers ΔG=1.0 eV for constant ΔV',
+        passed,
+        `ΔG=${result.deltaG.toFixed(6)} eV, expected=${c.toFixed(6)} eV, relErr=${relErr.toExponential(3)}`,
+        'Relative error < 1e-6',
+      );
+    }
+  }
+
+  // FEP-08: Block averaging on uncorrelated data matches naive SEM
+  {
+    const id = 'FEP-08';
+    if (!isSkipped(id)) {
+      // For uncorrelated data, block averaging should give
+      // approximately the same SEM as the naive formula.
+      const n = 1000;
+      const values: number[] = [];
+      // Use the seeded PRNG for reproducibility
+      for (let i = 0; i < n; i++) {
+        // Box-Muller transform for approximate normal distribution
+        const u1 = seededRng();
+        const u2 = seededRng();
+        values.push(
+          5.0 + 2.0 * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2),
+        );
+      }
+
+      const [mean, blockError] = blockAverage(values);
+
+      // Naive SEM = σ / √n
+      let variance = 0;
+      for (let i = 0; i < n; i++) {
+        const d = values[i] - mean;
+        variance += d * d;
+      }
+      variance /= n - 1;
+      const naiveSEM = Math.sqrt(variance / n);
+
+      // Block error should be within 2x of naive SEM for uncorrelated data
+      const ratio = blockError / naiveSEM;
+      const passed = ratio > 0.3 && ratio < 3.0 && Math.abs(mean - 5.0) < 0.5;
+
+      report(
+        id,
+        'Block averaging on uncorrelated data ≈ naive SEM',
+        passed,
+        `mean=${mean.toFixed(3)}, blockErr=${blockError.toExponential(3)}, naiveSEM=${naiveSEM.toExponential(3)}, ratio=${ratio.toFixed(3)}`,
+        '0.3 < ratio < 3.0, |mean - 5.0| < 0.5',
+      );
+    }
+  }
+
+  // FEP-09: Soft-core dV/dλ is smooth (no discontinuities)
+  {
+    const id = 'FEP-09';
+    if (!isSkipped(id)) {
+      // Sample dV/dλ at many λ values and check it's smooth
+      const r = 2.5; // Å — well inside the cutoff
+      const sigma = 3.4; // Å — Ar LJ
+      const epsilon = 0.0104; // eV — Ar LJ
+      const nPoints = 20;
+      const dVdLambdaValues: number[] = [];
+
+      for (let i = 0; i <= nPoints; i++) {
+        const lambda = i / nPoints;
+        const pos = new Float64Array([0, 0, 0, r, 0, 0]);
+        const frc = new Float64Array(6);
+        const [, dVdL] = softCoreLJForce(
+          pos,
+          frc,
+          0,
+          1,
+          sigma,
+          epsilon,
+          Math.max(lambda, 1e-14), // avoid exact 0
+          0.5,
+          1,
+          10.0,
+        );
+        dVdLambdaValues.push(dVdL);
+      }
+
+      // Check all values are finite
+      const allFinite = dVdLambdaValues.every((v) => Number.isFinite(v));
+
+      // Check smoothness: no consecutive pair should differ by more than 10x
+      // the average step difference (allowing for curvature)
+      let maxJump = 0;
+      let avgStep = 0;
+      for (let i = 1; i < dVdLambdaValues.length; i++) {
+        const jump = Math.abs(dVdLambdaValues[i] - dVdLambdaValues[i - 1]);
+        maxJump = Math.max(maxJump, jump);
+        avgStep += jump;
+      }
+      avgStep /= dVdLambdaValues.length - 1;
+
+      // Max jump should not be more than 20x the average step
+      // (generous to allow for rapid but continuous variation)
+      const passed = allFinite && (avgStep < 1e-15 || maxJump / avgStep < 20);
+      report(
+        id,
+        'Soft-core dV/dλ is smooth across λ=[0,1]',
+        passed,
+        `allFinite=${allFinite}, maxJump=${maxJump.toExponential(3)}, avgStep=${avgStep.toExponential(3)}`,
+        'All values finite, max jump < 20× average step',
+      );
+    }
+  }
+}
+
 // ---- Main ----
 
 console.log('╔══════════════════════════════════════════════════╗');
@@ -3993,6 +4428,7 @@ runBondPlacementTests();
 runCrystalBuilderTests();
 runNEBTests();
 runAngularMomentumTests();
+runFEPTests();
 
 // Summary
 console.log('\n' + '='.repeat(50));
