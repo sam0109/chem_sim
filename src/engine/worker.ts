@@ -18,6 +18,7 @@ import {
   getLJParams,
   getUFFAngleK,
   getUFFTorsionParams,
+  getUFFInversionParams,
 } from '../data/uff';
 import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
@@ -25,6 +26,7 @@ import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
 import { pauliRepulsion } from './forces/pauli';
 import { torsionForce } from './forces/torsion';
+import { inversionForce } from './forces/inversion';
 import {
   velocityVerletStep,
   computeTemperature,
@@ -37,6 +39,7 @@ import {
   detectHydrogenBonds,
   buildAngleList,
   buildDihedralList,
+  buildInversionList,
 } from './bondDetector';
 import { CellList } from './neighborList';
 import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
@@ -93,6 +96,17 @@ let torsionParams: Array<{
   V: number;
   n: number;
   phi0: number;
+}> = [];
+// Cached inversion (out-of-plane) parameters
+let inversionParams: Array<{
+  i: number;
+  j: number;
+  k: number;
+  l: number;
+  K: number;
+  C0: number;
+  C1: number;
+  C2: number;
 }> = [];
 
 // --- Exclusion set: skip 1-2 (bonded) AND 1-3 (angle) pairs from LJ/Coulomb ---
@@ -228,6 +242,48 @@ function buildTorsionParams(): void {
     }
   }
 
+  // Build inversion (out-of-plane) parameters for sp2/sp3 centers.
+  // K is divided by the total number of OOP terms per center to
+  // avoid over-counting the inversion barrier.
+  // Source: Rappé et al., JACS 114, 10024 (1992), Eq. 17.
+  const { inversions, termsPerCenter } = buildInversionList(
+    bonds,
+    nAtoms,
+    Array.from(atomicNumbers),
+    hybridizations,
+  );
+  inversionParams = [];
+  // Build neighbor map to check for sp2 oxygen neighbors (carbonyl C)
+  const neighborMap: number[][] = Array.from({ length: nAtoms }, () => []);
+  for (const bond of bonds) {
+    if (bond.type === 'hydrogen' || bond.type === 'vanderwaals') continue;
+    neighborMap[bond.atomA].push(bond.atomB);
+    neighborMap[bond.atomB].push(bond.atomA);
+  }
+  for (const [ii, ij, ik, il] of inversions) {
+    const hasONeighbor = neighborMap[ij].some(
+      (nb) => atomicNumbers[nb] === 8 && hybridizations[nb] === 'sp2',
+    );
+    const params = getUFFInversionParams(
+      atomicNumbers[ij],
+      hybridizations[ij],
+      hasONeighbor,
+    );
+    if (params) {
+      const nTerms = termsPerCenter.get(ij) ?? 1;
+      inversionParams.push({
+        i: ii,
+        j: ij,
+        k: ik,
+        l: il,
+        K: params.K / nTerms,
+        C0: params.C0,
+        C1: params.C1,
+        C2: params.C2,
+      });
+    }
+  }
+
   // Compute Gasteiger partial charges from bond topology.
   // This replaces the hardcoded/zero charges with physically meaningful
   // values based on orbital electronegativity equilibration.
@@ -314,6 +370,22 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       tp.V,
       tp.n,
       tp.phi0,
+    );
+  }
+
+  // 2.75. Inversion (out-of-plane) forces — using precomputed params
+  for (const ip of inversionParams) {
+    potentialEnergy += inversionForce(
+      pos,
+      frc,
+      ip.i,
+      ip.j,
+      ip.k,
+      ip.l,
+      ip.K,
+      ip.C0,
+      ip.C1,
+      ip.C2,
     );
   }
 

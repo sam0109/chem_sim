@@ -23,7 +23,12 @@ import { harmonicAngleForce } from './forces/harmonic';
 import { pauliRepulsion } from './forces/pauli';
 import { torsionForce } from './forces/torsion';
 import { inversionForce } from './forces/inversion';
-import { detectBonds, buildAngleList, buildDihedralList } from './bondDetector';
+import {
+  detectBonds,
+  buildAngleList,
+  buildDihedralList,
+  buildInversionList,
+} from './bondDetector';
 import {
   velocityVerletStep,
   initializeVelocities,
@@ -151,6 +156,16 @@ interface SimState {
     n: number;
     phi0: number;
   }>;
+  inversionParams: Array<{
+    i: number;
+    j: number;
+    k: number;
+    l: number;
+    K: number;
+    C0: number;
+    C1: number;
+    C2: number;
+  }>;
 }
 
 function initSim(atoms: Atom[]): SimState {
@@ -193,6 +208,7 @@ function initSim(atoms: Atom[]): SimState {
     angleParams: [],
     dihedrals: [],
     torsionParams: [],
+    inversionParams: [],
   };
 
   rebuildTopo(state);
@@ -264,6 +280,45 @@ function rebuildTopo(s: SimState): void {
     }
   }
 
+  // Build inversion (out-of-plane) parameters
+  const { inversions, termsPerCenter } = buildInversionList(
+    s.bonds,
+    s.N,
+    s.Z,
+    detectedHyb,
+  );
+  s.inversionParams = [];
+  // Build neighbor map for checking sp2 O neighbors
+  const neighborMap: number[][] = Array.from({ length: s.N }, () => []);
+  for (const b of s.bonds) {
+    if (b.type === 'hydrogen' || b.type === 'vanderwaals') continue;
+    neighborMap[b.atomA].push(b.atomB);
+    neighborMap[b.atomB].push(b.atomA);
+  }
+  for (const [ii, ij, ik, il] of inversions) {
+    const hasONeighbor = neighborMap[ij].some(
+      (nb) => s.Z[nb] === 8 && detectedHyb[nb] === 'sp2',
+    );
+    const params = getUFFInversionParams(
+      s.Z[ij],
+      detectedHyb[ij],
+      hasONeighbor,
+    );
+    if (params) {
+      const nTerms = termsPerCenter.get(ij) ?? 1;
+      s.inversionParams.push({
+        i: ii,
+        j: ij,
+        k: ik,
+        l: il,
+        K: params.K / nTerms,
+        C0: params.C0,
+        C1: params.C1,
+        C2: params.C2,
+      });
+    }
+  }
+
   // Compute Gasteiger charges from bond topology
   const gasteigerQ = computeGasteigerCharges(
     new Int32Array(s.Z),
@@ -289,6 +344,19 @@ function calcForces(s: SimState, p: Float64Array, f: Float64Array): number {
     pe += harmonicAngleForce(p, f, a.i, a.j, a.k, a.kA, a.t0);
   for (const t of s.torsionParams)
     pe += torsionForce(p, f, t.i, t.j, t.k, t.l, t.V, t.n, t.phi0);
+  for (const iv of s.inversionParams)
+    pe += inversionForce(
+      p,
+      f,
+      iv.i,
+      iv.j,
+      iv.k,
+      iv.l,
+      iv.K,
+      iv.C0,
+      iv.C1,
+      iv.C2,
+    );
   for (let i = 0; i < s.N; i++) {
     for (let j = i + 1; j < s.N; j++) {
       if (s.exclusionSet.has(i + '-' + j)) continue;
