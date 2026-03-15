@@ -856,6 +856,25 @@ function removeAtom(atomId: number): void {
   sendState();
 }
 
+// ---- Transmute atom (change element in place) ----
+function transmuteAtom(atomId: number, newElementNumber: number): void {
+  if (atomId < 0 || atomId >= nAtoms) return;
+  cachedEnergiesValid = false;
+
+  // Update element and mass in place — no array resizing needed
+  atomicNumbers[atomId] = newElementNumber;
+  const el = elements[newElementNumber];
+  masses[atomId] = el ? el.mass : 1.0;
+  // Reset hybridization; rebuildTopology() will redetect it
+  hybridizations[atomId] = 'sp3';
+
+  // LJ params depend on element — clear cache
+  ljCache.clear();
+
+  rebuildTopology();
+  sendState();
+}
+
 // ---- Minimize ----
 function minimize(maxSteps: number, tolerance: number): void {
   cachedEnergiesValid = false;
@@ -1004,6 +1023,10 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
 
     case 'remove-atom':
       removeAtom(msg.atomId);
+      break;
+
+    case 'transmute-atom':
+      transmuteAtom(msg.atomId, msg.newElementNumber);
       break;
 
     case 'drag':
