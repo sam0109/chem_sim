@@ -31,7 +31,12 @@ import {
   computeTemperature,
   initializeVelocities,
 } from './integrator';
-import { berendsenThermostat } from './thermostat';
+import {
+  berendsenThermostat,
+  noseHooverChainStep,
+  createNoseHooverChainState,
+} from './thermostat';
+import type { NoseHooverChainState } from './thermostat';
 import { steepestDescent } from './minimizer';
 import {
   detectBonds,
@@ -58,6 +63,9 @@ let hybridizations: Hybridization[] = [];
 let bonds: Bond[] = [];
 let angles: Array<[number, number, number]> = [];
 let dihedrals: Array<[number, number, number, number]> = [];
+
+// Nosé-Hoover chain thermostat state (initialized on simulation start)
+let nhChainState: NoseHooverChainState | null = null;
 let config: SimulationConfig = {
   timestep: 0.5,
   temperature: 300,
@@ -564,6 +572,13 @@ function initSimulation(
   step = 0;
   ljCache.clear();
 
+  // Initialize Nosé-Hoover chain state for the new system
+  nhChainState = createNoseHooverChainState(
+    nAtoms,
+    config.temperature,
+    config.thermostatTau,
+  );
+
   sendState();
 }
 
@@ -590,6 +605,16 @@ function runSteps(nSteps: number): void {
         config.temperature,
         config.timestep,
         config.thermostatTau,
+      );
+    } else if (config.thermostat === 'nose-hoover' && nhChainState) {
+      noseHooverChainStep(
+        velocities,
+        masses,
+        fixed,
+        kineticEnergy,
+        config.temperature,
+        config.timestep,
+        nhChainState,
       );
     }
 
@@ -790,7 +815,22 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
 
     case 'config': {
       const wasRunning = config.running;
+      // Only reset NH chain state when thermostat parameters actually change value
+      const needsNHReset =
+        (msg.config.thermostat !== undefined &&
+          msg.config.thermostat !== config.thermostat) ||
+        (msg.config.temperature !== undefined &&
+          msg.config.temperature !== config.temperature) ||
+        (msg.config.thermostatTau !== undefined &&
+          msg.config.thermostatTau !== config.thermostatTau);
       Object.assign(config, msg.config);
+      if (needsNHReset && nAtoms > 0) {
+        nhChainState = createNoseHooverChainState(
+          nAtoms,
+          config.temperature,
+          config.thermostatTau,
+        );
+      }
       if (config.running && !wasRunning) startLoop();
       if (!config.running && wasRunning) stopLoop();
       break;
