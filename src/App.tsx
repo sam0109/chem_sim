@@ -11,6 +11,7 @@ import { Toolbar } from './ui/Toolbar';
 import { EnergyPlot } from './ui/EnergyPlot';
 import { ChallengePanel } from './ui/ChallengePanel';
 import { EncounterPanel } from './ui/EncounterPanel';
+import { ReactionLog } from './ui/ReactionLog';
 import { useSimulationStore } from './store/simulationStore';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
@@ -345,6 +346,7 @@ const App: React.FC = () => {
       <EnergyPlot />
       <ChallengePanel />
       <EncounterPanel />
+      <ReactionLog />
 
       <div
         data-testid="status-bar"
