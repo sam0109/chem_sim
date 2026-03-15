@@ -112,7 +112,6 @@ export function findMolecules(
  * @param moleculeIds    Molecule ID per atom (from findMolecules)
  * @param positions      Flat position array [x0,y0,z0,x1,y1,z1,...]
  * @param charges        Charge per atom
- * @param atomicNumbers  Atomic number per atom
  * @param masses         Mass per atom in amu
  * @param nAtoms         Total number of atoms
  * @returns Array of MoleculeInfo, one per molecule
