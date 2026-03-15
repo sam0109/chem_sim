@@ -17,6 +17,7 @@ export const SimulationControls: React.FC = () => {
   const temperature = useSimContextStore((s) => s.temperature);
   const atoms = useSimContextStore((s) => s.atoms);
   const bonds = useSimContextStore((s) => s.bonds);
+  const gpuAccelerated = useSimContextStore((s) => s.gpuAccelerated);
 
   return (
     <div
@@ -254,6 +255,17 @@ export const SimulationControls: React.FC = () => {
         <span style={{ color: '#888' }}>Bonds</span>
         <span data-testid="stat-bonds" style={{ textAlign: 'right' }}>
           {bonds.length}
+        </span>
+
+        <span style={{ color: '#888' }}>Forces</span>
+        <span
+          data-testid="stat-gpu"
+          style={{
+            textAlign: 'right',
+            color: gpuAccelerated ? '#44ff88' : '#888',
+          }}
+        >
+          {gpuAccelerated ? 'GPU' : 'CPU'}
         </span>
 
         <span style={{ color: '#888' }}>Temp</span>

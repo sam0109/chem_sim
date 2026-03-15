@@ -59,6 +59,30 @@ import { detectHybridization } from './hybridization';
 import { findMolecules, computeMoleculeInfo } from './moleculeTracker';
 import { wrapPositions } from './pbc';
 import { diffBonds, detectReactions } from './reactionDetector';
+import {
+  WebGPUForceCompute,
+  buildLJParamTable,
+  packExclusions,
+} from './webgpu/index';
+import type {
+  LJParamTable,
+  ExclusionData,
+  GPUForceResult,
+} from './webgpu/index';
+
+// ---- GPU acceleration state ----
+// Minimum atoms to use GPU path (below this, CPU overhead < GPU dispatch overhead)
+const GPU_ATOM_THRESHOLD = 50;
+let gpuForceCompute: WebGPUForceCompute | null = null;
+let gpuReady = false;
+let gpuInitAttempted = false;
+
+// Cached GPU data structures (rebuilt when topology changes)
+let gpuLJParamTable: LJParamTable | null = null;
+let gpuAtomTypes: Uint32Array = new Uint32Array(0);
+let gpuExclusions: ExclusionData = { pairs: new Uint32Array(0), count: 0 };
+let gpuScale14: ExclusionData = { pairs: new Uint32Array(0), count: 0 };
+let gpuDataDirty = true; // Flag to rebuild GPU data when topology changes
 
 // ---- Simulation state ----
 let nAtoms = 0;
@@ -86,6 +110,92 @@ let config: SimulationConfig = {
 };
 let step = 0;
 let box: SimulationBox = { size: [50, 50, 50], periodic: false };
+
+// ---- GPU initialization (non-blocking, best-effort) ----
+async function tryInitGPU(): Promise<void> {
+  if (gpuInitAttempted) return;
+  gpuInitAttempted = true;
+
+  try {
+    gpuForceCompute = new WebGPUForceCompute();
+    const success = await gpuForceCompute.init();
+    gpuReady = success;
+    if (!success) {
+      gpuForceCompute = null;
+    }
+  } catch {
+    gpuForceCompute = null;
+    gpuReady = false;
+  }
+}
+
+// Attempt GPU init immediately when worker starts
+tryInitGPU();
+
+/**
+ * Rebuild GPU-side data structures from current topology.
+ * Called after rebuildTopology() when gpuDataDirty is set.
+ */
+function rebuildGPUData(): void {
+  if (!gpuReady) return;
+
+  gpuLJParamTable = buildLJParamTable(atomicNumbers, nAtoms, getLJParams);
+
+  // Build per-atom type index array
+  gpuAtomTypes = new Uint32Array(nAtoms);
+  for (let i = 0; i < nAtoms; i++) {
+    gpuAtomTypes[i] =
+      gpuLJParamTable.atomicNumberToType.get(atomicNumbers[i]) ?? 0;
+  }
+
+  // Pack exclusion and scale14 sets
+  gpuExclusions = packExclusions(exclusionSet);
+  gpuScale14 = packExclusions(scale14Set);
+
+  gpuDataDirty = false;
+}
+
+/**
+ * Whether the GPU path should be used for the current step.
+ */
+function shouldUseGPU(): boolean {
+  return gpuReady && gpuForceCompute !== null && nAtoms >= GPU_ATOM_THRESHOLD;
+}
+
+/**
+ * Compute non-bonded forces on GPU and return the result.
+ * Returns null if GPU is unavailable or computation fails.
+ */
+async function computeNonbondedGPU(
+  pos: Float64Array,
+): Promise<GPUForceResult | null> {
+  if (!gpuForceCompute || !gpuLJParamTable) return null;
+
+  const wc = wolfConst;
+  const pbcBoxSize = box.periodic
+    ? (box.size as [number, number, number])
+    : undefined;
+
+  try {
+    return await gpuForceCompute.computeForces(
+      pos,
+      charges,
+      gpuAtomTypes,
+      nAtoms,
+      gpuLJParamTable,
+      gpuExclusions,
+      gpuScale14,
+      config.cutoff,
+      wc.alpha,
+      wc.erfcAlphaRc_over_rc,
+      wc.forceShift,
+      pbcBoxSize,
+    );
+  } catch {
+    // GPU failed — fall back to CPU silently
+    return null;
+  }
+}
 
 // Cached Wolf summation constants (recomputed when cutoff changes)
 let wolfConst: WolfConstants = computeWolfConstants(10.0);
@@ -414,6 +524,9 @@ function buildTorsionParams(): void {
     masses,
     nAtoms,
   );
+
+  // Mark GPU data as stale so it's rebuilt before next GPU dispatch
+  gpuDataDirty = true;
 }
 
 function getLJCached(
@@ -442,7 +555,12 @@ let cachedEnergyBreakdown: EnergyBreakdown = {
 /**
  * Compute all forces and return potential energy.
  * Also populates cachedEnergyBreakdown with per-force-type contributions.
+ *
+ * When gpuNonbondedResult is provided, uses pre-computed GPU forces for
+ * non-bonded interactions instead of CPU LJ + Coulomb computation.
  */
+let pendingGPUResult: GPUForceResult | null = null;
+
 function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   let potentialEnergy = 0;
   let morseE = 0;
@@ -525,64 +643,95 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
     potentialEnergy += e;
   }
 
-  // 3. Non-bonded forces (LJ + Coulomb) using cell list or brute force
-  // 1-2 and 1-3 pairs are fully excluded; 1-4 pairs get SCALE_14 (0.5×).
-  // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
-  const cutoff = config.cutoff;
-  const wc = wolfConst;
-  const pairCallback = (i: number, j: number): void => {
-    // Skip 1-2 (bonded) and 1-3 (angle) pairs
-    const key = `${Math.min(i, j)}-${Math.max(i, j)}`;
-    if (exclusionSet.has(key)) return;
+  // 3. Non-bonded forces (LJ + Coulomb)
+  // When GPU result is available, use pre-computed forces from the GPU.
+  // Otherwise fall back to CPU cell list or brute force.
+  const gpuResult = pendingGPUResult;
+  pendingGPUResult = null; // consume the result
 
-    // 1-4 pairs: scale LJ epsilon and Coulomb by SCALE_14
-    const is14 = scale14Set.has(key);
-    const scaleFactor = is14 ? SCALE_14 : 1.0;
-
-    const { sigma, epsilon } = getLJCached(atomicNumbers[i], atomicNumbers[j]);
-    const eLJ = ljForce(
-      pos,
-      frc,
-      i,
-      j,
-      sigma,
-      epsilon * scaleFactor,
-      cutoff,
-      pbcBoxSize,
-    );
-    ljE += eLJ;
-    potentialEnergy += eLJ;
-    const eCoul = coulombForce(
-      pos,
-      frc,
-      i,
-      j,
-      charges[i] * scaleFactor,
-      charges[j],
-      wc,
-      pbcBoxSize,
-    );
-    coulombE += eCoul;
-    potentialEnergy += eCoul;
-  };
-
-  if (nAtoms < 50) {
-    CellList.forEachPairBrute(pos, nAtoms, cutoff, pairCallback, pbcBoxSize);
-  } else {
-    if (box.periodic) {
-      cellList!.buildPeriodic(pos, nAtoms, box.size);
-    } else {
-      cellList!.build(pos, nAtoms);
+  if (gpuResult) {
+    // --- GPU path: add pre-computed non-bonded forces ---
+    const gpuForces = gpuResult.forces;
+    for (let i = 0; i < nAtoms; i++) {
+      frc[i * 3] += gpuForces[i * 3];
+      frc[i * 3 + 1] += gpuForces[i * 3 + 1];
+      frc[i * 3 + 2] += gpuForces[i * 3 + 2];
     }
-    cellList!.forEachPair(pos, cutoff, pairCallback, pbcBoxSize);
-  }
+    ljE = gpuResult.ljEnergy;
+    potentialEnergy += ljE;
+    coulombE = gpuResult.coulombEnergy;
+    potentialEnergy += coulombE;
 
-  // 3.5. Wolf self-energy correction (position-independent, affects PE only)
-  // Uses actual (unscaled) charges — the 1-4 scaling only applies to pair terms.
-  // Reference: Wolf et al., J. Chem. Phys. 110, 8254 (1999), Eq. 2.
-  const wolfSelf = wolfSelfEnergy(charges, nAtoms, wc);
-  coulombE += wolfSelf;
-  potentialEnergy += wolfSelf;
+    // Wolf self-energy correction (position-independent, computed on CPU)
+    // The GPU only computes pair interactions; self-energy is a constant offset.
+    // Reference: Wolf et al., J. Chem. Phys. 110, 8254 (1999), Eq. 2.
+    const wolfSelf = wolfSelfEnergy(charges, nAtoms, wolfConst);
+    coulombE += wolfSelf;
+    potentialEnergy += wolfSelf;
+  } else {
+    // --- CPU path: LJ + Coulomb using cell list or brute force ---
+    // 1-2 and 1-3 pairs are fully excluded; 1-4 pairs get SCALE_14 (0.5x).
+    // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
+    const cutoff = config.cutoff;
+    const pbcBoxSize = box.periodic ? box.size : undefined;
+    const wc = wolfConst;
+    const pairCallback = (i: number, j: number): void => {
+      // Skip 1-2 (bonded) and 1-3 (angle) pairs
+      const key = `${Math.min(i, j)}-${Math.max(i, j)}`;
+      if (exclusionSet.has(key)) return;
+
+      // 1-4 pairs: scale LJ epsilon and Coulomb by SCALE_14
+      const is14 = scale14Set.has(key);
+      const scaleFactor = is14 ? SCALE_14 : 1.0;
+
+      const { sigma, epsilon } = getLJCached(
+        atomicNumbers[i],
+        atomicNumbers[j],
+      );
+      const eLJ = ljForce(
+        pos,
+        frc,
+        i,
+        j,
+        sigma,
+        epsilon * scaleFactor,
+        cutoff,
+        pbcBoxSize,
+      );
+      ljE += eLJ;
+      potentialEnergy += eLJ;
+      const eCoul = coulombForce(
+        pos,
+        frc,
+        i,
+        j,
+        charges[i] * scaleFactor,
+        charges[j],
+        wc,
+        pbcBoxSize,
+      );
+      coulombE += eCoul;
+      potentialEnergy += eCoul;
+    };
+
+    if (nAtoms < 50) {
+      CellList.forEachPairBrute(pos, nAtoms, cutoff, pairCallback, pbcBoxSize);
+    } else {
+      if (box.periodic) {
+        cellList!.buildPeriodic(pos, nAtoms, box.size);
+      } else {
+        cellList!.build(pos, nAtoms);
+      }
+      cellList!.forEachPair(pos, cutoff, pairCallback, pbcBoxSize);
+    }
+
+    // 3.5. Wolf self-energy correction (position-independent, affects PE only)
+    // Uses actual (unscaled) charges — the 1-4 scaling only applies to pair terms.
+    // Reference: Wolf et al., J. Chem. Phys. 110, 8254 (1999), Eq. 2.
+    const wolfSelf = wolfSelfEnergy(charges, nAtoms, wc);
+    coulombE += wolfSelf;
+    potentialEnergy += wolfSelf;
+  }
 
   // 4. Drag force (spring to target position)
   if (dragAtomId >= 0 && dragAtomId < nAtoms) {
@@ -621,6 +770,7 @@ function initSimulation(
   wolfConst = computeWolfConstants(config.cutoff);
   nAtoms = atoms.length;
   cachedEnergiesValid = false;
+  gpuDataDirty = true;
 
   atomicNumbers = new Int32Array(nAtoms);
   positions = new Float64Array(nAtoms * 3);
@@ -827,9 +977,140 @@ function runSteps(nSteps: number): void {
   sendState();
 }
 
+/**
+ * GPU-accelerated version of runSteps.
+ * Uses async GPU dispatch for non-bonded forces while keeping bonded
+ * forces on the CPU. Falls back to CPU-only if GPU dispatch fails.
+ *
+ * The GPU result is placed in pendingGPUResult before the synchronous
+ * computeAllForces callback is invoked by velocityVerletStep, so the
+ * force computation uses GPU non-bonded forces instead of CPU.
+ */
+async function runStepsGPU(nSteps: number): Promise<void> {
+  // Rebuild GPU data if topology changed (new bonds, charges, etc.)
+  if (gpuDataDirty) {
+    rebuildGPUData();
+  }
+
+  let lastPE = 0;
+  const CONV = 103.6427; // 1 eV = 103.6427 amu·Å²/fs²
+  const dt = config.timestep;
+
+  for (let s = 0; s < nSteps; s++) {
+    // --- NH thermostat half-step BEFORE Verlet ---
+    if (config.thermostat === 'nose-hoover' && nhChainState) {
+      const ke = computeKineticEnergy();
+      noseHooverChainStep(
+        velocities,
+        masses,
+        fixed,
+        ke,
+        config.temperature,
+        dt * 0.5,
+        nhChainState,
+      );
+    }
+
+    // --- Inline async Velocity Verlet ---
+    // We inline the integrator here to insert the async GPU dispatch
+    // between position update and force computation.
+    const N = masses.length;
+    const invConv2dt = dt / (2.0 * CONV);
+
+    // Half-step velocity update: v(t+dt/2) = v(t) + F(t)/(2m) * dt
+    for (let i = 0; i < N; i++) {
+      if (fixed[i]) continue;
+      const invM = invConv2dt / masses[i];
+      const i3 = i * 3;
+      velocities[i3] += forces[i3] * invM;
+      velocities[i3 + 1] += forces[i3 + 1] * invM;
+      velocities[i3 + 2] += forces[i3 + 2] * invM;
+    }
+
+    // Position update: r(t+dt) = r(t) + v(t+dt/2) * dt
+    for (let i = 0; i < N; i++) {
+      if (fixed[i]) continue;
+      const i3 = i * 3;
+      positions[i3] += velocities[i3] * dt;
+      positions[i3 + 1] += velocities[i3 + 1] * dt;
+      positions[i3 + 2] += velocities[i3 + 2] * dt;
+    }
+
+    // --- Async GPU dispatch for non-bonded forces at new positions ---
+
+    const gpuResult = await computeNonbondedGPU(positions);
+    pendingGPUResult = gpuResult; // Will be consumed by computeAllForces
+
+    // Compute all forces (bonded on CPU + non-bonded from GPU or CPU fallback)
+    forces.fill(0);
+    const potentialEnergy = computeAllForces(positions, forces);
+
+    // Second half-step velocity: v(t+dt) = v(t+dt/2) + F(t+dt)/(2m) * dt
+    for (let i = 0; i < N; i++) {
+      if (fixed[i]) continue;
+      const invM = invConv2dt / masses[i];
+      const i3 = i * 3;
+      velocities[i3] += forces[i3] * invM;
+      velocities[i3 + 1] += forces[i3 + 1] * invM;
+      velocities[i3 + 2] += forces[i3 + 2] * invM;
+    }
+
+    // Compute KE
+    let kineticEnergy = 0;
+    for (let i = 0; i < N; i++) {
+      const i3 = i * 3;
+      const vx = velocities[i3];
+      const vy = velocities[i3 + 1];
+      const vz = velocities[i3 + 2];
+      kineticEnergy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz) * CONV;
+    }
+    // --- End inline Verlet ---
+
+    // Wrap positions into primary cell if PBC is enabled
+    if (box.periodic) {
+      wrapPositions(positions, nAtoms, box.size);
+    }
+
+    lastPE = potentialEnergy;
+
+    // Apply thermostat
+    if (config.thermostat === 'berendsen') {
+      berendsenThermostat(
+        velocities,
+        masses,
+        fixed,
+        kineticEnergy,
+        config.temperature,
+        dt,
+        config.thermostatTau,
+      );
+    } else if (config.thermostat === 'nose-hoover' && nhChainState) {
+      noseHooverChainStep(
+        velocities,
+        masses,
+        fixed,
+        kineticEnergy,
+        config.temperature,
+        dt * 0.5,
+        nhChainState,
+      );
+    }
+
+    step++;
+  }
+
+  cachedPE = lastPE;
+  cachedKE = computeKineticEnergy();
+  cachedEnergiesValid = true;
+
+  rebuildTopology();
+  sendState();
+}
+
 // ---- Add atom ----
 function addAtom(atom: Atom): void {
   cachedEnergiesValid = false;
+  gpuDataDirty = true;
   const newN = nAtoms + 1;
 
   // Grow arrays
@@ -876,6 +1157,7 @@ function addAtom(atom: Atom): void {
 function removeAtom(atomId: number): void {
   if (atomId < 0 || atomId >= nAtoms) return;
   cachedEnergiesValid = false;
+  gpuDataDirty = true;
 
   const newN = nAtoms - 1;
   const newAtomicNumbers = new Int32Array(newN);
@@ -922,6 +1204,7 @@ function transmuteAtom(atomId: number, newElementNumber: number): void {
   const el = elements[newElementNumber];
   if (!el) return; // reject unknown elements
   cachedEnergiesValid = false;
+  gpuDataDirty = true;
 
   // Rescale velocity to conserve momentum: p = m_old * v_old = m_new * v_new
   // This prevents kinetic energy discontinuities when the mass changes.
@@ -1036,8 +1319,27 @@ function simLoop(): void {
     return;
   }
 
-  runSteps(STEPS_PER_FRAME);
-  loopId = setTimeout(simLoop, FRAME_INTERVAL);
+  if (shouldUseGPU()) {
+    // GPU path: async sim loop
+    runStepsGPU(STEPS_PER_FRAME)
+      .then(() => {
+        if (config.running && nAtoms > 0) {
+          loopId = setTimeout(simLoop, FRAME_INTERVAL);
+        } else {
+          loopId = null;
+        }
+      })
+      .catch(() => {
+        // GPU failed during sim — fall back to CPU for this frame and future
+        gpuReady = false;
+        runSteps(STEPS_PER_FRAME);
+        loopId = setTimeout(simLoop, FRAME_INTERVAL);
+      });
+  } else {
+    // CPU path: synchronous
+    runSteps(STEPS_PER_FRAME);
+    loopId = setTimeout(simLoop, FRAME_INTERVAL);
+  }
 }
 
 function startLoop(): void {
