@@ -201,6 +201,134 @@ describe('detectHydrogenBonds', () => {
     const hBonds = detectHydrogenBonds(positions, atomicNumbers, existingBonds);
     expect(hBonds.length).toBe(0);
   });
+
+  it('preserves existing H-bond via hysteresis in break threshold zone', () => {
+    // Geometry: D-O at origin, H at (-0.96, 0, 0), acceptor O positioned so
+    // H···A = 2.7 Å (> 2.5 form threshold, < 3.0 break threshold).
+    // H at x=-0.96, acceptor at x = -0.96 + 2.7 = 1.74
+    // D→H = (-0.96, 0, 0), H→A = (2.7, 0, 0) → angle ~180° > 120° ✓
+    const positions = new Float64Array([
+      0,
+      0,
+      0, // atom 0: donor O
+      -0.96,
+      0,
+      0, // atom 1: H
+      1.74,
+      0,
+      0, // atom 2: acceptor O (H···A = 2.7 Å)
+    ]);
+    const atomicNumbers = [8, 1, 8];
+    const covalentBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+    ];
+
+    // Without previous H-bonds: should NOT form (2.7 > 2.5 form threshold)
+    const hBondsNew = detectHydrogenBonds(
+      positions,
+      atomicNumbers,
+      covalentBonds,
+      [],
+    );
+    expect(hBondsNew.length).toBe(0);
+
+    // With previous H-bond: should PRESERVE (2.7 < 3.0 break threshold)
+    const previousHBonds: Bond[] = [
+      { atomA: 1, atomB: 2, order: 0.5, type: 'hydrogen' },
+    ];
+    const hBondsExisting = detectHydrogenBonds(
+      positions,
+      atomicNumbers,
+      covalentBonds,
+      previousHBonds,
+    );
+    expect(hBondsExisting.length).toBe(1);
+    expect(hBondsExisting[0].type).toBe('hydrogen');
+  });
+
+  it('breaks H-bond when geometry exceeds break threshold', () => {
+    // H···A distance = 3.2 Å, which exceeds even the break threshold (3.0 Å)
+    // H at x=-0.96, acceptor at x = -0.96 + 3.2 = 2.24
+    const positions = new Float64Array([
+      0,
+      0,
+      0, // atom 0: donor O
+      -0.96,
+      0,
+      0, // atom 1: H
+      2.24,
+      0,
+      0, // atom 2: acceptor O (H···A = 3.2 Å)
+    ]);
+    const atomicNumbers = [8, 1, 8];
+    const covalentBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+    ];
+
+    // Even with previous H-bond, should break (3.2 > 3.0 break threshold)
+    const previousHBonds: Bond[] = [
+      { atomA: 1, atomB: 2, order: 0.5, type: 'hydrogen' },
+    ];
+    const hBonds = detectHydrogenBonds(
+      positions,
+      atomicNumbers,
+      covalentBonds,
+      previousHBonds,
+    );
+    expect(hBonds.length).toBe(0);
+  });
+
+  it('preserves existing H-bond via angle hysteresis', () => {
+    // Set up geometry where D-H···A angle is between form (120°) and break (100°)
+    // D at origin, H at (-0.96, 0, 0), acceptor placed so angle ≈ 110°
+    // For angle of 110° between D→H and H→A vectors:
+    //   D→H = (-0.96, 0, 0)
+    //   H→A = (ax, ay, 0), with dot(DH, HA)/(|DH|*|HA|) = cos(110°)
+    //   => -ax / distHA = cos(110°) => ax = -distHA * cos(110°)
+    const angleRad = (110 * Math.PI) / 180;
+    const distHA = 2.0; // Å, within form threshold
+    const ax = -distHA * Math.cos(angleRad);
+    const ay = distHA * Math.sin(angleRad);
+    const acceptorX = -0.96 + ax;
+    const acceptorY = ay;
+
+    const positions = new Float64Array([
+      0,
+      0,
+      0, // atom 0: donor O
+      -0.96,
+      0,
+      0, // atom 1: H
+      acceptorX,
+      acceptorY,
+      0, // atom 2: acceptor O
+    ]);
+    const atomicNumbers = [8, 1, 8];
+    const covalentBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+    ];
+
+    // Without previous H-bonds: should NOT form (110° < 120° form threshold)
+    const hBondsNew = detectHydrogenBonds(
+      positions,
+      atomicNumbers,
+      covalentBonds,
+      [],
+    );
+    expect(hBondsNew.length).toBe(0);
+
+    // With previous H-bond: should PRESERVE (110° > 100° break threshold)
+    const previousHBonds: Bond[] = [
+      { atomA: 1, atomB: 2, order: 0.5, type: 'hydrogen' },
+    ];
+    const hBondsExisting = detectHydrogenBonds(
+      positions,
+      atomicNumbers,
+      covalentBonds,
+      previousHBonds,
+    );
+    expect(hBondsExisting.length).toBe(1);
+  });
 });
 
 describe('buildAngleList', () => {
