@@ -163,14 +163,19 @@ function rebuildTopology(): void {
   const savedPrevMolIds = prevMoleculeIds;
   const savedPrevMolInfo = prevMoleculeInfo;
 
+  // Extract previous H-bonds for hysteresis BEFORE detectBonds() overwrites
+  // the bonds array (detectBonds never returns hydrogen-type bonds)
+  const previousHBonds = bonds.filter((b) => b.type === 'hydrogen');
+
   // Detect bonds with hysteresis (existing bonds get wider break tolerance)
   bonds = detectBonds(positions, Array.from(atomicNumbers), 1.2, bonds, 1.5);
 
-  // Add hydrogen bonds
+  // Add hydrogen bonds (with hysteresis from previous frame)
   const hBonds = detectHydrogenBonds(
     positions,
     Array.from(atomicNumbers),
     bonds,
+    previousHBonds,
   );
   bonds = [...bonds.filter((b) => b.type !== 'hydrogen'), ...hBonds];
 
@@ -181,11 +186,17 @@ function rebuildTopology(): void {
   bondParams = [];
   exclusionSet.clear();
   for (const bond of bonds) {
+    // H-bonds are non-covalent — their energy comes from LJ/Coulomb,
+    // so they must NOT be added to the exclusion set. Excluding them
+    // would suppress the very electrostatic attraction that creates them.
+    // Van der Waals bonds similarly should not create Morse terms but
+    // they do need exclusion (handled by their own force computation).
+    if (bond.type === 'hydrogen') continue;
     // 1-2 exclusion: bonded pairs skip LJ (Morse handles them)
     exclusionSet.add(
       `${Math.min(bond.atomA, bond.atomB)}-${Math.max(bond.atomA, bond.atomB)}`,
     );
-    if (bond.type === 'hydrogen' || bond.type === 'vanderwaals') continue;
+    if (bond.type === 'vanderwaals') continue;
     const params = getMorseBondParams(
       atomicNumbers[bond.atomA],
       atomicNumbers[bond.atomB],
@@ -577,10 +588,13 @@ function initSimulation(
     bondParams = [];
     exclusionSet.clear();
     for (const bond of bonds) {
+      // H-bonds are non-covalent — their energy comes from LJ/Coulomb,
+      // so they must NOT be added to the exclusion set.
+      if (bond.type === 'hydrogen') continue;
       exclusionSet.add(
         `${Math.min(bond.atomA, bond.atomB)}-${Math.max(bond.atomA, bond.atomB)}`,
       );
-      if (bond.type === 'hydrogen' || bond.type === 'vanderwaals') continue;
+      if (bond.type === 'vanderwaals') continue;
       const params = getMorseBondParams(
         atomicNumbers[bond.atomA],
         atomicNumbers[bond.atomB],
