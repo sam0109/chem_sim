@@ -138,6 +138,10 @@ export class SimulationWorker {
     this.onNEBResult = callback;
   }
 
+  calm(): void {
+    this.send({ type: 'calm' });
+  }
+
   terminate(): void {
     this.worker.terminate();
   }

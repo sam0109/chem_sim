@@ -12,6 +12,7 @@ export const SimulationControls: React.FC = () => {
   const setBox = useSimContextStore((s) => s.setBox);
   const toggleRunning = useSimContextStore((s) => s.toggleRunning);
   const minimize = useSimContextStore((s) => s.minimize);
+  const calm = useSimContextStore((s) => s.calm);
   const step = useSimContextStore((s) => s.step);
   const energy = useSimContextStore((s) => s.energy);
   const temperature = useSimContextStore((s) => s.temperature);
@@ -85,6 +86,24 @@ export const SimulationControls: React.FC = () => {
           }}
         >
           ⚡ Minimize
+        </button>
+        <button
+          data-testid="calm-button"
+          onClick={calm}
+          title="Zero all velocities to stop motion"
+          style={{
+            flex: 1,
+            padding: '6px 12px',
+            borderRadius: 4,
+            border: 'none',
+            background: '#5e8c6a',
+            color: '#fff',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+            fontSize: 12,
+          }}
+        >
+          Calm
         </button>
       </div>
 

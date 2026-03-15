@@ -40,6 +40,7 @@ import {
   velocityVerletStep,
   computeTemperature,
   initializeVelocities,
+  removeAngularMomentum,
 } from './integrator';
 import {
   berendsenThermostat,
@@ -978,6 +979,21 @@ function runSteps(nSteps: number): void {
   // LJ repulsion on 1-3 pairs prevents angle collapse.
   rebuildTopology();
 
+  // Remove angular momentum from each molecule periodically to prevent
+  // unphysical rotational energy buildup. Applied every 10 steps (~2 frames)
+  // as a gentle correction that doesn't over-damp genuine rotational dynamics.
+  // Source: Allen & Tildesley, "Computer Simulation of Liquids", §2.6
+  const ANGULAR_MOMENTUM_REMOVAL_INTERVAL = 10;
+  if (
+    step % ANGULAR_MOMENTUM_REMOVAL_INTERVAL === 0 &&
+    moleculeInfo.length > 0
+  ) {
+    const groups = moleculeInfo.map((m) => m.atomIndices);
+    removeAngularMomentum(positions, velocities, masses, fixed, groups);
+    // Invalidate cached KE since velocities changed
+    cachedKE = computeKineticEnergy();
+  }
+
   sendState();
 }
 
@@ -1493,6 +1509,22 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
 
     case 'neb-cancel':
       nebCancelled = true;
+      break;
+
+    case 'calm':
+      // Zero all velocities to stop all motion (translational + rotational)
+      cachedEnergiesValid = false;
+      velocities.fill(0);
+      // Reset Nosé-Hoover chain state so thermostat doesn't immediately
+      // re-inject energy from stale chain variables
+      if (nhChainState && nAtoms > 0) {
+        nhChainState = createNoseHooverChainState(
+          nAtoms,
+          config.temperature,
+          config.thermostatTau,
+        );
+      }
+      sendState();
       break;
   }
 };

@@ -119,6 +119,166 @@ export function computeTemperature(
 }
 
 /**
+ * Remove rigid-body angular momentum from each molecule.
+ *
+ * For each molecule group, computes the angular momentum L = Σ mᵢ (rᵢ - R) × vᵢ,
+ * the inertia tensor I, solves ω = I⁻¹ L, and subtracts ω × (rᵢ - R) from each
+ * atom's velocity. This prevents unphysical buildup of rotational kinetic energy.
+ *
+ * Single-atom molecules are skipped (no rotational DOF). For molecules with
+ * a near-singular inertia tensor (e.g., linear molecules), only the component
+ * of angular momentum about axes with nonzero moment of inertia is removed,
+ * using a pseudoinverse with a tolerance threshold.
+ *
+ * Source: Allen & Tildesley, "Computer Simulation of Liquids",
+ *   2nd ed., Section 2.6 — removal of center-of-mass angular momentum.
+ *
+ * @param positions  flat Float64Array [x0,y0,z0,x1,y1,z1,...] in Å
+ * @param velocities flat Float64Array [vx0,vy0,vz0,...] in Å/fs
+ * @param masses     atom masses in amu (length N)
+ * @param fixed      boolean flags (length N) — fixed atoms are excluded
+ * @param moleculeGroups array of atom-index arrays, one per molecule
+ */
+export function removeAngularMomentum(
+  positions: Float64Array,
+  velocities: Float64Array,
+  masses: Float64Array,
+  fixed: Uint8Array,
+  moleculeGroups: number[][],
+): void {
+  for (const group of moleculeGroups) {
+    // Filter out fixed atoms and skip single-atom molecules
+    const mobile = group.filter((i) => !fixed[i]);
+    if (mobile.length < 2) continue;
+
+    // --- Compute center of mass ---
+    let totalMass = 0;
+    let comX = 0,
+      comY = 0,
+      comZ = 0;
+    for (const i of mobile) {
+      const m = masses[i];
+      const i3 = i * 3;
+      totalMass += m;
+      comX += m * positions[i3];
+      comY += m * positions[i3 + 1];
+      comZ += m * positions[i3 + 2];
+    }
+    if (totalMass <= 0) continue;
+    comX /= totalMass;
+    comY /= totalMass;
+    comZ /= totalMass;
+
+    // --- Compute COM velocity ---
+    let vcomX = 0,
+      vcomY = 0,
+      vcomZ = 0;
+    for (const i of mobile) {
+      const m = masses[i];
+      const i3 = i * 3;
+      vcomX += m * velocities[i3];
+      vcomY += m * velocities[i3 + 1];
+      vcomZ += m * velocities[i3 + 2];
+    }
+    vcomX /= totalMass;
+    vcomY /= totalMass;
+    vcomZ /= totalMass;
+
+    // --- Compute angular momentum L = Σ mᵢ (rᵢ - R) × (vᵢ - V_com) ---
+    let Lx = 0,
+      Ly = 0,
+      Lz = 0;
+    for (const i of mobile) {
+      const m = masses[i];
+      const i3 = i * 3;
+      const rx = positions[i3] - comX;
+      const ry = positions[i3 + 1] - comY;
+      const rz = positions[i3 + 2] - comZ;
+      const vx = velocities[i3] - vcomX;
+      const vy = velocities[i3 + 1] - vcomY;
+      const vz = velocities[i3 + 2] - vcomZ;
+      // L = r × (m * v)
+      Lx += m * (ry * vz - rz * vy);
+      Ly += m * (rz * vx - rx * vz);
+      Lz += m * (rx * vy - ry * vx);
+    }
+
+    // --- Compute inertia tensor I ---
+    // I_xx = Σ mᵢ (ry² + rz²), I_xy = -Σ mᵢ rx ry, etc.
+    let Ixx = 0,
+      Iyy = 0,
+      Izz = 0;
+    let Ixy = 0,
+      Ixz = 0,
+      Iyz = 0;
+    for (const i of mobile) {
+      const m = masses[i];
+      const i3 = i * 3;
+      const rx = positions[i3] - comX;
+      const ry = positions[i3 + 1] - comY;
+      const rz = positions[i3 + 2] - comZ;
+      Ixx += m * (ry * ry + rz * rz);
+      Iyy += m * (rx * rx + rz * rz);
+      Izz += m * (rx * rx + ry * ry);
+      Ixy -= m * rx * ry;
+      Ixz -= m * rx * rz;
+      Iyz -= m * ry * rz;
+    }
+
+    // --- Solve ω = I⁻¹ L via explicit 3×3 inverse with pseudoinverse for singularities ---
+    // Determinant of I
+    const det =
+      Ixx * (Iyy * Izz - Iyz * Iyz) -
+      Ixy * (Ixy * Izz - Iyz * Ixz) +
+      Ixz * (Ixy * Iyz - Iyy * Ixz);
+
+    // Tolerance for near-singular inertia tensor (linear molecules, etc.)
+    // Scaled relative to the largest diagonal element to handle various mass scales.
+    const maxDiag = Math.max(Ixx, Iyy, Izz);
+    const TOL = 1e-10 * maxDiag * maxDiag * maxDiag;
+
+    let omegaX: number, omegaY: number, omegaZ: number;
+
+    if (Math.abs(det) > TOL) {
+      // Full 3×3 inverse: I⁻¹ = adj(I) / det
+      const invDet = 1.0 / det;
+      // Cofactor matrix (symmetric)
+      const c00 = (Iyy * Izz - Iyz * Iyz) * invDet;
+      const c01 = (Ixz * Iyz - Ixy * Izz) * invDet;
+      const c02 = (Ixy * Iyz - Ixz * Iyy) * invDet;
+      const c11 = (Ixx * Izz - Ixz * Ixz) * invDet;
+      const c12 = (Ixy * Ixz - Ixx * Iyz) * invDet;
+      const c22 = (Ixx * Iyy - Ixy * Ixy) * invDet;
+
+      omegaX = c00 * Lx + c01 * Ly + c02 * Lz;
+      omegaY = c01 * Lx + c11 * Ly + c12 * Lz;
+      omegaZ = c02 * Lx + c12 * Ly + c22 * Lz;
+    } else {
+      // Near-singular tensor (linear molecule or degenerate).
+      // Fall back to removing angular momentum only about axes with
+      // significant moment of inertia. For a diatomic/linear molecule,
+      // this correctly removes rotation perpendicular to the bond axis
+      // while leaving the (zero-moment) axial component untouched.
+      omegaX = maxDiag > 0 && Ixx > TOL / (maxDiag * maxDiag) ? Lx / Ixx : 0;
+      omegaY = maxDiag > 0 && Iyy > TOL / (maxDiag * maxDiag) ? Ly / Iyy : 0;
+      omegaZ = maxDiag > 0 && Izz > TOL / (maxDiag * maxDiag) ? Lz / Izz : 0;
+    }
+
+    // --- Subtract ω × (rᵢ - R) from each atom velocity ---
+    for (const i of mobile) {
+      const i3 = i * 3;
+      const rx = positions[i3] - comX;
+      const ry = positions[i3 + 1] - comY;
+      const rz = positions[i3 + 2] - comZ;
+      // ω × r = (ωy*rz - ωz*ry, ωz*rx - ωx*rz, ωx*ry - ωy*rx)
+      velocities[i3] -= omegaY * rz - omegaZ * ry;
+      velocities[i3 + 1] -= omegaZ * rx - omegaX * rz;
+      velocities[i3 + 2] -= omegaX * ry - omegaY * rx;
+    }
+  }
+}
+
+/**
  * Initialize velocities from Maxwell-Boltzmann distribution at target temperature.
  */
 export function initializeVelocities(

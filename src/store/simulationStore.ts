@@ -92,6 +92,7 @@ export interface SimulationStoreState {
   initSimulation: (atoms: Atom[], bonds?: Bond[]) => void;
   toggleRunning: () => void;
   minimize: () => void;
+  calm: () => void;
   dragAtom: (atomId: number, position: [number, number, number]) => void;
   releaseDrag: () => void;
   handleWorkerState: (state: WorkerStateUpdate) => void;
@@ -542,6 +543,10 @@ function buildStoreSlice(
 
     minimize() {
       get().worker?.minimize();
+    },
+
+    calm() {
+      get().worker?.calm();
     },
 
     dragAtom(atomId: number, position: [number, number, number]) {
