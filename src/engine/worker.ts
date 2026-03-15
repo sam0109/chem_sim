@@ -859,12 +859,25 @@ function removeAtom(atomId: number): void {
 // ---- Transmute atom (change element in place) ----
 function transmuteAtom(atomId: number, newElementNumber: number): void {
   if (atomId < 0 || atomId >= nAtoms) return;
+  const el = elements[newElementNumber];
+  if (!el) return; // reject unknown elements
   cachedEnergiesValid = false;
+
+  // Rescale velocity to conserve momentum: p = m_old * v_old = m_new * v_new
+  // This prevents kinetic energy discontinuities when the mass changes.
+  const oldMass = masses[atomId];
+  const newMass = el.mass;
+  if (newMass > 0) {
+    const scale = oldMass / newMass;
+    const i3 = atomId * 3;
+    velocities[i3] *= scale;
+    velocities[i3 + 1] *= scale;
+    velocities[i3 + 2] *= scale;
+  }
 
   // Update element and mass in place — no array resizing needed
   atomicNumbers[atomId] = newElementNumber;
-  const el = elements[newElementNumber];
-  masses[atomId] = el ? el.mass : 1.0;
+  masses[atomId] = newMass;
   // Reset hybridization; rebuildTopology() will redetect it
   hybridizations[atomId] = 'sp3';
 
