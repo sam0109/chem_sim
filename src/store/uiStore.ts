@@ -41,6 +41,7 @@ interface UIStore {
   showChallengePanel: boolean;
   showEncounterPanel: boolean;
   showReactionLog: boolean;
+  showEventLog: boolean;
   showExperimentPanel: boolean;
   togglePeriodicTable: () => void;
   togglePropertyPanel: () => void;
@@ -48,6 +49,7 @@ interface UIStore {
   toggleChallengePanel: () => void;
   toggleEncounterPanel: () => void;
   toggleReactionLog: () => void;
+  toggleEventLog: () => void;
   toggleExperimentPanel: () => void;
 
   // ---- Quantity dashboard ----
@@ -129,6 +131,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   showChallengePanel: false,
   showEncounterPanel: false,
   showReactionLog: false,
+  showEventLog: false,
   showExperimentPanel: false,
   hoveredAtomId: null,
 
@@ -184,6 +187,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   toggleEncounterPanel: () =>
     set({ showEncounterPanel: !get().showEncounterPanel }),
   toggleReactionLog: () => set({ showReactionLog: !get().showReactionLog }),
+  toggleEventLog: () => set({ showEventLog: !get().showEventLog }),
   toggleExperimentPanel: () =>
     set({ showExperimentPanel: !get().showExperimentPanel }),
 

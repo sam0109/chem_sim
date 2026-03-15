@@ -23,6 +23,7 @@ import {
 import type { SimulationStoreState } from './store/simulationStore';
 import { SimulationContext } from './store/SimulationContext';
 import { ReactionLog } from './ui/ReactionLog';
+import { EventLog } from './ui/EventLog';
 import { QuantityDashboard } from './ui/QuantityDashboard';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
@@ -692,6 +693,7 @@ const App: React.FC = () => {
         <ExperimentPanel />
         <EncounterPanel />
         <ReactionLog />
+        <EventLog />
         <QuantityDashboard />
 
         <div
