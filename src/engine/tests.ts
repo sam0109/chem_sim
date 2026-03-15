@@ -39,6 +39,7 @@ import {
   velocityVerletStep,
   initializeVelocities,
   computeTemperature,
+  removeAngularMomentum,
 } from './integrator';
 import { berendsenThermostat } from './thermostat';
 import {
@@ -3707,6 +3708,270 @@ function runNEBTests(): void {
   }
 }
 
+// ---- Angular Momentum Removal Tests ----
+
+function runAngularMomentumTests(): void {
+  console.log('\n--- Angular Momentum Removal Tests ---');
+
+  // ANG-01: Triangle molecule with pure rotation should have L → 0 after removal
+  {
+    const id = 'ANG-01';
+    if (!isSkipped(id)) {
+      // Three equal-mass atoms at corners of an equilateral triangle in the XY plane
+      // centered at origin, spinning clockwise around the Z axis
+      const positions = new Float64Array([
+        1.0,
+        0.0,
+        0.0, // atom 0: (1, 0, 0)
+        -0.5,
+        0.866,
+        0.0, // atom 1: (-0.5, √3/2, 0)
+        -0.5,
+        -0.866,
+        0.0, // atom 2: (-0.5, -√3/2, 0)
+      ]);
+      const masses = new Float64Array([12.0, 12.0, 12.0]); // carbon-like
+      const fixed = new Uint8Array([0, 0, 0]);
+
+      // Pure rotation: v = ω × r with ω = (0, 0, 1.0) rad/fs
+      // v_i = ω × r_i = (0,0,ω) × (x,y,z) = (-ωy, ωx, 0)
+      const omega = 1.0;
+      const velocities = new Float64Array([
+        -omega * 0.0,
+        omega * 1.0,
+        0.0, // v0 = (0, ω, 0)
+        -omega * 0.866,
+        omega * -0.5,
+        0.0, // v1 = (-ω√3/2, -ω/2, 0)
+        omega * 0.866,
+        omega * -0.5,
+        0.0, // v2 = (ω√3/2, -ω/2, 0)
+      ]);
+
+      const moleculeGroups = [[0, 1, 2]];
+
+      // Compute initial angular momentum magnitude
+      let L0x = 0,
+        L0y = 0,
+        L0z = 0;
+      for (let i = 0; i < 3; i++) {
+        const m = masses[i];
+        const rx = positions[i * 3],
+          ry = positions[i * 3 + 1],
+          rz = positions[i * 3 + 2];
+        const vx = velocities[i * 3],
+          vy = velocities[i * 3 + 1],
+          vz = velocities[i * 3 + 2];
+        L0x += m * (ry * vz - rz * vy);
+        L0y += m * (rz * vx - rx * vz);
+        L0z += m * (rx * vy - ry * vx);
+      }
+      const L0mag = Math.sqrt(L0x * L0x + L0y * L0y + L0z * L0z);
+
+      removeAngularMomentum(
+        positions,
+        velocities,
+        masses,
+        fixed,
+        moleculeGroups,
+      );
+
+      // Compute final angular momentum magnitude
+      let Lfx = 0,
+        Lfy = 0,
+        Lfz = 0;
+      for (let i = 0; i < 3; i++) {
+        const m = masses[i];
+        const rx = positions[i * 3],
+          ry = positions[i * 3 + 1],
+          rz = positions[i * 3 + 2];
+        const vx = velocities[i * 3],
+          vy = velocities[i * 3 + 1],
+          vz = velocities[i * 3 + 2];
+        Lfx += m * (ry * vz - rz * vy);
+        Lfy += m * (rz * vx - rx * vz);
+        Lfz += m * (rx * vy - ry * vx);
+      }
+      const Lfmag = Math.sqrt(Lfx * Lfx + Lfy * Lfy + Lfz * Lfz);
+
+      const passed = L0mag > 1.0 && Lfmag < 1e-10;
+      report(
+        id,
+        'Triangle molecule: angular momentum zeroed after removal',
+        passed,
+        `|L_initial| = ${L0mag.toFixed(4)}, |L_final| = ${Lfmag.toExponential(3)}`,
+        '|L_initial| > 1.0, |L_final| < 1e-10',
+      );
+    }
+  }
+
+  // ANG-02: Single-atom molecule is skipped (no crash, velocity unchanged)
+  {
+    const id = 'ANG-02';
+    if (!isSkipped(id)) {
+      const positions = new Float64Array([1.0, 2.0, 3.0]);
+      const velocities = new Float64Array([0.5, -0.3, 0.1]);
+      const vBefore = new Float64Array(velocities);
+      const masses = new Float64Array([16.0]);
+      const fixed = new Uint8Array([0]);
+      const moleculeGroups = [[0]];
+
+      removeAngularMomentum(
+        positions,
+        velocities,
+        masses,
+        fixed,
+        moleculeGroups,
+      );
+
+      const unchanged =
+        velocities[0] === vBefore[0] &&
+        velocities[1] === vBefore[1] &&
+        velocities[2] === vBefore[2];
+      report(
+        id,
+        'Single-atom molecule: velocity unchanged (no rotational DOF)',
+        unchanged,
+        `v = [${velocities[0]}, ${velocities[1]}, ${velocities[2]}]`,
+        `v = [${vBefore[0]}, ${vBefore[1]}, ${vBefore[2]}] (unchanged)`,
+      );
+    }
+  }
+
+  // ANG-03: Translational COM velocity is preserved after angular momentum removal
+  {
+    const id = 'ANG-03';
+    if (!isSkipped(id)) {
+      // Three atoms with different masses and both translation + rotation
+      const positions = new Float64Array([
+        1.0, 0.0, 0.0, -0.5, 0.866, 0.0, -0.5, -0.866, 0.0,
+      ]);
+      const masses = new Float64Array([12.0, 16.0, 1.0]); // C, O, H
+      const fixed = new Uint8Array([0, 0, 0]);
+      // Translation: (1, 0.5, -0.2) + rotation
+      const velocities = new Float64Array([
+        1.0 + 0.0,
+        0.5 + 1.0,
+        -0.2, // translational + rotational
+        1.0 - 0.866,
+        0.5 - 0.5,
+        -0.2,
+        1.0 + 0.866,
+        0.5 - 0.5,
+        -0.2,
+      ]);
+
+      // COM velocity before
+      let totalMass = 0;
+      let vcomBx = 0,
+        vcomBy = 0,
+        vcomBz = 0;
+      for (let i = 0; i < 3; i++) {
+        const m = masses[i];
+        totalMass += m;
+        vcomBx += m * velocities[i * 3];
+        vcomBy += m * velocities[i * 3 + 1];
+        vcomBz += m * velocities[i * 3 + 2];
+      }
+      vcomBx /= totalMass;
+      vcomBy /= totalMass;
+      vcomBz /= totalMass;
+
+      const moleculeGroups = [[0, 1, 2]];
+      removeAngularMomentum(
+        positions,
+        velocities,
+        masses,
+        fixed,
+        moleculeGroups,
+      );
+
+      // COM velocity after
+      let vcomAx = 0,
+        vcomAy = 0,
+        vcomAz = 0;
+      for (let i = 0; i < 3; i++) {
+        const m = masses[i];
+        vcomAx += m * velocities[i * 3];
+        vcomAy += m * velocities[i * 3 + 1];
+        vcomAz += m * velocities[i * 3 + 2];
+      }
+      vcomAx /= totalMass;
+      vcomAy /= totalMass;
+      vcomAz /= totalMass;
+
+      const dv = Math.sqrt(
+        (vcomAx - vcomBx) ** 2 +
+          (vcomAy - vcomBy) ** 2 +
+          (vcomAz - vcomBz) ** 2,
+      );
+      const passed = dv < 1e-12;
+      report(
+        id,
+        'COM velocity preserved after angular momentum removal',
+        passed,
+        `|Δv_com| = ${dv.toExponential(3)}`,
+        '|Δv_com| < 1e-12',
+      );
+    }
+  }
+
+  // ANG-04: Linear molecule (diatomic) with rotation about perpendicular axis
+  {
+    const id = 'ANG-04';
+    if (!isSkipped(id)) {
+      // Two atoms along the X axis, rotating in the XY plane
+      const positions = new Float64Array([
+        -0.6,
+        0.0,
+        0.0, // atom 0
+        0.6,
+        0.0,
+        0.0, // atom 1
+      ]);
+      const masses = new Float64Array([16.0, 16.0]); // O2-like
+      const fixed = new Uint8Array([0, 0]);
+      // Rotation: ω = (0, 0, 2.0) → v = ω × r
+      const velocities = new Float64Array([
+        0.0,
+        -1.2,
+        0.0, // (-ωy₀, ωx₀, 0) = (0, -2*0.6, 0)
+        0.0,
+        1.2,
+        0.0, // (0, 2*0.6, 0)
+      ]);
+
+      const moleculeGroups = [[0, 1]];
+      removeAngularMomentum(
+        positions,
+        velocities,
+        masses,
+        fixed,
+        moleculeGroups,
+      );
+
+      // Check angular momentum after
+      let Lfz = 0;
+      for (let i = 0; i < 2; i++) {
+        const m = masses[i];
+        const rx = positions[i * 3],
+          ry = positions[i * 3 + 1];
+        const vx = velocities[i * 3],
+          vy = velocities[i * 3 + 1];
+        Lfz += m * (rx * vy - ry * vx);
+      }
+      const passed = Math.abs(Lfz) < 1e-10;
+      report(
+        id,
+        'Diatomic molecule: perpendicular rotation removed',
+        passed,
+        `|L_z| = ${Math.abs(Lfz).toExponential(3)}`,
+        '|L_z| < 1e-10',
+      );
+    }
+  }
+}
+
 // ---- Main ----
 
 console.log('╔══════════════════════════════════════════════════╗');
@@ -3727,6 +3992,7 @@ runOrbitalTests();
 runBondPlacementTests();
 runCrystalBuilderTests();
 runNEBTests();
+runAngularMomentumTests();
 
 // Summary
 console.log('\n' + '='.repeat(50));
