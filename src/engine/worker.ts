@@ -112,6 +112,12 @@ let inversionParams: Array<{
 // --- Exclusion set: skip 1-2 (bonded) AND 1-3 (angle) pairs from LJ/Coulomb ---
 const exclusionSet: Set<string> = new Set();
 
+// --- 1-4 scaling set: dihedral terminal pairs get 0.5× LJ and Coulomb ---
+// Standard AMBER/OPLS convention: 1-4 pairs are scaled by 0.5.
+// Source: Cornell et al., JACS 117, 5179 (1995); Jorgensen et al., JACS 118, 11225 (1996).
+const SCALE_14 = 0.5;
+const scale14Set: Set<string> = new Set();
+
 // Drag force target
 let dragAtomId = -1;
 let dragTarget: [number, number, number] = [0, 0, 0];
@@ -176,6 +182,17 @@ function rebuildTopology(): void {
   }
 
   buildTorsionParams();
+
+  // Build 1-4 scaling set from dihedral terminal atoms.
+  // Pairs that are both 1-3 (in exclusionSet) and 1-4 are fully excluded
+  // (1-3 takes precedence), so we skip those here.
+  scale14Set.clear();
+  for (const [di, , , dl] of dihedrals) {
+    const key = `${Math.min(di, dl)}-${Math.max(di, dl)}`;
+    if (!exclusionSet.has(key)) {
+      scale14Set.add(key);
+    }
+  }
 
   // Compute Gasteiger partial charges from bond topology.
   // This replaces the hardcoded/zero charges with physically meaningful
@@ -390,20 +407,34 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   }
 
   // 3. Non-bonded forces (LJ + Coulomb) using cell list or brute force
+  // 1-2 and 1-3 pairs are fully excluded; 1-4 pairs get SCALE_14 (0.5×).
+  // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
   const cutoff = config.cutoff;
   const pairCallback = (i: number, j: number): void => {
     // Skip 1-2 (bonded) and 1-3 (angle) pairs
     const key = `${Math.min(i, j)}-${Math.max(i, j)}`;
     if (exclusionSet.has(key)) return;
 
+    // 1-4 pairs: scale LJ epsilon and Coulomb by SCALE_14
+    const is14 = scale14Set.has(key);
+    const scaleFactor = is14 ? SCALE_14 : 1.0;
+
     const { sigma, epsilon } = getLJCached(atomicNumbers[i], atomicNumbers[j]);
-    potentialEnergy += ljForce(pos, frc, i, j, sigma, epsilon, cutoff);
+    potentialEnergy += ljForce(
+      pos,
+      frc,
+      i,
+      j,
+      sigma,
+      epsilon * scaleFactor,
+      cutoff,
+    );
     potentialEnergy += coulombForce(
       pos,
       frc,
       i,
       j,
-      charges[i],
+      charges[i] * scaleFactor,
       charges[j],
       cutoff,
     );
@@ -530,6 +561,14 @@ function initSimulation(
       angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
     }
     buildTorsionParams();
+    // Build 1-4 scaling set for provided bonds
+    scale14Set.clear();
+    for (const [di, , , dl] of dihedrals) {
+      const key = `${Math.min(di, dl)}-${Math.max(di, dl)}`;
+      if (!exclusionSet.has(key)) {
+        scale14Set.add(key);
+      }
+    }
   } else {
     rebuildTopology();
   }
