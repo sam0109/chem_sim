@@ -139,6 +139,12 @@ const exclusionSet: Set<string> = new Set();
 const SCALE_14 = 0.5;
 const scale14Set: Set<string> = new Set();
 
+// Cached energies from the most recent velocityVerletStep() call.
+// Used by sendState() to avoid a redundant O(N²) force computation.
+let cachedKE = 0;
+let cachedPE = 0;
+let cachedEnergiesValid = false;
+
 // Drag force target
 let dragAtomId = -1;
 let dragTarget: [number, number, number] = [0, 0, 0];
@@ -554,6 +560,7 @@ function initSimulation(
   box = { ...inputBox };
   wolfConst = computeWolfConstants(config.cutoff);
   nAtoms = atoms.length;
+  cachedEnergiesValid = false;
 
   atomicNumbers = new Int32Array(nAtoms);
   positions = new Float64Array(nAtoms * 3);
@@ -681,6 +688,8 @@ function computeKineticEnergy(): number {
 }
 
 function runSteps(nSteps: number): void {
+  let lastPE = 0;
+
   for (let s = 0; s < nSteps; s++) {
     // --- NH thermostat half-step BEFORE Verlet ---
     // Split integration: apply thermostat at dt/2 before and after
@@ -699,7 +708,7 @@ function runSteps(nSteps: number): void {
       );
     }
 
-    const { kineticEnergy } = velocityVerletStep(
+    const { kineticEnergy, potentialEnergy } = velocityVerletStep(
       positions,
       velocities,
       forces,
@@ -713,6 +722,8 @@ function runSteps(nSteps: number): void {
     if (box.periodic) {
       wrapPositions(positions, nAtoms, box.size);
     }
+
+    lastPE = potentialEnergy;
 
     // Apply thermostat
     if (config.thermostat === 'berendsen') {
@@ -741,6 +752,13 @@ function runSteps(nSteps: number): void {
     step++;
   }
 
+  // Cache PE from the last integration step (positions unchanged since then).
+  cachedPE = lastPE;
+
+  // Recompute KE after thermostat, since Berendsen/Nosé-Hoover scale velocities.
+  cachedKE = computeKineticEnergy();
+  cachedEnergiesValid = true;
+
   // Re-detect bonds every frame for physically accurate dynamic bonding.
   // Valence constraints in detectBonds prevent spurious bonds.
   // LJ repulsion on 1-3 pairs prevents angle collapse.
@@ -751,6 +769,7 @@ function runSteps(nSteps: number): void {
 
 // ---- Add atom ----
 function addAtom(atom: Atom): void {
+  cachedEnergiesValid = false;
   const newN = nAtoms + 1;
 
   // Grow arrays
@@ -796,6 +815,7 @@ function addAtom(atom: Atom): void {
 // ---- Remove atom ----
 function removeAtom(atomId: number): void {
   if (atomId < 0 || atomId >= nAtoms) return;
+  cachedEnergiesValid = false;
 
   const newN = nAtoms - 1;
   const newAtomicNumbers = new Int32Array(newN);
@@ -838,6 +858,7 @@ function removeAtom(atomId: number): void {
 
 // ---- Minimize ----
 function minimize(maxSteps: number, tolerance: number): void {
+  cachedEnergiesValid = false;
   steepestDescent(
     positions,
     forces,
@@ -859,11 +880,22 @@ function minimize(maxSteps: number, tolerance: number): void {
 
 // ---- Send state back to main thread ----
 function sendState(): void {
-  // Compute energies
-  forces.fill(0);
-  const potentialEnergy = computeAllForces(positions, forces);
+  let potentialEnergy: number;
+  let kineticEnergy: number;
 
-  const kineticEnergy = computeKineticEnergy();
+  if (cachedEnergiesValid) {
+    // Hot path: reuse energies from the most recent velocityVerletStep().
+    // Avoids a redundant O(N²) computeAllForces() call.
+    potentialEnergy = cachedPE;
+    kineticEnergy = cachedKE;
+    cachedEnergiesValid = false;
+  } else {
+    // Cold path: no cached value available (init, addAtom, removeAtom,
+    // minimize, set-velocities). Recompute from scratch.
+    forces.fill(0);
+    potentialEnergy = computeAllForces(positions, forces);
+    kineticEnergy = computeKineticEnergy();
+  }
 
   const temperature = computeTemperature(kineticEnergy, nAtoms);
 
@@ -985,6 +1017,7 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
       break;
 
     case 'set-velocities':
+      cachedEnergiesValid = false;
       for (const entry of msg.entries) {
         const idx = entry.atomIndex;
         if (idx >= 0 && idx < nAtoms) {
