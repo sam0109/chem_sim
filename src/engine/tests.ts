@@ -29,7 +29,7 @@ import {
   naclPair,
   ethanolMolecule,
 } from '../io/examples';
-import type { Atom, Bond } from '../data/types';
+import type { Atom, Bond, Hybridization } from '../data/types';
 
 // ---- Deterministic PRNG for reproducible tests ----
 // Mulberry32: a simple 32-bit seeded PRNG (public domain)
@@ -110,6 +110,7 @@ interface SimState {
   fixed: Uint8Array;
   Z: number[];
   charges: number[];
+  hybridizations: Hybridization[];
   N: number;
   bonds: Bond[];
   angles: Array<[number, number, number]>;
@@ -139,11 +140,13 @@ function initSim(atoms: Atom[]): SimState {
   const fixed = new Uint8Array(N);
   const Z: number[] = [];
   const charges: number[] = [];
+  const hybridizations: Hybridization[] = [];
 
   for (let i = 0; i < N; i++) {
     const a = atoms[i];
     Z.push(a.elementNumber);
     charges.push(a.charge);
+    hybridizations.push(a.hybridization);
     pos[i * 3] = a.position[0];
     pos[i * 3 + 1] = a.position[1];
     pos[i * 3 + 2] = a.position[2];
@@ -159,6 +162,7 @@ function initSim(atoms: Atom[]): SimState {
     fixed,
     Z,
     charges,
+    hybridizations,
     N,
     bonds: [],
     angles: [],
@@ -189,7 +193,7 @@ function rebuildTopo(s: SimState): void {
     s.exclusionSet.add(Math.min(i, k) + '-' + Math.max(i, k));
   }
   for (const [ti, c, tk] of s.angles) {
-    const a = getUFFAngleK(s.Z[ti], s.Z[c], s.Z[tk]);
+    const a = getUFFAngleK(s.Z[ti], s.Z[c], s.Z[tk], 1, 1, s.hybridizations[c]);
     s.angleParams.push({ i: ti, j: c, k: tk, kA: a.kAngle, t0: a.theta0 });
   }
 }

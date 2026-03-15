@@ -5,6 +5,7 @@
 import type {
   Atom,
   Bond,
+  Hybridization,
   SimulationBox,
   SimulationConfig,
   WorkerInMessage,
@@ -40,6 +41,7 @@ let forces: Float64Array = new Float64Array(0);
 let masses: Float64Array = new Float64Array(0);
 let charges: Float64Array = new Float64Array(0);
 let fixed: Uint8Array = new Uint8Array(0);
+let hybridizations: Hybridization[] = [];
 let bonds: Bond[] = [];
 let angles: Array<[number, number, number]> = [];
 let config: SimulationConfig = {
@@ -124,6 +126,9 @@ function rebuildTopology(): void {
       atomicNumbers[ti],
       atomicNumbers[central],
       atomicNumbers[tk],
+      1,
+      1,
+      hybridizations[central],
     );
     angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
   }
@@ -262,6 +267,7 @@ function initSimulation(
   masses = new Float64Array(nAtoms);
   charges = new Float64Array(nAtoms);
   fixed = new Uint8Array(nAtoms);
+  hybridizations = new Array(nAtoms);
 
   for (let i = 0; i < nAtoms; i++) {
     const atom = atoms[i];
@@ -276,6 +282,7 @@ function initSimulation(
     masses[i] = el ? el.mass : 1.0;
     charges[i] = atom.charge;
     fixed[i] = atom.fixed ? 1 : 0;
+    hybridizations[i] = atom.hybridization;
   }
 
   cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
@@ -309,6 +316,9 @@ function initSimulation(
         atomicNumbers[ti],
         atomicNumbers[central],
         atomicNumbers[tk],
+        1,
+        1,
+        hybridizations[central],
       );
       angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
     }
@@ -408,6 +418,7 @@ function addAtom(atom: Atom): void {
   masses = newMasses;
   charges = newCharges;
   fixed = newFixed;
+  hybridizations.push(atom.hybridization);
   nAtoms = newN;
 
   rebuildTopology();
@@ -450,6 +461,7 @@ function removeAtom(atomId: number): void {
   masses = newMasses;
   charges = newCharges;
   fixed = newFixed;
+  hybridizations.splice(atomId, 1);
   nAtoms = newN;
 
   rebuildTopology();
