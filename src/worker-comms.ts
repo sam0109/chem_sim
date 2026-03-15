@@ -4,8 +4,13 @@
 // ==============================================================
 
 import type {
-  Atom, Bond, SimulationBox, SimulationConfig,
-  WorkerInMessage, WorkerOutMessage, WorkerStateUpdate,
+  Atom,
+  Bond,
+  SimulationBox,
+  SimulationConfig,
+  WorkerInMessage,
+  WorkerOutMessage,
+  WorkerStateUpdate,
 } from './data/types';
 
 export type StateCallback = (state: WorkerStateUpdate) => void;
@@ -16,10 +21,9 @@ export class SimulationWorker {
   private readyPromise: Promise<void>;
 
   constructor() {
-    this.worker = new Worker(
-      new URL('./engine/worker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    this.worker = new Worker(new URL('./engine/worker.ts', import.meta.url), {
+      type: 'module',
+    });
 
     this.readyPromise = new Promise<void>((resolve) => {
       const handler = (e: MessageEvent<WorkerOutMessage>) => {
@@ -49,7 +53,12 @@ export class SimulationWorker {
     this.worker.postMessage(msg);
   }
 
-  init(atoms: Atom[], bonds: Bond[], box: SimulationBox, config: SimulationConfig): void {
+  init(
+    atoms: Atom[],
+    bonds: Bond[],
+    box: SimulationBox,
+    config: SimulationConfig,
+  ): void {
     this.send({ type: 'init', atoms, bonds, box, config });
   }
 

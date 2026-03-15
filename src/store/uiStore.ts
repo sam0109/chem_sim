@@ -38,7 +38,9 @@ interface UIStore {
 
   // ---- Rendering options ----
   renderMode: 'ball-and-stick' | 'space-filling' | 'wireframe';
-  setRenderMode: (mode: 'ball-and-stick' | 'space-filling' | 'wireframe') => void;
+  setRenderMode: (
+    mode: 'ball-and-stick' | 'space-filling' | 'wireframe',
+  ) => void;
   showLabels: boolean;
   toggleLabels: () => void;
 }
@@ -77,8 +79,10 @@ export const useUIStore = create<UIStore>((set, get) => ({
   addMeasurement: (m) => set({ measurements: [...get().measurements, m] }),
   clearMeasurements: () => set({ measurements: [] }),
 
-  togglePeriodicTable: () => set({ showPeriodicTable: !get().showPeriodicTable }),
-  togglePropertyPanel: () => set({ showPropertyPanel: !get().showPropertyPanel }),
+  togglePeriodicTable: () =>
+    set({ showPeriodicTable: !get().showPeriodicTable }),
+  togglePropertyPanel: () =>
+    set({ showPropertyPanel: !get().showPropertyPanel }),
   toggleEnergyPlot: () => set({ showEnergyPlot: !get().showEnergyPlot }),
 
   setHoveredAtom: (id) => set({ hoveredAtomId: id }),

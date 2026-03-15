@@ -4,7 +4,10 @@ import { ljForce } from '../lennardJones.ts';
 /**
  * Helper: create a two-atom system along the x-axis.
  */
-function makePair(r: number): { positions: Float64Array; forces: Float64Array } {
+function makePair(r: number): {
+  positions: Float64Array;
+  forces: Float64Array;
+} {
   const positions = new Float64Array([0, 0, 0, r, 0, 0]);
   const forces = new Float64Array(6);
   return { positions, forces };
@@ -14,8 +17,11 @@ function makePair(r: number): { positions: Float64Array; forces: Float64Array } 
  * Central finite-difference gradient check.
  */
 function checkGradient(
-  sigma: number, epsilon: number, cutoff: number,
-  r: number, h = 1e-5, tol = 1e-6,
+  sigma: number,
+  epsilon: number,
+  cutoff: number,
+  r: number,
+  h = 1e-5,
 ): void {
   const { positions } = makePair(r);
   const analyticalForces = new Float64Array(6);
@@ -38,9 +44,9 @@ function checkGradient(
 }
 
 // Typical LJ parameters
-const sigma = 3.5;     // Å
-const epsilon = 0.003;  // eV
-const cutoff = 10.0;    // Å
+const sigma = 3.5; // Å
+const epsilon = 0.003; // eV
+const cutoff = 10.0; // Å
 
 describe('ljForce', () => {
   it('returns correct energy at LJ minimum (r = 2^(1/6) * sigma)', () => {
@@ -74,7 +80,7 @@ describe('ljForce', () => {
     expect(Math.abs(energy)).toBeLessThan(1e-10);
   });
 
-  it('obeys Newton\'s 3rd law', () => {
+  it("obeys Newton's 3rd law", () => {
     const r = 4.0;
     const { positions, forces } = makePair(r);
     ljForce(positions, forces, 0, 1, sigma, epsilon, cutoff);
@@ -141,7 +147,15 @@ describe('ljForce', () => {
     ljForce(positions, forces, 0, 1, sigma, epsilon, cutoff);
 
     const forcesClean = new Float64Array(6);
-    ljForce(new Float64Array(positions), forcesClean, 0, 1, sigma, epsilon, cutoff);
+    ljForce(
+      new Float64Array(positions),
+      forcesClean,
+      0,
+      1,
+      sigma,
+      epsilon,
+      cutoff,
+    );
 
     expect(forces[0]).toBeCloseTo(1.0 + forcesClean[0], 10);
     expect(forces[3]).toBeCloseTo(4.0 + forcesClean[3], 10);

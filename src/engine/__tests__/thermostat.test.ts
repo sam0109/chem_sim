@@ -20,7 +20,9 @@ function computeKE(velocities: Float64Array, masses: Float64Array): number {
 
 describe('berendsenThermostat', () => {
   it('rescales velocities toward target temperature', () => {
-    const velocities = new Float64Array([0.01, 0.02, -0.01, -0.015, 0.01, 0.005]);
+    const velocities = new Float64Array([
+      0.01, 0.02, -0.01, -0.015, 0.01, 0.005,
+    ]);
     const masses = new Float64Array([16.0, 1.008]);
     const fixed = new Uint8Array([0, 0]);
 
@@ -38,7 +40,9 @@ describe('berendsenThermostat', () => {
   });
 
   it('does not rescale fixed atoms', () => {
-    const velocities = new Float64Array([0.01, 0.02, -0.01, -0.015, 0.01, 0.005]);
+    const velocities = new Float64Array([
+      0.01, 0.02, -0.01, -0.015, 0.01, 0.005,
+    ]);
     const masses = new Float64Array([16.0, 1.008]);
     const fixed = new Uint8Array([1, 0]);
 
@@ -68,7 +72,9 @@ describe('berendsenThermostat', () => {
 
   it('clamps rescaling factor to prevent extreme changes', () => {
     // Set up a system with very different target from current temp
-    const velocities = new Float64Array([0.001, 0.001, 0.001, 0.001, 0.001, 0.001]);
+    const velocities = new Float64Array([
+      0.001, 0.001, 0.001, 0.001, 0.001, 0.001,
+    ]);
     const masses = new Float64Array([16.0, 1.008]);
     const fixed = new Uint8Array([0, 0]);
 
@@ -89,7 +95,9 @@ describe('berendsenThermostat', () => {
 
 describe('rescaleVelocities', () => {
   it('rescales to exact target temperature', () => {
-    const velocities = new Float64Array([0.01, 0.02, -0.01, -0.015, 0.01, 0.005]);
+    const velocities = new Float64Array([
+      0.01, 0.02, -0.01, -0.015, 0.01, 0.005,
+    ]);
     const masses = new Float64Array([16.0, 1.008]);
     const fixed = new Uint8Array([0, 0]);
 
@@ -105,7 +113,9 @@ describe('rescaleVelocities', () => {
   });
 
   it('does not rescale fixed atoms', () => {
-    const velocities = new Float64Array([0.01, 0.02, -0.01, -0.015, 0.01, 0.005]);
+    const velocities = new Float64Array([
+      0.01, 0.02, -0.01, -0.015, 0.01, 0.005,
+    ]);
     const masses = new Float64Array([16.0, 1.008]);
     const fixed = new Uint8Array([1, 0]);
 
@@ -134,7 +144,7 @@ describe('rescaleVelocities', () => {
     const masses = new Float64Array([16.0, 1.008]);
     const fixed = new Uint8Array([0, 0]);
 
-    const origDirs = Array.from(velocities).map(v => Math.sign(v));
+    const origDirs = Array.from(velocities).map((v) => Math.sign(v));
 
     const KE = computeKE(velocities, masses);
     rescaleVelocities(velocities, masses, fixed, KE, 300);

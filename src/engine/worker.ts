@@ -3,8 +3,12 @@
 // ==============================================================
 
 import type {
-  Atom, Bond, SimulationBox, SimulationConfig,
-  WorkerInMessage, WorkerStateUpdate,
+  Atom,
+  Bond,
+  SimulationBox,
+  SimulationConfig,
+  WorkerInMessage,
+  WorkerStateUpdate,
 } from '../data/types';
 import elements from '../data/elements';
 import { getMorseBondParams, getLJParams, getUFFAngleK } from '../data/uff';
@@ -13,10 +17,18 @@ import { ljForce } from './forces/lennardJones';
 import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
 import { pauliRepulsion } from './forces/pauli';
-import { velocityVerletStep, computeTemperature, initializeVelocities } from './integrator';
+import {
+  velocityVerletStep,
+  computeTemperature,
+  initializeVelocities,
+} from './integrator';
 import { berendsenThermostat } from './thermostat';
 import { steepestDescent } from './minimizer';
-import { detectBonds, detectHydrogenBonds, buildAngleList } from './bondDetector';
+import {
+  detectBonds,
+  detectHydrogenBonds,
+  buildAngleList,
+} from './bondDetector';
 import { CellList } from './neighborList';
 
 // ---- Simulation state ----
@@ -41,11 +53,23 @@ let config: SimulationConfig = {
 let step = 0;
 
 // Cached force-field parameters
-let bondParams: Array<{ i: number; j: number; De: number; alpha: number; re: number }> = [];
+let bondParams: Array<{
+  i: number;
+  j: number;
+  De: number;
+  alpha: number;
+  re: number;
+}> = [];
 const ljCache: Map<string, { sigma: number; epsilon: number }> = new Map();
 let cellList: CellList | null = null;
 // Cached angle parameters (precomputed once per topology rebuild)
-let angleParams: Array<{ i: number; j: number; k: number; kAngle: number; theta0: number }> = [];
+let angleParams: Array<{
+  i: number;
+  j: number;
+  k: number;
+  kAngle: number;
+  theta0: number;
+}> = [];
 
 // --- Exclusion set: skip 1-2 (bonded) AND 1-3 (angle) pairs from LJ/Coulomb ---
 const exclusionSet: Set<string> = new Set();
@@ -61,8 +85,12 @@ function rebuildTopology(): void {
   bonds = detectBonds(positions, Array.from(atomicNumbers), 1.2, bonds, 1.5);
 
   // Add hydrogen bonds
-  const hBonds = detectHydrogenBonds(positions, Array.from(atomicNumbers), bonds);
-  bonds = [...bonds.filter(b => b.type !== 'hydrogen'), ...hBonds];
+  const hBonds = detectHydrogenBonds(
+    positions,
+    Array.from(atomicNumbers),
+    bonds,
+  );
+  bonds = [...bonds.filter((b) => b.type !== 'hydrogen'), ...hBonds];
 
   // Build angle list
   angles = buildAngleList(bonds, nAtoms);
@@ -72,9 +100,15 @@ function rebuildTopology(): void {
   exclusionSet.clear();
   for (const bond of bonds) {
     // 1-2 exclusion: bonded pairs skip LJ (Morse handles them)
-    exclusionSet.add(`${Math.min(bond.atomA, bond.atomB)}-${Math.max(bond.atomA, bond.atomB)}`);
+    exclusionSet.add(
+      `${Math.min(bond.atomA, bond.atomB)}-${Math.max(bond.atomA, bond.atomB)}`,
+    );
     if (bond.type === 'hydrogen' || bond.type === 'vanderwaals') continue;
-    const params = getMorseBondParams(atomicNumbers[bond.atomA], atomicNumbers[bond.atomB], bond.order);
+    const params = getMorseBondParams(
+      atomicNumbers[bond.atomA],
+      atomicNumbers[bond.atomB],
+      bond.order,
+    );
     bondParams.push({ i: bond.atomA, j: bond.atomB, ...params });
   }
 
@@ -87,7 +121,9 @@ function rebuildTopology(): void {
   angleParams = [];
   for (const [ti, central, tk] of angles) {
     const { kAngle, theta0 } = getUFFAngleK(
-      atomicNumbers[ti], atomicNumbers[central], atomicNumbers[tk],
+      atomicNumbers[ti],
+      atomicNumbers[central],
+      atomicNumbers[tk],
     );
     angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
   }
@@ -98,7 +134,10 @@ function rebuildTopology(): void {
   }
 }
 
-function getLJCached(z1: number, z2: number): { sigma: number; epsilon: number } {
+function getLJCached(
+  z1: number,
+  z2: number,
+): { sigma: number; epsilon: number } {
   const key = z1 < z2 ? `${z1}-${z2}` : `${z2}-${z1}`;
   let cached = ljCache.get(key);
   if (!cached) {
@@ -116,12 +155,28 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
 
   // 1. Bonded forces (Morse)
   for (const bp of bondParams) {
-    potentialEnergy += morseBondForce(pos, frc, bp.i, bp.j, bp.De, bp.alpha, bp.re);
+    potentialEnergy += morseBondForce(
+      pos,
+      frc,
+      bp.i,
+      bp.j,
+      bp.De,
+      bp.alpha,
+      bp.re,
+    );
   }
 
   // 2. Angle forces (harmonic) — using precomputed params
   for (const ap of angleParams) {
-    potentialEnergy += harmonicAngleForce(pos, frc, ap.i, ap.j, ap.k, ap.kAngle, ap.theta0);
+    potentialEnergy += harmonicAngleForce(
+      pos,
+      frc,
+      ap.i,
+      ap.j,
+      ap.k,
+      ap.kAngle,
+      ap.theta0,
+    );
   }
 
   // 3. Non-bonded forces (LJ + Coulomb) using cell list or brute force
@@ -133,7 +188,15 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
 
     const { sigma, epsilon } = getLJCached(atomicNumbers[i], atomicNumbers[j]);
     potentialEnergy += ljForce(pos, frc, i, j, sigma, epsilon, cutoff);
-    potentialEnergy += coulombForce(pos, frc, i, j, charges[i], charges[j], cutoff);
+    potentialEnergy += coulombForce(
+      pos,
+      frc,
+      i,
+      j,
+      charges[i],
+      charges[j],
+      cutoff,
+    );
   };
 
   if (nAtoms < 50) {
@@ -150,11 +213,20 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       // Use element-dependent minimum approach distance (~0.5 × smallest covalent radius)
       const elI = elements[atomicNumbers[i]];
       const elJ = elements[atomicNumbers[j]];
-      const rMin = 0.5 * Math.min(
-        elI ? elI.covalentRadius : 0.5,
-        elJ ? elJ.covalentRadius : 0.5,
+      const rMin =
+        0.5 *
+        Math.min(
+          elI ? elI.covalentRadius : 0.5,
+          elJ ? elJ.covalentRadius : 0.5,
+        );
+      potentialEnergy += pauliRepulsion(
+        pos,
+        frc,
+        i,
+        j,
+        Math.max(rMin, 0.15),
+        20.0,
       );
-      potentialEnergy += pauliRepulsion(pos, frc, i, j, Math.max(rMin, 0.15), 20.0);
     }
   }
 
@@ -174,7 +246,12 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
 }
 
 // ---- Initialize from atoms ----
-function initSimulation(atoms: Atom[], inputBonds: Bond[], _box: SimulationBox, cfg: SimulationConfig): void {
+function initSimulation(
+  atoms: Atom[],
+  inputBonds: Bond[],
+  _box: SimulationBox,
+  cfg: SimulationConfig,
+): void {
   config = { ...config, ...cfg };
   nAtoms = atoms.length;
 
@@ -209,9 +286,15 @@ function initSimulation(atoms: Atom[], inputBonds: Bond[], _box: SimulationBox, 
     bondParams = [];
     exclusionSet.clear();
     for (const bond of bonds) {
-      exclusionSet.add(`${Math.min(bond.atomA, bond.atomB)}-${Math.max(bond.atomA, bond.atomB)}`);
+      exclusionSet.add(
+        `${Math.min(bond.atomA, bond.atomB)}-${Math.max(bond.atomA, bond.atomB)}`,
+      );
       if (bond.type === 'hydrogen' || bond.type === 'vanderwaals') continue;
-      const params = getMorseBondParams(atomicNumbers[bond.atomA], atomicNumbers[bond.atomB], bond.order);
+      const params = getMorseBondParams(
+        atomicNumbers[bond.atomA],
+        atomicNumbers[bond.atomB],
+        bond.order,
+      );
       bondParams.push({ i: bond.atomA, j: bond.atomB, ...params });
     }
     angles = buildAngleList(bonds, nAtoms);
@@ -223,7 +306,9 @@ function initSimulation(atoms: Atom[], inputBonds: Bond[], _box: SimulationBox, 
     angleParams = [];
     for (const [ti, central, tk] of angles) {
       const { kAngle, theta0 } = getUFFAngleK(
-        atomicNumbers[ti], atomicNumbers[central], atomicNumbers[tk],
+        atomicNumbers[ti],
+        atomicNumbers[central],
+        atomicNumbers[tk],
       );
       angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
     }
@@ -234,7 +319,10 @@ function initSimulation(atoms: Atom[], inputBonds: Bond[], _box: SimulationBox, 
   // Initialize velocities if all zero
   let allZero = true;
   for (let i = 0; i < velocities.length; i++) {
-    if (velocities[i] !== 0) { allZero = false; break; }
+    if (velocities[i] !== 0) {
+      allZero = false;
+      break;
+    }
   }
   if (allZero && config.temperature > 0) {
     initializeVelocities(velocities, masses, fixed, config.temperature);
@@ -250,7 +338,11 @@ function initSimulation(atoms: Atom[], inputBonds: Bond[], _box: SimulationBox, 
 function runSteps(nSteps: number): void {
   for (let s = 0; s < nSteps; s++) {
     const { kineticEnergy } = velocityVerletStep(
-      positions, velocities, forces, masses, fixed,
+      positions,
+      velocities,
+      forces,
+      masses,
+      fixed,
       config.timestep,
       computeAllForces,
     );
@@ -258,9 +350,13 @@ function runSteps(nSteps: number): void {
     // Apply thermostat
     if (config.thermostat === 'berendsen') {
       berendsenThermostat(
-        velocities, masses, fixed,
-        kineticEnergy, config.temperature,
-        config.timestep, config.thermostatTau,
+        velocities,
+        masses,
+        fixed,
+        kineticEnergy,
+        config.temperature,
+        config.timestep,
+        config.thermostatTau,
       );
     }
 
@@ -362,7 +458,15 @@ function removeAtom(atomId: number): void {
 
 // ---- Minimize ----
 function minimize(maxSteps: number, tolerance: number): void {
-  steepestDescent(positions, forces, fixed, nAtoms, computeAllForces, maxSteps, tolerance);
+  steepestDescent(
+    positions,
+    forces,
+    fixed,
+    nAtoms,
+    computeAllForces,
+    maxSteps,
+    tolerance,
+  );
   // Zero velocities after minimization
   velocities.fill(0);
   rebuildTopology();

@@ -14,49 +14,443 @@ const KCAL_TO_EV = 0.0433641;
  * For a full implementation you'd key by hybridization too.
  */
 const uffAtomTypes: Record<string, UFFAtomType> = {
-  H: { label: 'H_', element: 'H', atomicNumber: 1, r1: 0.354, theta0: 180.0, x: 2.886, D: 0.044, zeta: 12.0, Z: 0.712, chi: 4.528 },
-  He: { label: 'He4+4', element: 'He', atomicNumber: 2, r1: 0.849, theta0: 90.0, x: 2.362, D: 0.056, zeta: 15.24, Z: 0.098, chi: 9.66 },
-  Li: { label: 'Li', element: 'Li', atomicNumber: 3, r1: 1.336, theta0: 180.0, x: 2.451, D: 0.025, zeta: 12.0, Z: 1.026, chi: 2.0 },
-  Be: { label: 'Be3+2', element: 'Be', atomicNumber: 4, r1: 1.074, theta0: 109.47, x: 2.745, D: 0.085, zeta: 12.0, Z: 1.565, chi: 4.0 },
-  B: { label: 'B_3', element: 'B', atomicNumber: 5, r1: 0.838, theta0: 109.47, x: 4.083, D: 0.180, zeta: 12.052, Z: 1.755, chi: 5.11 },
-  C_3: { label: 'C_3', element: 'C', atomicNumber: 6, r1: 0.757, theta0: 109.47, x: 3.851, D: 0.105, zeta: 12.73, Z: 1.912, chi: 5.343 },
-  C_R: { label: 'C_R', element: 'C', atomicNumber: 6, r1: 0.729, theta0: 120.0, x: 3.851, D: 0.105, zeta: 12.73, Z: 1.912, chi: 5.343 },
-  C_2: { label: 'C_2', element: 'C', atomicNumber: 6, r1: 0.732, theta0: 120.0, x: 3.851, D: 0.105, zeta: 12.73, Z: 1.912, chi: 5.343 },
-  C_1: { label: 'C_1', element: 'C', atomicNumber: 6, r1: 0.706, theta0: 180.0, x: 3.851, D: 0.105, zeta: 12.73, Z: 1.912, chi: 5.343 },
-  N_3: { label: 'N_3', element: 'N', atomicNumber: 7, r1: 0.700, theta0: 106.7, x: 3.660, D: 0.069, zeta: 13.407, Z: 2.544, chi: 6.899 },
-  N_R: { label: 'N_R', element: 'N', atomicNumber: 7, r1: 0.699, theta0: 120.0, x: 3.660, D: 0.069, zeta: 13.407, Z: 2.544, chi: 6.899 },
-  N_2: { label: 'N_2', element: 'N', atomicNumber: 7, r1: 0.685, theta0: 111.2, x: 3.660, D: 0.069, zeta: 13.407, Z: 2.544, chi: 6.899 },
-  N_1: { label: 'N_1', element: 'N', atomicNumber: 7, r1: 0.656, theta0: 180.0, x: 3.660, D: 0.069, zeta: 13.407, Z: 2.544, chi: 6.899 },
-  O_3: { label: 'O_3', element: 'O', atomicNumber: 8, r1: 0.658, theta0: 104.51, x: 3.500, D: 0.060, zeta: 14.085, Z: 2.300, chi: 8.741 },
-  O_R: { label: 'O_R', element: 'O', atomicNumber: 8, r1: 0.680, theta0: 110.0, x: 3.500, D: 0.060, zeta: 14.085, Z: 2.300, chi: 8.741 },
-  O_2: { label: 'O_2', element: 'O', atomicNumber: 8, r1: 0.634, theta0: 120.0, x: 3.500, D: 0.060, zeta: 14.085, Z: 2.300, chi: 8.741 },
-  O_1: { label: 'O_1', element: 'O', atomicNumber: 8, r1: 0.639, theta0: 180.0, x: 3.500, D: 0.060, zeta: 14.085, Z: 2.300, chi: 8.741 },
-  F: { label: 'F_', element: 'F', atomicNumber: 9, r1: 0.668, theta0: 180.0, x: 3.364, D: 0.050, zeta: 14.762, Z: 2.300, chi: 10.874 },
-  Ne: { label: 'Ne4+4', element: 'Ne', atomicNumber: 10, r1: 0.920, theta0: 90.0, x: 3.243, D: 0.042, zeta: 15.44, Z: 0.194, chi: 11.04 },
-  Na: { label: 'Na', element: 'Na', atomicNumber: 11, r1: 1.539, theta0: 180.0, x: 2.983, D: 0.030, zeta: 12.0, Z: 1.081, chi: 2.843 },
-  Mg: { label: 'Mg3+2', element: 'Mg', atomicNumber: 12, r1: 1.421, theta0: 109.47, x: 3.021, D: 0.111, zeta: 12.0, Z: 1.787, chi: 3.951 },
-  Al: { label: 'Al3', element: 'Al', atomicNumber: 13, r1: 1.244, theta0: 109.47, x: 4.499, D: 0.505, zeta: 11.278, Z: 1.792, chi: 4.06 },
-  Si: { label: 'Si3', element: 'Si', atomicNumber: 14, r1: 1.117, theta0: 109.47, x: 4.295, D: 0.402, zeta: 12.175, Z: 2.323, chi: 4.168 },
-  P_3: { label: 'P_3+3', element: 'P', atomicNumber: 15, r1: 1.101, theta0: 93.8, x: 4.147, D: 0.305, zeta: 13.072, Z: 2.863, chi: 5.463 },
-  S_3: { label: 'S_3+2', element: 'S', atomicNumber: 16, r1: 1.064, theta0: 92.1, x: 4.035, D: 0.274, zeta: 13.969, Z: 2.703, chi: 6.928 },
-  Cl: { label: 'Cl', element: 'Cl', atomicNumber: 17, r1: 1.044, theta0: 180.0, x: 3.947, D: 0.227, zeta: 14.886, Z: 2.348, chi: 8.564 },
-  Ar: { label: 'Ar4+4', element: 'Ar', atomicNumber: 18, r1: 1.032, theta0: 90.0, x: 3.868, D: 0.185, zeta: 15.763, Z: 0.300, chi: 9.465 },
-  K: { label: 'K_', element: 'K', atomicNumber: 19, r1: 1.953, theta0: 180.0, x: 3.812, D: 0.035, zeta: 12.0, Z: 1.165, chi: 2.421 },
-  Ca: { label: 'Ca6+2', element: 'Ca', atomicNumber: 20, r1: 1.761, theta0: 90.0, x: 3.399, D: 0.238, zeta: 12.0, Z: 2.141, chi: 3.231 },
-  Fe: { label: 'Fe3+2', element: 'Fe', atomicNumber: 26, r1: 1.285, theta0: 109.47, x: 2.912, D: 0.013, zeta: 12.0, Z: 2.912, chi: 6.4 },
-  Cu: { label: 'Cu3+1', element: 'Cu', atomicNumber: 29, r1: 1.302, theta0: 109.47, x: 3.495, D: 0.005, zeta: 12.0, Z: 1.956, chi: 4.2 },
-  Zn: { label: 'Zn3+2', element: 'Zn', atomicNumber: 30, r1: 1.308, theta0: 109.47, x: 2.763, D: 0.124, zeta: 12.0, Z: 1.308, chi: 5.106 },
-  Br: { label: 'Br', element: 'Br', atomicNumber: 35, r1: 1.141, theta0: 180.0, x: 4.189, D: 0.251, zeta: 15.0, Z: 2.519, chi: 7.79 },
-  I: { label: 'I_', element: 'I', atomicNumber: 53, r1: 1.360, theta0: 180.0, x: 4.50, D: 0.339, zeta: 15.0, Z: 2.65, chi: 6.822 },
+  H: {
+    label: 'H_',
+    element: 'H',
+    atomicNumber: 1,
+    r1: 0.354,
+    theta0: 180.0,
+    x: 2.886,
+    D: 0.044,
+    zeta: 12.0,
+    Z: 0.712,
+    chi: 4.528,
+  },
+  He: {
+    label: 'He4+4',
+    element: 'He',
+    atomicNumber: 2,
+    r1: 0.849,
+    theta0: 90.0,
+    x: 2.362,
+    D: 0.056,
+    zeta: 15.24,
+    Z: 0.098,
+    chi: 9.66,
+  },
+  Li: {
+    label: 'Li',
+    element: 'Li',
+    atomicNumber: 3,
+    r1: 1.336,
+    theta0: 180.0,
+    x: 2.451,
+    D: 0.025,
+    zeta: 12.0,
+    Z: 1.026,
+    chi: 2.0,
+  },
+  Be: {
+    label: 'Be3+2',
+    element: 'Be',
+    atomicNumber: 4,
+    r1: 1.074,
+    theta0: 109.47,
+    x: 2.745,
+    D: 0.085,
+    zeta: 12.0,
+    Z: 1.565,
+    chi: 4.0,
+  },
+  B: {
+    label: 'B_3',
+    element: 'B',
+    atomicNumber: 5,
+    r1: 0.838,
+    theta0: 109.47,
+    x: 4.083,
+    D: 0.18,
+    zeta: 12.052,
+    Z: 1.755,
+    chi: 5.11,
+  },
+  C_3: {
+    label: 'C_3',
+    element: 'C',
+    atomicNumber: 6,
+    r1: 0.757,
+    theta0: 109.47,
+    x: 3.851,
+    D: 0.105,
+    zeta: 12.73,
+    Z: 1.912,
+    chi: 5.343,
+  },
+  C_R: {
+    label: 'C_R',
+    element: 'C',
+    atomicNumber: 6,
+    r1: 0.729,
+    theta0: 120.0,
+    x: 3.851,
+    D: 0.105,
+    zeta: 12.73,
+    Z: 1.912,
+    chi: 5.343,
+  },
+  C_2: {
+    label: 'C_2',
+    element: 'C',
+    atomicNumber: 6,
+    r1: 0.732,
+    theta0: 120.0,
+    x: 3.851,
+    D: 0.105,
+    zeta: 12.73,
+    Z: 1.912,
+    chi: 5.343,
+  },
+  C_1: {
+    label: 'C_1',
+    element: 'C',
+    atomicNumber: 6,
+    r1: 0.706,
+    theta0: 180.0,
+    x: 3.851,
+    D: 0.105,
+    zeta: 12.73,
+    Z: 1.912,
+    chi: 5.343,
+  },
+  N_3: {
+    label: 'N_3',
+    element: 'N',
+    atomicNumber: 7,
+    r1: 0.7,
+    theta0: 106.7,
+    x: 3.66,
+    D: 0.069,
+    zeta: 13.407,
+    Z: 2.544,
+    chi: 6.899,
+  },
+  N_R: {
+    label: 'N_R',
+    element: 'N',
+    atomicNumber: 7,
+    r1: 0.699,
+    theta0: 120.0,
+    x: 3.66,
+    D: 0.069,
+    zeta: 13.407,
+    Z: 2.544,
+    chi: 6.899,
+  },
+  N_2: {
+    label: 'N_2',
+    element: 'N',
+    atomicNumber: 7,
+    r1: 0.685,
+    theta0: 111.2,
+    x: 3.66,
+    D: 0.069,
+    zeta: 13.407,
+    Z: 2.544,
+    chi: 6.899,
+  },
+  N_1: {
+    label: 'N_1',
+    element: 'N',
+    atomicNumber: 7,
+    r1: 0.656,
+    theta0: 180.0,
+    x: 3.66,
+    D: 0.069,
+    zeta: 13.407,
+    Z: 2.544,
+    chi: 6.899,
+  },
+  O_3: {
+    label: 'O_3',
+    element: 'O',
+    atomicNumber: 8,
+    r1: 0.658,
+    theta0: 104.51,
+    x: 3.5,
+    D: 0.06,
+    zeta: 14.085,
+    Z: 2.3,
+    chi: 8.741,
+  },
+  O_R: {
+    label: 'O_R',
+    element: 'O',
+    atomicNumber: 8,
+    r1: 0.68,
+    theta0: 110.0,
+    x: 3.5,
+    D: 0.06,
+    zeta: 14.085,
+    Z: 2.3,
+    chi: 8.741,
+  },
+  O_2: {
+    label: 'O_2',
+    element: 'O',
+    atomicNumber: 8,
+    r1: 0.634,
+    theta0: 120.0,
+    x: 3.5,
+    D: 0.06,
+    zeta: 14.085,
+    Z: 2.3,
+    chi: 8.741,
+  },
+  O_1: {
+    label: 'O_1',
+    element: 'O',
+    atomicNumber: 8,
+    r1: 0.639,
+    theta0: 180.0,
+    x: 3.5,
+    D: 0.06,
+    zeta: 14.085,
+    Z: 2.3,
+    chi: 8.741,
+  },
+  F: {
+    label: 'F_',
+    element: 'F',
+    atomicNumber: 9,
+    r1: 0.668,
+    theta0: 180.0,
+    x: 3.364,
+    D: 0.05,
+    zeta: 14.762,
+    Z: 2.3,
+    chi: 10.874,
+  },
+  Ne: {
+    label: 'Ne4+4',
+    element: 'Ne',
+    atomicNumber: 10,
+    r1: 0.92,
+    theta0: 90.0,
+    x: 3.243,
+    D: 0.042,
+    zeta: 15.44,
+    Z: 0.194,
+    chi: 11.04,
+  },
+  Na: {
+    label: 'Na',
+    element: 'Na',
+    atomicNumber: 11,
+    r1: 1.539,
+    theta0: 180.0,
+    x: 2.983,
+    D: 0.03,
+    zeta: 12.0,
+    Z: 1.081,
+    chi: 2.843,
+  },
+  Mg: {
+    label: 'Mg3+2',
+    element: 'Mg',
+    atomicNumber: 12,
+    r1: 1.421,
+    theta0: 109.47,
+    x: 3.021,
+    D: 0.111,
+    zeta: 12.0,
+    Z: 1.787,
+    chi: 3.951,
+  },
+  Al: {
+    label: 'Al3',
+    element: 'Al',
+    atomicNumber: 13,
+    r1: 1.244,
+    theta0: 109.47,
+    x: 4.499,
+    D: 0.505,
+    zeta: 11.278,
+    Z: 1.792,
+    chi: 4.06,
+  },
+  Si: {
+    label: 'Si3',
+    element: 'Si',
+    atomicNumber: 14,
+    r1: 1.117,
+    theta0: 109.47,
+    x: 4.295,
+    D: 0.402,
+    zeta: 12.175,
+    Z: 2.323,
+    chi: 4.168,
+  },
+  P_3: {
+    label: 'P_3+3',
+    element: 'P',
+    atomicNumber: 15,
+    r1: 1.101,
+    theta0: 93.8,
+    x: 4.147,
+    D: 0.305,
+    zeta: 13.072,
+    Z: 2.863,
+    chi: 5.463,
+  },
+  S_3: {
+    label: 'S_3+2',
+    element: 'S',
+    atomicNumber: 16,
+    r1: 1.064,
+    theta0: 92.1,
+    x: 4.035,
+    D: 0.274,
+    zeta: 13.969,
+    Z: 2.703,
+    chi: 6.928,
+  },
+  Cl: {
+    label: 'Cl',
+    element: 'Cl',
+    atomicNumber: 17,
+    r1: 1.044,
+    theta0: 180.0,
+    x: 3.947,
+    D: 0.227,
+    zeta: 14.886,
+    Z: 2.348,
+    chi: 8.564,
+  },
+  Ar: {
+    label: 'Ar4+4',
+    element: 'Ar',
+    atomicNumber: 18,
+    r1: 1.032,
+    theta0: 90.0,
+    x: 3.868,
+    D: 0.185,
+    zeta: 15.763,
+    Z: 0.3,
+    chi: 9.465,
+  },
+  K: {
+    label: 'K_',
+    element: 'K',
+    atomicNumber: 19,
+    r1: 1.953,
+    theta0: 180.0,
+    x: 3.812,
+    D: 0.035,
+    zeta: 12.0,
+    Z: 1.165,
+    chi: 2.421,
+  },
+  Ca: {
+    label: 'Ca6+2',
+    element: 'Ca',
+    atomicNumber: 20,
+    r1: 1.761,
+    theta0: 90.0,
+    x: 3.399,
+    D: 0.238,
+    zeta: 12.0,
+    Z: 2.141,
+    chi: 3.231,
+  },
+  Fe: {
+    label: 'Fe3+2',
+    element: 'Fe',
+    atomicNumber: 26,
+    r1: 1.285,
+    theta0: 109.47,
+    x: 2.912,
+    D: 0.013,
+    zeta: 12.0,
+    Z: 2.912,
+    chi: 6.4,
+  },
+  Cu: {
+    label: 'Cu3+1',
+    element: 'Cu',
+    atomicNumber: 29,
+    r1: 1.302,
+    theta0: 109.47,
+    x: 3.495,
+    D: 0.005,
+    zeta: 12.0,
+    Z: 1.956,
+    chi: 4.2,
+  },
+  Zn: {
+    label: 'Zn3+2',
+    element: 'Zn',
+    atomicNumber: 30,
+    r1: 1.308,
+    theta0: 109.47,
+    x: 2.763,
+    D: 0.124,
+    zeta: 12.0,
+    Z: 1.308,
+    chi: 5.106,
+  },
+  Br: {
+    label: 'Br',
+    element: 'Br',
+    atomicNumber: 35,
+    r1: 1.141,
+    theta0: 180.0,
+    x: 4.189,
+    D: 0.251,
+    zeta: 15.0,
+    Z: 2.519,
+    chi: 7.79,
+  },
+  I: {
+    label: 'I_',
+    element: 'I',
+    atomicNumber: 53,
+    r1: 1.36,
+    theta0: 180.0,
+    x: 4.5,
+    D: 0.339,
+    zeta: 15.0,
+    Z: 2.65,
+    chi: 6.822,
+  },
 };
 
 // Generic lookup by element symbol — returns the sp3/default type
 const elementToUFF: Record<number, string> = {
-  1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B',
-  6: 'C_3', 7: 'N_3', 8: 'O_3', 9: 'F', 10: 'Ne',
-  11: 'Na', 12: 'Mg', 13: 'Al', 14: 'Si', 15: 'P_3',
-  16: 'S_3', 17: 'Cl', 18: 'Ar', 19: 'K', 20: 'Ca',
-  26: 'Fe', 29: 'Cu', 30: 'Zn', 35: 'Br', 53: 'I',
+  1: 'H',
+  2: 'He',
+  3: 'Li',
+  4: 'Be',
+  5: 'B',
+  6: 'C_3',
+  7: 'N_3',
+  8: 'O_3',
+  9: 'F',
+  10: 'Ne',
+  11: 'Na',
+  12: 'Mg',
+  13: 'Al',
+  14: 'Si',
+  15: 'P_3',
+  16: 'S_3',
+  17: 'Cl',
+  18: 'Ar',
+  19: 'K',
+  20: 'Ca',
+  26: 'Fe',
+  29: 'Cu',
+  30: 'Zn',
+  35: 'Br',
+  53: 'I',
 };
 
 export function getUFFType(atomicNumber: number): UFFAtomType | undefined {
@@ -69,14 +463,19 @@ export function getUFFType(atomicNumber: number): UFFAtomType | undefined {
  * r_ij = r_i + r_j + r_BO + r_EN
  * r_BO = bond-order correction, r_EN = electronegativity correction
  */
-export function getUFFBondLength(z1: number, z2: number, bondOrder: number = 1): number {
+export function getUFFBondLength(
+  z1: number,
+  z2: number,
+  bondOrder: number = 1,
+): number {
   const t1 = getUFFType(z1);
   const t2 = getUFFType(z2);
   if (!t1 || !t2) return 1.5; // fallback
 
   const r_BO = -0.1332 * (t1.r1 + t2.r1) * Math.log(bondOrder);
   const chiDiff = Math.sqrt(t1.chi) - Math.sqrt(t2.chi);
-  const r_EN = t1.r1 * t2.r1 * (chiDiff * chiDiff) / (t1.chi * t1.r1 + t2.chi * t2.r1);
+  const r_EN =
+    (t1.r1 * t2.r1 * (chiDiff * chiDiff)) / (t1.chi * t1.r1 + t2.chi * t2.r1);
   return t1.r1 + t2.r1 + r_BO - r_EN;
 }
 
@@ -84,7 +483,11 @@ export function getUFFBondLength(z1: number, z2: number, bondOrder: number = 1):
  * Compute Morse potential parameters for a bond.
  * Returns { De, alpha, re } in eV and Å
  */
-export function getMorseBondParams(z1: number, z2: number, bondOrder: number = 1): {
+export function getMorseBondParams(
+  z1: number,
+  z2: number,
+  bondOrder: number = 1,
+): {
   De: number;
   alpha: number;
   re: number;
@@ -104,7 +507,7 @@ export function getMorseBondParams(z1: number, z2: number, bondOrder: number = 1
 
   // alpha = sqrt(k_e / (2 * De)), k_e from UFF bond stretching
   // k_e (UFF) = 664.12 * Z_i * Z_j / r_ij^3
-  const ke = 664.12 * (t1.Z * t2.Z) / (re * re * re); // kcal/(mol·Å²)
+  const ke = (664.12 * (t1.Z * t2.Z)) / (re * re * re); // kcal/(mol·Å²)
   const keEV = ke * KCAL_TO_EV; // eV/ų
   const alpha = Math.sqrt(keEV / (2.0 * De));
 
@@ -116,7 +519,10 @@ export function getMorseBondParams(z1: number, z2: number, bondOrder: number = 1
  * Uses geometric combining rules: σ = sqrt(σ_i * σ_j), ε = sqrt(ε_i * ε_j)
  * Returns { sigma, epsilon } in Å and eV
  */
-export function getLJParams(z1: number, z2: number): { sigma: number; epsilon: number } {
+export function getLJParams(
+  z1: number,
+  z2: number,
+): { sigma: number; epsilon: number } {
   const t1 = getUFFType(z1);
   const t2 = getUFFType(z2);
   if (!t1 || !t2) return { sigma: 3.0, epsilon: 0.01 };
@@ -138,15 +544,19 @@ export function getLJParams(z1: number, z2: number): { sigma: number; epsilon: n
  * @param bondOrderJK bond order of J-K bond
  */
 export function getUFFAngleK(
-  zI: number, zJ: number, zK: number,
-  bondOrderIJ: number = 1, bondOrderJK: number = 1,
+  zI: number,
+  zJ: number,
+  zK: number,
+  bondOrderIJ: number = 1,
+  bondOrderJK: number = 1,
 ): { kAngle: number; theta0: number } {
   const tI = getUFFType(zI);
   const tJ = getUFFType(zJ);
   const tK = getUFFType(zK);
-  if (!tI || !tJ || !tK) return { kAngle: 3.0, theta0: 109.47 * Math.PI / 180 };
+  if (!tI || !tJ || !tK)
+    return { kAngle: 3.0, theta0: (109.47 * Math.PI) / 180 };
 
-  const theta0 = tJ.theta0 * Math.PI / 180.0;
+  const theta0 = (tJ.theta0 * Math.PI) / 180.0;
 
   // Equilibrium bond lengths
   const rIJ = getUFFBondLength(zI, zJ, bondOrderIJ);
@@ -163,7 +573,8 @@ export function getUFFAngleK(
   //     [rIJ*rJK*(1-cos²θ₀)*3 - rIK²*cosθ₀]
   const sinTheta0_2 = 1 - cosTheta0 * cosTheta0;
   const bracket = 3 * rIJ * rJK * sinTheta0_2 - rIK2 * cosTheta0;
-  const K_kcal = (664.12 / (rIJ * rJK)) * (tI.Z * tK.Z / rIK5) * rIJ * rJK * bracket;
+  const K_kcal =
+    (664.12 / (rIJ * rJK)) * ((tI.Z * tK.Z) / rIK5) * rIJ * rJK * bracket;
 
   // Convert to harmonic k: K_harmonic = K / sin²(θ₀) for the general nonlinear case
   const sinTheta0 = Math.sin(theta0);
