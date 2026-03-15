@@ -272,6 +272,17 @@ export interface NEBConfig {
   stepSize: number;
 }
 
+/** Default NEB configuration values */
+export const DEFAULT_NEB_CONFIG: NEBConfig = {
+  nImages: 7,
+  springK: 0.1, // eV/Å² — typical value for molecular systems
+  climbingImage: true,
+  ciActivationIter: 20,
+  maxIterations: 500,
+  forceTolerance: 0.05, // eV/Å
+  stepSize: 0.01, // Å
+};
+
 /** A single image along the NEB reaction path */
 export interface NEBImage {
   /** Atom positions for this image — flat Float64Array [x0,y0,z0,...] */

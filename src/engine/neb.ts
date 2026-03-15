@@ -13,17 +13,10 @@
 // ==============================================================
 
 import type { NEBConfig, NEBImage, NEBResult } from '../data/types';
+import { DEFAULT_NEB_CONFIG } from '../data/types';
 
-/** Default NEB configuration values */
-export const DEFAULT_NEB_CONFIG: NEBConfig = {
-  nImages: 7,
-  springK: 0.1, // eV/Å² — typical value for molecular systems
-  climbingImage: true,
-  ciActivationIter: 20,
-  maxIterations: 500,
-  forceTolerance: 0.05, // eV/Å
-  stepSize: 0.01, // Å
-};
+// Re-export for convenience (engine modules can import from here)
+export { DEFAULT_NEB_CONFIG };
 
 /**
  * Generate intermediate images by linear interpolation between
