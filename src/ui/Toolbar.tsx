@@ -131,6 +131,8 @@ export const Toolbar: React.FC = () => {
   const toggleAnnotationDipole = useUIStore((s) => s.toggleAnnotationDipole);
   const showNEBPanel = useUIStore((s) => s.showNEBPanel);
   const toggleNEBPanel = useUIStore((s) => s.toggleNEBPanel);
+  const showFEPPanel = useUIStore((s) => s.showFEPPanel);
+  const toggleFEPPanel = useUIStore((s) => s.toggleFEPPanel);
 
   // When selecting the place-molecule tool, show the encounter panel
   const handleToolSelect = useCallback(
@@ -694,6 +696,30 @@ export const Toolbar: React.FC = () => {
         }}
       >
         NEB
+      </button>
+
+      {/* FEP free energy toggle */}
+      <button
+        data-testid="toggle-fep-panel"
+        onClick={toggleFEPPanel}
+        title="Free Energy Perturbation"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showFEPPanel
+            ? '2px solid #a5fac4'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showFEPPanel
+            ? 'rgba(165,250,196,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        FEP
       </button>
     </div>
   );
