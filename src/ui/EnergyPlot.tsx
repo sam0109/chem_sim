@@ -122,6 +122,7 @@ export const EnergyPlot: React.FC = () => {
 
   return (
     <div
+      data-testid="energy-plot"
       style={{
         position: 'absolute',
         bottom: 10,

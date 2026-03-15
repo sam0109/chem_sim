@@ -18,6 +18,7 @@ export const SimulationControls: React.FC = () => {
 
   return (
     <div
+      data-testid="simulation-controls"
       style={{
         position: 'absolute',
         top: 10,
@@ -48,6 +49,7 @@ export const SimulationControls: React.FC = () => {
       {/* Play/Pause + Minimize */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
         <button
+          data-testid="play-pause-button"
           onClick={toggleRunning}
           style={{
             flex: 1,
@@ -65,6 +67,7 @@ export const SimulationControls: React.FC = () => {
           {config.running ? '⏸ Pause' : '▶ Play'}
         </button>
         <button
+          data-testid="minimize-button"
           onClick={minimize}
           style={{
             flex: 1,
@@ -95,6 +98,7 @@ export const SimulationControls: React.FC = () => {
           <span style={{ color: '#ffaa44' }}>{config.temperature} K</span>
         </div>
         <input
+          data-testid="temperature-slider"
           type="range"
           min={0}
           max={1000}
@@ -134,6 +138,7 @@ export const SimulationControls: React.FC = () => {
       <div style={{ marginBottom: 10 }}>
         <div style={{ marginBottom: 2 }}>Thermostat</div>
         <select
+          data-testid="thermostat-select"
           value={config.thermostat}
           onChange={(e) =>
             setConfig({
@@ -161,6 +166,7 @@ export const SimulationControls: React.FC = () => {
 
       {/* Stats */}
       <div
+        data-testid="stats-grid"
         style={{
           borderTop: '1px solid rgba(255,255,255,0.1)',
           paddingTop: 8,
@@ -171,31 +177,49 @@ export const SimulationControls: React.FC = () => {
         }}
       >
         <span style={{ color: '#888' }}>Step</span>
-        <span style={{ textAlign: 'right' }}>{step}</span>
+        <span data-testid="stat-step" style={{ textAlign: 'right' }}>
+          {step}
+        </span>
 
         <span style={{ color: '#888' }}>Atoms</span>
-        <span style={{ textAlign: 'right' }}>{atoms.length}</span>
+        <span data-testid="stat-atoms" style={{ textAlign: 'right' }}>
+          {atoms.length}
+        </span>
 
         <span style={{ color: '#888' }}>Bonds</span>
-        <span style={{ textAlign: 'right' }}>{bonds.length}</span>
+        <span data-testid="stat-bonds" style={{ textAlign: 'right' }}>
+          {bonds.length}
+        </span>
 
         <span style={{ color: '#888' }}>Temp</span>
-        <span style={{ textAlign: 'right', color: '#ffaa44' }}>
+        <span
+          data-testid="stat-temp"
+          style={{ textAlign: 'right', color: '#ffaa44' }}
+        >
           {temperature.toFixed(0)} K
         </span>
 
         <span style={{ color: '#888' }}>KE</span>
-        <span style={{ textAlign: 'right', color: '#ff6666' }}>
+        <span
+          data-testid="stat-ke"
+          style={{ textAlign: 'right', color: '#ff6666' }}
+        >
           {energy.kinetic.toFixed(3)} eV
         </span>
 
         <span style={{ color: '#888' }}>PE</span>
-        <span style={{ textAlign: 'right', color: '#66aaff' }}>
+        <span
+          data-testid="stat-pe"
+          style={{ textAlign: 'right', color: '#66aaff' }}
+        >
           {energy.potential.toFixed(3)} eV
         </span>
 
         <span style={{ color: '#888' }}>Total E</span>
-        <span style={{ textAlign: 'right', color: '#66ff66' }}>
+        <span
+          data-testid="stat-total-e"
+          style={{ textAlign: 'right', color: '#66ff66' }}
+        >
           {energy.total.toFixed(3)} eV
         </span>
       </div>

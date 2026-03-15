@@ -37,6 +37,7 @@ const ElementCell: React.FC<{
 
   return (
     <button
+      data-testid={`element-${el.symbol}`}
       onClick={onClick}
       style={{
         width: 38,
@@ -73,6 +74,7 @@ export const PeriodicTable: React.FC = () => {
 
   return (
     <div
+      data-testid="periodic-table"
       style={{
         position: 'absolute',
         bottom: 10,

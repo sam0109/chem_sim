@@ -25,6 +25,7 @@ const ToolButton: React.FC<{
   onClick: () => void;
 }> = ({ tool, active, onClick }) => (
   <button
+    data-testid={`tool-${tool.id}`}
     onClick={onClick}
     title={`${tool.label} (${tool.shortcut})`}
     style={{
@@ -90,6 +91,7 @@ export const Toolbar: React.FC = () => {
 
   return (
     <div
+      data-testid="toolbar"
       style={{
         position: 'absolute',
         top: '50%',
@@ -122,6 +124,7 @@ export const Toolbar: React.FC = () => {
 
       {/* View mode buttons */}
       <button
+        data-testid="view-ball-and-stick"
         onClick={() => setRenderMode('ball-and-stick')}
         title="Ball and Stick"
         style={{
@@ -145,6 +148,7 @@ export const Toolbar: React.FC = () => {
         B&S
       </button>
       <button
+        data-testid="view-space-filling"
         onClick={() => setRenderMode('space-filling')}
         title="Space Filling"
         style={{
@@ -179,6 +183,7 @@ export const Toolbar: React.FC = () => {
 
       {/* Toggle buttons */}
       <button
+        data-testid="toggle-labels"
         onClick={toggleLabels}
         title="Toggle Labels (L)"
         style={{
@@ -200,6 +205,7 @@ export const Toolbar: React.FC = () => {
         Lbl
       </button>
       <button
+        data-testid="toggle-energy-plot"
         onClick={toggleEnergyPlot}
         title="Toggle Energy Plot"
         style={{

@@ -40,6 +40,7 @@ export const PropertyPanel: React.FC = () => {
 
   return (
     <div
+      data-testid="property-panel"
       style={{
         position: 'absolute',
         top: 10,

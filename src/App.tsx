@@ -57,6 +57,7 @@ const App: React.FC = () => {
   if (loading) {
     return (
       <div
+        data-testid="loading-screen"
         style={{
           width: '100vw',
           height: '100vh',
@@ -76,6 +77,7 @@ const App: React.FC = () => {
 
   return (
     <div
+      data-testid="app-container"
       style={{
         width: '100vw',
         height: '100vh',
@@ -104,6 +106,7 @@ const App: React.FC = () => {
         <div style={{ display: 'flex', gap: 6, pointerEvents: 'auto' }}>
           <div style={{ position: 'relative' }}>
             <button
+              data-testid="examples-button"
               onClick={() => setShowExamples(!showExamples)}
               style={{
                 padding: '6px 12px',
@@ -121,6 +124,7 @@ const App: React.FC = () => {
             </button>
             {showExamples && (
               <div
+                data-testid="examples-dropdown"
                 style={{
                   position: 'absolute',
                   top: '100%',
@@ -137,6 +141,7 @@ const App: React.FC = () => {
                 {Object.keys(exampleMolecules).map((name) => (
                   <button
                     key={name}
+                    data-testid={`example-${name}`}
                     onClick={() => handleLoadExample(name)}
                     style={{
                       display: 'block',
@@ -166,6 +171,7 @@ const App: React.FC = () => {
             )}
           </div>
           <button
+            data-testid="import-xyz-button"
             onClick={handleFileImport}
             style={{
               padding: '6px 12px',
@@ -191,6 +197,7 @@ const App: React.FC = () => {
       <EnergyPlot />
 
       <div
+        data-testid="status-bar"
         style={{
           position: 'absolute',
           bottom: 0,
