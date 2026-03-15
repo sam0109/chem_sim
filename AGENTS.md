@@ -298,17 +298,49 @@ Spawn a sub-agent to review the PR. The reviewer agent must:
 
 ## Step 6: Merge
 
-Once the PR is approved and all checks pass:
+Once the PR is approved, rebase onto latest `main`, enable automerge, and move on. GitHub will squash-merge automatically once CI passes.
+
+### 6a. Rebase onto latest main
+
+Other agents may have merged to `main` since you branched. Always rebase before merging:
 
 ```bash
-gh pr merge <PR-NUMBER> --squash --delete-branch
+git fetch origin main
+git rebase origin/main
 ```
 
-Use squash merge to keep `main` history clean. The squash message should be:
+If there are conflicts, resolve them carefully — keep functionality from both sides. After resolving:
 
+```bash
+npx tsc --noEmit          # verify typecheck
+npx tsx src/engine/tests.ts  # verify physics tests (if engine touched)
+git push --force-with-lease origin <BRANCH>
 ```
-<Issue title> (#<NUMBER>)
+
+### 6b. Enable automerge
+
+Use `--squash` to squash-merge and `--auto` so GitHub merges automatically once all required CI checks pass. This way the agent does not need to wait/poll for CI:
+
+```bash
+gh pr merge <PR-NUMBER> --squash --auto --delete-branch --subject "<Issue title> (#<NUMBER>)"
 ```
+
+This returns immediately. GitHub will squash-merge the PR and delete the branch once all required status checks pass.
+
+### 6c. If automerge fails
+
+Automerge can be cancelled by GitHub if a merge conflict arises (e.g. another PR merged to `main` first). If you are still running when this happens, re-rebase and re-enable automerge:
+
+```bash
+git fetch origin main
+git rebase origin/main
+# resolve any conflicts
+npx tsc --noEmit
+git push --force-with-lease origin <BRANCH>
+gh pr merge <PR-NUMBER> --squash --auto --delete-branch --subject "<Issue title> (#<NUMBER>)"
+```
+
+Retry up to 3 times. If it still fails, leave the PR open with a comment explaining the situation.
 
 ---
 
