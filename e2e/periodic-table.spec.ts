@@ -3,12 +3,16 @@ import { test, expect } from '@playwright/test';
 test.describe('Periodic table', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByTestId('loading-screen')).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId('loading-screen')).toBeHidden({
+      timeout: 30_000,
+    });
   });
 
   test('periodic table is visible on load', async ({ page }) => {
     await expect(page.getByTestId('periodic-table')).toBeVisible();
-    await expect(page.getByTestId('periodic-table')).toContainText('Periodic Table');
+    await expect(page.getByTestId('periodic-table')).toContainText(
+      'Periodic Table',
+    );
   });
 
   test('Carbon is selected by default', async ({ page }) => {
@@ -51,15 +55,15 @@ test.describe('Periodic table', () => {
 
   test('key elements are present', async ({ page }) => {
     // Spot-check several elements across the table
-    await expect(page.getByTestId('element-H')).toBeVisible();   // Hydrogen
-    await expect(page.getByTestId('element-He')).toBeVisible();  // Helium
-    await expect(page.getByTestId('element-Li')).toBeVisible();  // Lithium
-    await expect(page.getByTestId('element-C')).toBeVisible();   // Carbon
-    await expect(page.getByTestId('element-N')).toBeVisible();   // Nitrogen
-    await expect(page.getByTestId('element-O')).toBeVisible();   // Oxygen
-    await expect(page.getByTestId('element-Na')).toBeVisible();  // Sodium
-    await expect(page.getByTestId('element-Cl')).toBeVisible();  // Chlorine
-    await expect(page.getByTestId('element-Fe')).toBeVisible();  // Iron
-    await expect(page.getByTestId('element-Kr')).toBeVisible();  // Krypton
+    await expect(page.getByTestId('element-H')).toBeVisible(); // Hydrogen
+    await expect(page.getByTestId('element-He')).toBeVisible(); // Helium
+    await expect(page.getByTestId('element-Li')).toBeVisible(); // Lithium
+    await expect(page.getByTestId('element-C')).toBeVisible(); // Carbon
+    await expect(page.getByTestId('element-N')).toBeVisible(); // Nitrogen
+    await expect(page.getByTestId('element-O')).toBeVisible(); // Oxygen
+    await expect(page.getByTestId('element-Na')).toBeVisible(); // Sodium
+    await expect(page.getByTestId('element-Cl')).toBeVisible(); // Chlorine
+    await expect(page.getByTestId('element-Fe')).toBeVisible(); // Iron
+    await expect(page.getByTestId('element-Kr')).toBeVisible(); // Krypton
   });
 });

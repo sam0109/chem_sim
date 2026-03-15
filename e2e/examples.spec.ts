@@ -26,15 +26,17 @@ async function openExamplesDropdown(page: Page): Promise<void> {
 test.describe('Example molecule loading', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByTestId('loading-screen')).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId('loading-screen')).toBeHidden({
+      timeout: 30_000,
+    });
   });
 
-  test('examples dropdown opens and lists 5 molecules', async ({ page }) => {
+  test('examples dropdown opens and lists 6 molecules', async ({ page }) => {
     await openExamplesDropdown(page);
 
     const dropdown = page.getByTestId('examples-dropdown');
     const items = dropdown.locator('button');
-    await expect(items).toHaveCount(5);
+    await expect(items).toHaveCount(6);
   });
 
   test('default molecule is Water with 3 atoms', async ({ page }) => {
