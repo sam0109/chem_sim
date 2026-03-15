@@ -191,6 +191,7 @@ interface SimState {
     C1: number;
     C2: number;
   }>;
+  boxSize?: [number, number, number];
 }
 
 function initSim(atoms: Atom[]): SimState {
@@ -379,12 +380,13 @@ const testWolfConst: WolfConstants = computeWolfConstants(TEST_CUTOFF);
 
 function calcForces(s: SimState, p: Float64Array, f: Float64Array): number {
   let pe = 0;
+  const pbc = s.boxSize;
   for (const b of s.bondParams)
-    pe += morseBondForce(p, f, b.i, b.j, b.De, b.alpha, b.re);
+    pe += morseBondForce(p, f, b.i, b.j, b.De, b.alpha, b.re, pbc);
   for (const a of s.angleParams)
-    pe += harmonicAngleForce(p, f, a.i, a.j, a.k, a.kA, a.t0);
+    pe += harmonicAngleForce(p, f, a.i, a.j, a.k, a.kA, a.t0, pbc);
   for (const t of s.torsionParams)
-    pe += torsionForce(p, f, t.i, t.j, t.k, t.l, t.V, t.n, t.phi0);
+    pe += torsionForce(p, f, t.i, t.j, t.k, t.l, t.V, t.n, t.phi0, pbc);
   for (const iv of s.inversionParams)
     pe += inversionForce(
       p,
@@ -397,6 +399,7 @@ function calcForces(s: SimState, p: Float64Array, f: Float64Array): number {
       iv.C0,
       iv.C1,
       iv.C2,
+      pbc,
     );
   // Non-bonded: 1-2/1-3 excluded, 1-4 scaled by 0.5, 1-5+ full.
   // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
