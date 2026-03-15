@@ -2,7 +2,7 @@
 // Bond detection and dynamic bond formation/breaking
 // ==============================================================
 
-import type { Bond, BondType } from '../data/types';
+import type { Bond, BondType, Hybridization } from '../data/types';
 import elements from '../data/elements';
 
 /**
@@ -304,4 +304,86 @@ export function buildDihedralList(
   }
 
   return dihedrals;
+}
+
+/**
+ * Build list of inversion (out-of-plane) centers from bond topology.
+ *
+ * An inversion center is an atom j with 3 or more covalent neighbors
+ * that has sp2 or sp3 hybridization (or is a group-15 element).
+ * For each center j with N_neighbors ≥ 3, we enumerate all subsets
+ * of 3 neighbors {i, k, l} and produce 3 OOP terms per subset:
+ *   (i, j, k, l) — i is out-of-plane, j-k-l define the plane
+ *   (k, j, i, l) — k is out-of-plane, j-i-l define the plane
+ *   (l, j, i, k) — l is out-of-plane, j-i-k define the plane
+ *
+ * Returns array of [oopAtom, center, planeAtom1, planeAtom2] tuples
+ * along with the number of OOP terms per center (for normalization).
+ *
+ * @param bonds         detected bonds
+ * @param nAtoms        total number of atoms
+ * @param atomicNumbers array of atomic numbers
+ * @param hybridizations array of hybridization states
+ * @returns { inversions, termsPerCenter }
+ */
+export function buildInversionList(
+  bonds: Bond[],
+  nAtoms: number,
+  atomicNumbers: Int32Array | number[],
+  hybridizations: Hybridization[],
+): {
+  inversions: Array<[number, number, number, number]>;
+  termsPerCenter: Map<number, number>;
+} {
+  // Build adjacency: for each atom, list of covalent neighbors
+  const neighbors: number[][] = Array.from({ length: nAtoms }, () => []);
+  for (const bond of bonds) {
+    if (bond.type === 'hydrogen' || bond.type === 'vanderwaals') continue;
+    neighbors[bond.atomA].push(bond.atomB);
+    neighbors[bond.atomB].push(bond.atomA);
+  }
+
+  const inversions: Array<[number, number, number, number]> = [];
+  const termsPerCenter = new Map<number, number>();
+
+  // Eligible center atoms: C/N/O sp2 or sp3, or group 15 (P/As/Sb/Bi)
+  const group15 = new Set([15, 33, 51, 83]);
+
+  for (let j = 0; j < nAtoms; j++) {
+    const nbrs = neighbors[j];
+    if (nbrs.length < 3) continue;
+
+    const z = atomicNumbers[j];
+    const hyb = hybridizations[j];
+
+    // Check eligibility
+    const isEligible =
+      (z === 6 && (hyb === 'sp2' || hyb === 'sp3')) || // Carbon
+      (z === 7 && (hyb === 'sp2' || hyb === 'sp3')) || // Nitrogen
+      (z === 8 && hyb === 'sp2') || // Oxygen
+      group15.has(z); // Group 15
+
+    if (!isEligible) continue;
+
+    // For each combination of 3 neighbors from the N_neighbors,
+    // generate 3 OOP terms (one per choice of out-of-plane atom)
+    let termCount = 0;
+    for (let a = 0; a < nbrs.length; a++) {
+      for (let b = a + 1; b < nbrs.length; b++) {
+        for (let c = b + 1; c < nbrs.length; c++) {
+          const ni = nbrs[a],
+            nk = nbrs[b],
+            nl = nbrs[c];
+          // 3 permutations: each neighbor takes a turn as OOP atom
+          inversions.push([ni, j, nk, nl]); // ni out of plane j-nk-nl
+          inversions.push([nk, j, ni, nl]); // nk out of plane j-ni-nl
+          inversions.push([nl, j, ni, nk]); // nl out of plane j-ni-nk
+          termCount += 3;
+        }
+      }
+    }
+    termsPerCenter.set(j, termCount);
+  }
+
+  return { inversions, termsPerCenter };
 }
