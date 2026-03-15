@@ -7,7 +7,7 @@
 // ==============================================================
 
 import type { Atom } from '../data/types';
-import { getElementBySymbol } from '../data/elements';
+import { getElement, getElementBySymbol } from '../data/elements';
 
 /**
  * Parse XYZ file content into atoms.
@@ -60,7 +60,7 @@ export function writeXYZ(
   const lines: string[] = [String(atoms.length), comment];
 
   for (const atom of atoms) {
-    const el = getElementBySymbol(String(atom.elementNumber));
+    const el = getElement(atom.elementNumber);
     const sym = el?.symbol ?? 'X';
     const [x, y, z] = atom.position;
     lines.push(
