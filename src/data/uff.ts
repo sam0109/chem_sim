@@ -604,8 +604,16 @@ function clampK(k: number): number {
 
 /**
  * Compute UFF angle bending force constant for angle I-J-K.
- * Uses the UFF formula from Rappé et al. JACS 1992, Eq. 13.
- * Returns k_angle in eV/rad².
+ * Uses the UFF formula from Rappé et al. JACS 114, 10024 (1992), Eq. 13.
+ * Returns k_angle in eV/rad² (harmonic in θ). The cosine-harmonic
+ * conversion (K/sin²θ₀) is done downstream in harmonicAngleForce().
+ *
+ * Validated K values (from Eq. 13 with UFF Table I parameters):
+ *   H-O-H (water):      5.33 eV/rad² (123 kcal/mol/rad²)
+ *   H-C-H (methane):    2.66 eV/rad² ( 61 kcal/mol/rad²)
+ *   H-N-H (ammonia):    3.86 eV/rad² ( 89 kcal/mol/rad²)
+ *   C-C-C (alkane):     4.05 eV/rad² ( 93 kcal/mol/rad²)
+ *   O=C=O (CO₂, lin.):  5.92 eV      (137 kcal/mol, linear kA)
  *
  * @param zI atomic number of terminal atom I
  * @param zJ atomic number of central atom J
