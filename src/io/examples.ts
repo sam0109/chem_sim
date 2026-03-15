@@ -741,10 +741,20 @@ export function hfH2oPair(): Atom[] {
 }
 
 export const exampleMolecules = {
+  // Single molecules
   'Water (H₂O)': waterMolecule,
   'Methane (CH₄)': methaneMolecule,
   'Ethanol (C₂H₅OH)': ethanolMolecule,
-  'NaCl pair': naclPair,
   'Carbon Dioxide (CO₂)': co2Molecule,
+  'Ammonia (NH₃)': ammoniaMolecule,
+  'Hydrogen Fluoride (HF)': hfMolecule,
+  'Hydrogen Sulfide (H₂S)': h2sMolecule,
+  'Acetylene (C₂H₂)': acetyleneMolecule,
+  'Hydrogen Peroxide (H₂O₂)': h2o2Molecule,
+  // Ion pairs and interacting molecules
+  'NaCl pair': naclPair,
   'Two H₂O molecules': twoWaterMolecules,
+  'HCl + NH₃ (acid-base)': hclNh3Pair,
+  'H₂ + F₂ (reaction)': h2F2Pair,
+  'HF + H₂O (H-bonding)': hfH2oPair,
 };
