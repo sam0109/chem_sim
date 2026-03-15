@@ -73,6 +73,8 @@ export const Toolbar: React.FC = () => {
   const toggleEncounterPanel = useUIStore((s) => s.toggleEncounterPanel);
   const showReactionLog = useUIStore((s) => s.showReactionLog);
   const toggleReactionLog = useUIStore((s) => s.toggleReactionLog);
+  const showDashboard = useUIStore((s) => s.showDashboard);
+  const toggleDashboard = useUIStore((s) => s.toggleDashboard);
   const bondColorMode = useUIStore((s) => s.bondColorMode);
   const toggleBondColorMode = useUIStore((s) => s.toggleBondColorMode);
 
@@ -309,6 +311,28 @@ export const Toolbar: React.FC = () => {
         }}
       >
         E(t)
+      </button>
+      <button
+        data-testid="toggle-dashboard"
+        onClick={toggleDashboard}
+        title="Toggle Quantity Dashboard"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showDashboard
+            ? '2px solid #c4a24e'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showDashboard
+            ? 'rgba(196,162,78,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        Qty
       </button>
       <button
         data-testid="toggle-molecule-colors"
