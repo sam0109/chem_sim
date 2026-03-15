@@ -10,7 +10,7 @@ import type { Vector3Tuple } from '../../data/types';
  * Compute Morse bond force between two atoms and add to force arrays.
  * Returns the potential energy contribution (eV).
  *
- * @param positions flat position array [x0,y0,z0,x1,y0,z1,...]
+ * @param positions flat position array [x0,y0,z0,x1,y1,z1,...]
  * @param forces    flat force array (accumulated)
  * @param i         index of atom A
  * @param j         index of atom B
