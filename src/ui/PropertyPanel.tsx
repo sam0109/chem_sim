@@ -6,6 +6,8 @@ import React from 'react';
 import { useSimContextStore } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
+import { getAvailableOrbitals } from '../data/orbitalData';
+import type { OrbitalInfo } from '../data/orbitalData';
 
 export const PropertyPanel: React.FC = () => {
   const showPropertyPanel = useUIStore((s) => s.showPropertyPanel);
@@ -222,11 +224,146 @@ export const PropertyPanel: React.FC = () => {
                   {mol.centerOfMass[2].toFixed(2)}
                 </span>
                 <span style={{ color: '#888' }}>Dipole</span>
-                <span>{mol.dipoleMagnitude.toFixed(3)} e·Å</span>
+                <span>{mol.dipoleMagnitude.toFixed(3)} e&middot;A</span>
               </div>
             </div>
           );
         })()}
+
+      {/* Orbital visualization controls */}
+      <OrbitalControls atoms={selectedAtoms} />
+    </div>
+  );
+};
+
+// ---- Orbital Controls Sub-component ----
+
+import type { Atom } from '../data/types';
+
+const OrbitalControls: React.FC<{ atoms: Atom[] }> = ({ atoms }) => {
+  const showOrbitals = useUIStore((s) => s.showOrbitals);
+  const toggleOrbitals = useUIStore((s) => s.toggleOrbitals);
+  const selectedOrbital = useUIStore((s) => s.selectedOrbital);
+  const setSelectedOrbital = useUIStore((s) => s.setSelectedOrbital);
+  const orbitalIsovalue = useUIStore((s) => s.orbitalIsovalue);
+  const setOrbitalIsovalue = useUIStore((s) => s.setOrbitalIsovalue);
+
+  if (atoms.length === 0) return null;
+
+  // Get available orbitals from the first selected atom's electron config
+  const firstAtom = atoms[0];
+  const el = elements[firstAtom.elementNumber];
+  const availableOrbitals: OrbitalInfo[] = el
+    ? getAvailableOrbitals(el.electronConfig)
+    : [];
+
+  // Filter to only show orbitals we can render (l <= 2, i.e., s, p, d)
+  const renderableOrbitals = availableOrbitals.filter((o) => o.l <= 2);
+
+  const handleOrbitalChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (val === '') {
+      setSelectedOrbital(null);
+      return;
+    }
+    const orb = renderableOrbitals.find((o) => o.label === val);
+    if (orb) {
+      setSelectedOrbital({ n: orb.n, l: orb.l, m: orb.m });
+    }
+  };
+
+  const handleIsovalueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setOrbitalIsovalue(parseFloat(e.target.value));
+  };
+
+  // Find the label of the currently selected orbital
+  const selectedLabel = selectedOrbital
+    ? (renderableOrbitals.find(
+        (o) =>
+          o.n === selectedOrbital.n &&
+          o.l === selectedOrbital.l &&
+          o.m === selectedOrbital.m,
+      )?.label ?? '')
+    : '';
+
+  return (
+    <div
+      style={{
+        marginTop: 8,
+        padding: 6,
+        background: 'rgba(180,100,255,0.08)',
+        borderRadius: 4,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          marginBottom: 4,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={showOrbitals}
+          onChange={toggleOrbitals}
+          style={{ margin: 0, cursor: 'pointer' }}
+        />
+        <span style={{ fontSize: 11, color: '#bb88ff' }}>Orbitals</span>
+      </div>
+
+      {showOrbitals && (
+        <>
+          <div style={{ marginBottom: 4 }}>
+            <select
+              value={selectedLabel}
+              onChange={handleOrbitalChange}
+              style={{
+                width: '100%',
+                background: 'rgba(255,255,255,0.1)',
+                color: '#ddd',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: 3,
+                padding: '2px 4px',
+                fontSize: 10,
+                fontFamily: 'monospace',
+              }}
+            >
+              <option value="">-- select orbital --</option>
+              {renderableOrbitals.map((orb) => (
+                <option key={orb.label} value={orb.label}>
+                  {orb.label} ({orb.occupancy}e)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 10,
+            }}
+          >
+            <span style={{ color: '#888', whiteSpace: 'nowrap' }}>
+              Isovalue
+            </span>
+            <input
+              type="range"
+              min={0.001}
+              max={0.1}
+              step={0.001}
+              value={orbitalIsovalue}
+              onChange={handleIsovalueChange}
+              style={{ flex: 1, cursor: 'pointer' }}
+            />
+            <span style={{ color: '#aaa', minWidth: 36, textAlign: 'right' }}>
+              {orbitalIsovalue.toFixed(3)}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 };
