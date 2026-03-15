@@ -18,13 +18,14 @@ import {
   getLJParams,
   getUFFAngleK,
   getUFFTorsionParams,
+  getUFFInversionParams,
 } from '../data/uff';
 import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
 import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
-import { pauliRepulsion } from './forces/pauli';
 import { torsionForce } from './forces/torsion';
+import { inversionForce } from './forces/inversion';
 import {
   velocityVerletStep,
   computeTemperature,
@@ -37,6 +38,7 @@ import {
   detectHydrogenBonds,
   buildAngleList,
   buildDihedralList,
+  buildInversionList,
 } from './bondDetector';
 import { CellList } from './neighborList';
 import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
@@ -76,6 +78,7 @@ let bondParams: Array<{
 }> = [];
 const ljCache: Map<string, { sigma: number; epsilon: number }> = new Map();
 let cellList: CellList | null = null;
+
 // Cached angle parameters (precomputed once per topology rebuild)
 let angleParams: Array<{
   i: number;
@@ -94,9 +97,26 @@ let torsionParams: Array<{
   n: number;
   phi0: number;
 }> = [];
+// Cached inversion (out-of-plane) parameters
+let inversionParams: Array<{
+  i: number;
+  j: number;
+  k: number;
+  l: number;
+  K: number;
+  C0: number;
+  C1: number;
+  C2: number;
+}> = [];
 
 // --- Exclusion set: skip 1-2 (bonded) AND 1-3 (angle) pairs from LJ/Coulomb ---
 const exclusionSet: Set<string> = new Set();
+
+// --- 1-4 scaling set: dihedral terminal pairs get 0.5× LJ and Coulomb ---
+// Standard AMBER/OPLS convention: 1-4 pairs are scaled by 0.5.
+// Source: Cornell et al., JACS 117, 5179 (1995); Jorgensen et al., JACS 118, 11225 (1996).
+const SCALE_14 = 0.5;
+const scale14Set: Set<string> = new Set();
 
 // Drag force target
 let dragAtomId = -1;
@@ -163,6 +183,17 @@ function rebuildTopology(): void {
 
   buildTorsionParams();
 
+  // Build 1-4 scaling set from dihedral terminal atoms.
+  // Pairs that are both 1-3 (in exclusionSet) and 1-4 are fully excluded
+  // (1-3 takes precedence), so we skip those here.
+  scale14Set.clear();
+  for (const [di, , , dl] of dihedrals) {
+    const key = `${Math.min(di, dl)}-${Math.max(di, dl)}`;
+    if (!exclusionSet.has(key)) {
+      scale14Set.add(key);
+    }
+  }
+
   // Compute Gasteiger partial charges from bond topology.
   // This replaces the hardcoded/zero charges with physically meaningful
   // values based on orbital electronegativity equilibration.
@@ -224,6 +255,48 @@ function buildTorsionParams(): void {
         V: V / nDihedrals,
         n: nPeriod,
         phi0,
+      });
+    }
+  }
+
+  // Build inversion (out-of-plane) parameters for sp2/sp3 centers.
+  // K is divided by the total number of OOP terms per center to
+  // avoid over-counting the inversion barrier.
+  // Source: Rappé et al., JACS 114, 10024 (1992), Eq. 17.
+  const { inversions, termsPerCenter } = buildInversionList(
+    bonds,
+    nAtoms,
+    Array.from(atomicNumbers),
+    hybridizations,
+  );
+  inversionParams = [];
+  // Build neighbor map to check for sp2 oxygen neighbors (carbonyl C)
+  const neighborMap: number[][] = Array.from({ length: nAtoms }, () => []);
+  for (const bond of bonds) {
+    if (bond.type === 'hydrogen' || bond.type === 'vanderwaals') continue;
+    neighborMap[bond.atomA].push(bond.atomB);
+    neighborMap[bond.atomB].push(bond.atomA);
+  }
+  for (const [ii, ij, ik, il] of inversions) {
+    const hasONeighbor = neighborMap[ij].some(
+      (nb) => atomicNumbers[nb] === 8 && hybridizations[nb] === 'sp2',
+    );
+    const params = getUFFInversionParams(
+      atomicNumbers[ij],
+      hybridizations[ij],
+      hasONeighbor,
+    );
+    if (params) {
+      const nTerms = termsPerCenter.get(ij) ?? 1;
+      inversionParams.push({
+        i: ii,
+        j: ij,
+        k: ik,
+        l: il,
+        K: params.K / nTerms,
+        C0: params.C0,
+        C1: params.C1,
+        C2: params.C2,
       });
     }
   }
@@ -317,21 +390,51 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
     );
   }
 
+  // 2.75. Inversion (out-of-plane) forces — using precomputed params
+  for (const ip of inversionParams) {
+    potentialEnergy += inversionForce(
+      pos,
+      frc,
+      ip.i,
+      ip.j,
+      ip.k,
+      ip.l,
+      ip.K,
+      ip.C0,
+      ip.C1,
+      ip.C2,
+    );
+  }
+
   // 3. Non-bonded forces (LJ + Coulomb) using cell list or brute force
+  // 1-2 and 1-3 pairs are fully excluded; 1-4 pairs get SCALE_14 (0.5×).
+  // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
   const cutoff = config.cutoff;
   const pairCallback = (i: number, j: number): void => {
     // Skip 1-2 (bonded) and 1-3 (angle) pairs
     const key = `${Math.min(i, j)}-${Math.max(i, j)}`;
     if (exclusionSet.has(key)) return;
 
+    // 1-4 pairs: scale LJ epsilon and Coulomb by SCALE_14
+    const is14 = scale14Set.has(key);
+    const scaleFactor = is14 ? SCALE_14 : 1.0;
+
     const { sigma, epsilon } = getLJCached(atomicNumbers[i], atomicNumbers[j]);
-    potentialEnergy += ljForce(pos, frc, i, j, sigma, epsilon, cutoff);
+    potentialEnergy += ljForce(
+      pos,
+      frc,
+      i,
+      j,
+      sigma,
+      epsilon * scaleFactor,
+      cutoff,
+    );
     potentialEnergy += coulombForce(
       pos,
       frc,
       i,
       j,
-      charges[i],
+      charges[i] * scaleFactor,
       charges[j],
       cutoff,
     );
@@ -344,31 +447,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
     cellList!.forEachPair(pos, cutoff, pairCallback);
   }
 
-  // 4. Pauli repulsion — prevents atomic overlap for ALL pairs
-  // This is a short-range exponential wall that acts regardless of bonding
-  for (let i = 0; i < nAtoms; i++) {
-    for (let j = i + 1; j < nAtoms; j++) {
-      // Use element-dependent minimum approach distance (~0.5 × smallest covalent radius)
-      const elI = elements[atomicNumbers[i]];
-      const elJ = elements[atomicNumbers[j]];
-      const rMin =
-        0.5 *
-        Math.min(
-          elI ? elI.covalentRadius : 0.5,
-          elJ ? elJ.covalentRadius : 0.5,
-        );
-      potentialEnergy += pauliRepulsion(
-        pos,
-        frc,
-        i,
-        j,
-        Math.max(rMin, 0.15),
-        20.0,
-      );
-    }
-  }
-
-  // 5. Drag force (spring to target position)
+  // 4. Drag force (spring to target position)
   if (dragAtomId >= 0 && dragAtomId < nAtoms) {
     const i3 = dragAtomId * 3;
     const dx = dragTarget[0] - pos[i3];
@@ -458,6 +537,14 @@ function initSimulation(
       angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
     }
     buildTorsionParams();
+    // Build 1-4 scaling set for provided bonds
+    scale14Set.clear();
+    for (const [di, , , dl] of dihedrals) {
+      const key = `${Math.min(di, dl)}-${Math.max(di, dl)}`;
+      if (!exclusionSet.has(key)) {
+        scale14Set.add(key);
+      }
+    }
   } else {
     rebuildTopology();
   }
@@ -725,6 +812,18 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
     case 'minimize':
       stopLoop();
       minimize(msg.maxSteps, msg.tolerance);
+      break;
+
+    case 'set-velocities':
+      for (const entry of msg.entries) {
+        const idx = entry.atomIndex;
+        if (idx >= 0 && idx < nAtoms) {
+          velocities[idx * 3] = entry.velocity[0];
+          velocities[idx * 3 + 1] = entry.velocity[1];
+          velocities[idx * 3 + 2] = entry.velocity[2];
+        }
+      }
+      sendState();
       break;
   }
 };

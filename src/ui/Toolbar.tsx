@@ -2,7 +2,7 @@
 // Toolbar — tool selection and view mode buttons
 // ==============================================================
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useUIStore } from '../store/uiStore';
 import type { InteractionTool } from '../data/types';
 
@@ -14,6 +14,12 @@ const tools: Array<{
 }> = [
   { id: 'select', icon: '🔍', label: 'Select', shortcut: 'S' },
   { id: 'place-atom', icon: '⊕', label: 'Place Atom', shortcut: 'A' },
+  {
+    id: 'place-molecule',
+    icon: '🧪',
+    label: 'Place Molecule',
+    shortcut: 'P',
+  },
   { id: 'delete', icon: '✕', label: 'Delete', shortcut: 'D' },
   { id: 'drag', icon: '✋', label: 'Drag', shortcut: 'G' },
   { id: 'measure-distance', icon: '📏', label: 'Measure', shortcut: 'M' },
@@ -61,6 +67,19 @@ export const Toolbar: React.FC = () => {
   const showChallengePanel = useUIStore((s) => s.showChallengePanel);
   const comparisonMode = useUIStore((s) => s.comparisonMode);
   const toggleComparisonMode = useUIStore((s) => s.toggleComparisonMode);
+  const showEncounterPanel = useUIStore((s) => s.showEncounterPanel);
+  const toggleEncounterPanel = useUIStore((s) => s.toggleEncounterPanel);
+
+  // When selecting the place-molecule tool, show the encounter panel
+  const handleToolSelect = useCallback(
+    (tool: InteractionTool) => {
+      setActiveTool(tool);
+      if (tool === 'place-molecule' && !showEncounterPanel) {
+        toggleEncounterPanel();
+      }
+    },
+    [setActiveTool, showEncounterPanel, toggleEncounterPanel],
+  );
 
   // Keyboard shortcuts
   React.useEffect(() => {
@@ -76,6 +95,9 @@ export const Toolbar: React.FC = () => {
           break;
         case 'a':
           setActiveTool('place-atom');
+          break;
+        case 'p':
+          handleToolSelect('place-molecule');
           break;
         case 'd':
           setActiveTool('delete');
@@ -93,7 +115,7 @@ export const Toolbar: React.FC = () => {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setActiveTool, toggleLabels]);
+  }, [setActiveTool, toggleLabels, handleToolSelect]);
 
   return (
     <div
@@ -115,7 +137,7 @@ export const Toolbar: React.FC = () => {
           key={tool.id}
           tool={tool}
           active={activeTool === tool.id}
-          onClick={() => setActiveTool(tool.id)}
+          onClick={() => handleToolSelect(tool.id)}
         />
       ))}
 

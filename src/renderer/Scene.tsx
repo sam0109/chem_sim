@@ -3,8 +3,9 @@
 // ==============================================================
 
 import React, { useEffect, useCallback, useRef } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, Grid } from '@react-three/drei';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { AtomRenderer } from './AtomRenderer';
 import { BondRenderer } from './BondRenderer';
@@ -148,8 +149,54 @@ const Interaction: React.FC = () => {
   return null;
 };
 
+// ---- Camera tracker for encounter pair COM ----
+// When 2+ molecules are detected and the simulation is running,
+// smoothly moves the OrbitControls target to the pair's center of mass.
+const CameraTracker: React.FC<{
+  controlsRef: React.RefObject<OrbitControlsImpl | null>;
+}> = ({ controlsRef }) => {
+  const targetRef = useRef(new THREE.Vector3());
+  const simStore = useSimContextStoreApi();
+
+  useFrame(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    const { molecules, config } = simStore.getState();
+    const showEncounter = useUIStore.getState().showEncounterPanel;
+
+    // Only auto-track when encounter panel is active, 2+ molecules, and running
+    if (!showEncounter || molecules.length < 2 || !config.running) return;
+
+    // Compute the center of mass of all molecules' COMs
+    // (weighted equally — could weight by mass but COMs are sufficient)
+    let cx = 0;
+    let cy = 0;
+    let cz = 0;
+    for (const mol of molecules) {
+      cx += mol.centerOfMass[0];
+      cy += mol.centerOfMass[1];
+      cz += mol.centerOfMass[2];
+    }
+    cx /= molecules.length;
+    cy /= molecules.length;
+    cz /= molecules.length;
+
+    // Smoothly interpolate the target toward the pair COM.
+    // Lerp factor 0.05 per frame (~60fps) gives ~3s to reach 95% of target,
+    // preventing jarring camera jumps during fast encounters.
+    targetRef.current.set(cx, cy, cz);
+    controls.target.lerp(targetRef.current, 0.05);
+    controls.update();
+  });
+
+  return null;
+};
+
 // ---- Main Scene component ----
 export const Scene: React.FC = () => {
+  const controlsRef = useRef<OrbitControlsImpl>(null);
+
   return (
     <Canvas
       camera={{ position: [0, 8, 15], fov: 50, near: 0.1, far: 1000 }}
@@ -192,6 +239,7 @@ export const Scene: React.FC = () => {
 
       {/* Controls */}
       <OrbitControls
+        ref={controlsRef}
         enableDamping
         dampingFactor={0.1}
         rotateSpeed={0.8}
@@ -200,6 +248,9 @@ export const Scene: React.FC = () => {
         minDistance={2}
         maxDistance={100}
       />
+
+      {/* Camera tracking for encounters */}
+      <CameraTracker controlsRef={controlsRef} />
 
       {/* Interaction */}
       <Interaction />

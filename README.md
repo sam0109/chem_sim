@@ -43,7 +43,7 @@ The simulation recomputes bonds at every frame based on inter-atomic distances, 
 │  │ MD Engine                               │ │
 │  │  - Velocity Verlet integrator           │ │
 │  │  - Morse / LJ / Coulomb / Angle forces  │ │
-│  │  - Pauli repulsion                      │ │
+│  │  - 1-4 pair scaling (AMBER/OPLS)        │ │
 │  │  - Cell list neighbor search            │ │
 │  │  - Hysteresis bond detection            │ │
 │  │  - Berendsen thermostat                 │ │
@@ -79,7 +79,8 @@ src/
 │       ├── lennardJones.ts  # LJ 12-6 (van der Waals)
 │       ├── coulomb.ts       # Shifted Coulomb (electrostatics)
 │       ├── harmonic.ts      # Cosine-based angle bending
-│       └── pauli.ts         # Exponential short-range repulsion
+│       ├── torsion.ts       # Dihedral torsion potential
+│       └── inversion.ts     # Out-of-plane inversion potential
 ├── renderer/                # 3D visualization (React Three Fiber)
 │   ├── Scene.tsx            # R3F Canvas, lighting, controls, interaction
 │   ├── AtomRenderer.tsx     # Instanced sphere mesh (up to 2000 atoms)
@@ -108,20 +109,19 @@ src/
 
 ### Potentials
 
-| Interaction         | Potential                                   | Parameters from      |
-| ------------------- | ------------------------------------------- | -------------------- |
-| Covalent bonds      | Morse: V = Dₑ[1 − e^(−α(r−rₑ))]²            | UFF bond radii + Z\* |
-| Angle bending       | Cosine harmonic: V = (k_c/2)(cosθ − cosθ₀)² | UFF Eq. 13           |
-| Van der Waals       | LJ 12-6: V = 4ε[(σ/r)¹² − (σ/r)⁶]           | UFF xᵢ, Dᵢ           |
-| Electrostatics      | Shifted Coulomb: V = kₑ qᵢqⱼ (1/r − 1/rₓ)   | Partial charges      |
-| Short-range overlap | Pauli: V = A·exp(−b(r − rₘᵢₙ))              | Covalent radii       |
+| Interaction    | Potential                                   | Parameters from      |
+| -------------- | ------------------------------------------- | -------------------- |
+| Covalent bonds | Morse: V = Dₑ[1 − e^(−α(r−rₑ))]²            | UFF bond radii + Z\* |
+| Angle bending  | Cosine harmonic: V = (k_c/2)(cosθ − cosθ₀)² | UFF Eq. 13           |
+| Van der Waals  | LJ 12-6: V = 4ε[(σ/r)¹² − (σ/r)⁶]           | UFF xᵢ, Dᵢ           |
+| Electrostatics | Shifted Coulomb: V = kₑ qᵢqⱼ (1/r − 1/rₓ)   | Partial charges      |
 
 ### Exclusion Rules
 
 - **1-2 pairs** (directly bonded): excluded from LJ and Coulomb (Morse handles them)
 - **1-3 pairs** (connected through an angle): excluded from LJ and Coulomb (angle potential handles them)
-- **1-4+ pairs**: full LJ + Coulomb
-- **Pauli repulsion**: applied to ALL pairs (prevents unphysical overlap)
+- **1-4 pairs** (dihedral terminals): LJ and Coulomb scaled by 0.5 (AMBER/OPLS convention; Cornell et al., JACS 117, 5179, 1995)
+- **1-5+ pairs**: full LJ + Coulomb
 
 ### Bond Detection
 

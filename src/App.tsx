@@ -13,6 +13,7 @@ import { EnergyPlot } from './ui/EnergyPlot';
 import { ChallengePanel } from './ui/ChallengePanel';
 import { SimulationPanel } from './SimulationPanel';
 import { ComparisonTable } from './ui/ComparisonTable';
+import { EncounterPanel } from './ui/EncounterPanel';
 import {
   useSimulationStore,
   createSimulationStoreInstance,
@@ -31,6 +32,11 @@ import {
   deserializeState,
 } from './io/chemsimFile';
 import type { SerializeInput } from './io/chemsimFile';
+import { registerMoleculeTemplates } from './data/moleculeTemplates';
+
+// Register molecule templates so the encounter panel (in the UI layer)
+// can access them via the data-layer registry without importing io directly
+registerMoleculeTemplates(exampleMolecules);
 
 /** Read current simulation + UI state into a SerializeInput snapshot */
 function getSerializeInput(): SerializeInput {
@@ -575,6 +581,7 @@ const App: React.FC = () => {
         <PeriodicTable />
         <EnergyPlot />
         <ChallengePanel />
+        <EncounterPanel />
 
         <div
           data-testid="status-bar"

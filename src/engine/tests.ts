@@ -14,14 +14,20 @@ import {
   getLJParams,
   getUFFAngleK,
   getUFFTorsionParams,
+  getUFFInversionParams,
 } from '../data/uff';
 import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
 import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
-import { pauliRepulsion } from './forces/pauli';
 import { torsionForce } from './forces/torsion';
-import { detectBonds, buildAngleList, buildDihedralList } from './bondDetector';
+import { inversionForce } from './forces/inversion';
+import {
+  detectBonds,
+  buildAngleList,
+  buildDihedralList,
+  buildInversionList,
+} from './bondDetector';
 import {
   velocityVerletStep,
   initializeVelocities,
@@ -61,11 +67,6 @@ Math.random = seededRng;
 // Each entry maps a test ID to the issue(s) that will fix it.
 // These tests are skipped (not run) and don't count as pass or fail.
 const KNOWN_FAILURES: Record<string, string> = {
-  'NVE-02':
-    'Methane NVE explodes — needs out-of-plane/improper torsion (no proper dihedrals in CH4)',
-  'GEO-05': 'Methane HCH angle — needs out-of-plane/improper torsion',
-  'GEO-06': 'Methane C-H distance — needs out-of-plane/improper torsion',
-  'GEO-07': 'Methane bond count — needs out-of-plane/improper torsion',
   'GEO-09':
     'CO2 C=O distance — needs double bond params (#3) for correct bond detection',
 };
@@ -125,6 +126,7 @@ interface SimState {
   bonds: Bond[];
   angles: Array<[number, number, number]>;
   exclusionSet: Set<string>;
+  scale14Set: Set<string>;
   bondParams: Array<{
     i: number;
     j: number;
@@ -148,6 +150,16 @@ interface SimState {
     V: number;
     n: number;
     phi0: number;
+  }>;
+  inversionParams: Array<{
+    i: number;
+    j: number;
+    k: number;
+    l: number;
+    K: number;
+    C0: number;
+    C1: number;
+    C2: number;
   }>;
 }
 
@@ -187,10 +199,12 @@ function initSim(atoms: Atom[]): SimState {
     bonds: [],
     angles: [],
     exclusionSet: new Set(),
+    scale14Set: new Set(),
     bondParams: [],
     angleParams: [],
     dihedrals: [],
     torsionParams: [],
+    inversionParams: [],
   };
 
   rebuildTopo(state);
@@ -228,6 +242,17 @@ function rebuildTopo(s: SimState): void {
   // Build dihedral list and precompute torsion parameters.
   // Normalize V by the number of dihedrals sharing the same central bond.
   s.dihedrals = buildDihedralList(s.bonds, s.N);
+
+  // Build 1-4 scaling set from dihedral terminal atoms.
+  // Pairs already fully excluded as 1-3 are skipped (1-3 takes precedence).
+  s.scale14Set.clear();
+  for (const [di, , , dl] of s.dihedrals) {
+    const key = Math.min(di, dl) + '-' + Math.max(di, dl);
+    if (!s.exclusionSet.has(key)) {
+      s.scale14Set.add(key);
+    }
+  }
+
   s.torsionParams = [];
   const detectedHyb = detectHybridization(new Int32Array(s.Z), s.bonds, s.N);
   const dihedralCount = new Map<string, number>();
@@ -262,6 +287,45 @@ function rebuildTopo(s: SimState): void {
     }
   }
 
+  // Build inversion (out-of-plane) parameters
+  const { inversions, termsPerCenter } = buildInversionList(
+    s.bonds,
+    s.N,
+    s.Z,
+    detectedHyb,
+  );
+  s.inversionParams = [];
+  // Build neighbor map for checking sp2 O neighbors
+  const neighborMap: number[][] = Array.from({ length: s.N }, () => []);
+  for (const b of s.bonds) {
+    if (b.type === 'hydrogen' || b.type === 'vanderwaals') continue;
+    neighborMap[b.atomA].push(b.atomB);
+    neighborMap[b.atomB].push(b.atomA);
+  }
+  for (const [ii, ij, ik, il] of inversions) {
+    const hasONeighbor = neighborMap[ij].some(
+      (nb) => s.Z[nb] === 8 && detectedHyb[nb] === 'sp2',
+    );
+    const params = getUFFInversionParams(
+      s.Z[ij],
+      detectedHyb[ij],
+      hasONeighbor,
+    );
+    if (params) {
+      const nTerms = termsPerCenter.get(ij) ?? 1;
+      s.inversionParams.push({
+        i: ii,
+        j: ij,
+        k: ik,
+        l: il,
+        K: params.K / nTerms,
+        C0: params.C0,
+        C1: params.C1,
+        C2: params.C2,
+      });
+    }
+  }
+
   // Compute Gasteiger charges from bond topology
   const gasteigerQ = computeGasteigerCharges(
     new Int32Array(s.Z),
@@ -287,21 +351,30 @@ function calcForces(s: SimState, p: Float64Array, f: Float64Array): number {
     pe += harmonicAngleForce(p, f, a.i, a.j, a.k, a.kA, a.t0);
   for (const t of s.torsionParams)
     pe += torsionForce(p, f, t.i, t.j, t.k, t.l, t.V, t.n, t.phi0);
+  for (const iv of s.inversionParams)
+    pe += inversionForce(
+      p,
+      f,
+      iv.i,
+      iv.j,
+      iv.k,
+      iv.l,
+      iv.K,
+      iv.C0,
+      iv.C1,
+      iv.C2,
+    );
+  // Non-bonded: 1-2/1-3 excluded, 1-4 scaled by 0.5, 1-5+ full.
+  // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
+  const SCALE_14 = 0.5;
   for (let i = 0; i < s.N; i++) {
     for (let j = i + 1; j < s.N; j++) {
-      if (s.exclusionSet.has(i + '-' + j)) continue;
+      const key = i + '-' + j;
+      if (s.exclusionSet.has(key)) continue;
+      const scale = s.scale14Set.has(key) ? SCALE_14 : 1.0;
       const lj = getLJParams(s.Z[i], s.Z[j]);
-      pe += ljForce(p, f, i, j, lj.sigma, lj.epsilon, 10);
-      pe += coulombForce(p, f, i, j, s.charges[i], s.charges[j], 10);
-    }
-  }
-  for (let i = 0; i < s.N; i++) {
-    for (let j = i + 1; j < s.N; j++) {
-      const ri = elements[s.Z[i]];
-      const rj = elements[s.Z[j]];
-      if (!ri || !rj) continue;
-      const rm = 0.5 * Math.min(ri.covalentRadius, rj.covalentRadius);
-      pe += pauliRepulsion(p, f, i, j, Math.max(rm, 0.15), 20);
+      pe += ljForce(p, f, i, j, lj.sigma, lj.epsilon * scale, 10);
+      pe += coulombForce(p, f, i, j, s.charges[i] * scale, s.charges[j], 10);
     }
   }
   return pe;
@@ -410,13 +483,17 @@ function runGradientTests(): void {
     3,
   );
 
-  // GRAD-05: Pauli (steep exponential — use looser tolerance)
-  const pauliPos = new Float64Array([0, 0, 0, 0.25, 0, 0]);
+  // GRAD-05: 1-4 scaled LJ — test that gradient is consistent for a 1-4 pair
+  // Uses two O atoms at moderate distance as a 1-4 pair (half-strength LJ).
+  // This verifies that the 0.5× scaling produces correct forces.
+  const lj14Pos = new Float64Array([0, 0, 0, 3.0, 0, 0]);
+  const ljO = getLJParams(8, 8); // O-O LJ params
+  const SCALE_14_TEST = 0.5;
   testGradient(
     'GRAD-05',
-    'Pauli repulsion gradient',
-    (p, f) => pauliRepulsion(p, f, 0, 1, 0.15, 20),
-    pauliPos,
+    '1-4 scaled LJ O-O gradient',
+    (p, f) => ljForce(p, f, 0, 1, ljO.sigma, ljO.epsilon * SCALE_14_TEST, 10),
+    lj14Pos,
     2,
   );
 
@@ -479,6 +556,87 @@ function runGradientTests(): void {
     torsionPos,
     4,
   );
+
+  // GRAD-09: Inversion gradient (sp2 center — planar)
+  // C at origin with 3 neighbors in a slightly distorted trigonal arrangement.
+  // Atom 0 is out-of-plane, atom 1 is center, atoms 2,3 are in-plane.
+  const invSp2Pos = new Float64Array([
+    1.3,
+    0.1,
+    0.0, // atom 0 (OOP, slightly above plane)
+    0.0,
+    0.0,
+    0.0, // atom 1 (C center)
+    -0.65,
+    0.0,
+    1.12, // atom 2 (in plane)
+    -0.65,
+    0.0,
+    -1.12, // atom 3 (in plane)
+  ]);
+  const invSp2P = getUFFInversionParams(6, 'sp2');
+  if (invSp2P) {
+    testGradient(
+      'GRAD-09',
+      'Inversion sp2 C gradient',
+      (p, f) =>
+        inversionForce(
+          p,
+          f,
+          0,
+          1,
+          2,
+          3,
+          invSp2P.K / 3,
+          invSp2P.C0,
+          invSp2P.C1,
+          invSp2P.C2,
+        ),
+      invSp2Pos,
+      4,
+    );
+  }
+
+  // GRAD-10: Inversion gradient (sp3 center — tetrahedral)
+  // Methane-like geometry with one H slightly displaced from ideal position.
+  // Use a subset of methane: C(center) with 3 of its H neighbors.
+  const tetR = 1.09;
+  const invSp3Pos = new Float64Array([
+    tetR,
+    0.1,
+    0.0, // atom 0 (H, slightly perturbed)
+    0.0,
+    0.0,
+    0.0, // atom 1 (C center)
+    -tetR / 3,
+    tetR * Math.sqrt(8 / 9),
+    0.0, // atom 2 (H)
+    -tetR / 3,
+    -tetR * Math.sqrt(2 / 9),
+    tetR * Math.sqrt(2 / 3), // atom 3 (H)
+  ]);
+  const invSp3P = getUFFInversionParams(6, 'sp3');
+  if (invSp3P) {
+    testGradient(
+      'GRAD-10',
+      'Inversion sp3 C gradient (tetrahedral)',
+      (p, f) =>
+        inversionForce(
+          p,
+          f,
+          0,
+          1,
+          2,
+          3,
+          invSp3P.K / 12,
+          invSp3P.C0,
+          invSp3P.C1,
+          invSp3P.C2,
+        ),
+      invSp3Pos,
+      4,
+    );
+  }
 }
 
 // ---- NVE energy conservation tests ----

@@ -13,6 +13,7 @@ import type {
   SimulationBox,
   WorkerStateUpdate,
 } from '../data/types';
+import elements from '../data/elements';
 import { SimulationWorker } from '../worker-comms';
 
 /** Full simulation store state + actions (exported for context typing) */
@@ -51,6 +52,7 @@ export interface SimulationStoreState {
   // ---- Actions ----
   setConfig: (config: Partial<SimulationConfig>) => void;
   addAtom: (atom: Atom) => void;
+  addMolecule: (atoms: Atom[]) => void;
   removeAtom: (atomId: number) => void;
   initSimulation: (atoms: Atom[], bonds?: Bond[]) => void;
   toggleRunning: () => void;
@@ -58,6 +60,12 @@ export interface SimulationStoreState {
   dragAtom: (atomId: number, position: [number, number, number]) => void;
   releaseDrag: () => void;
   handleWorkerState: (state: WorkerStateUpdate) => void;
+  launchEncounter: (
+    molAIndices: number[],
+    molBIndices: number[],
+    speed: number,
+    impactParam: number,
+  ) => void;
 }
 
 const DEFAULT_CONFIG: SimulationConfig = {
@@ -173,6 +181,23 @@ function buildStoreSlice(
       get().worker?.addAtom(atom);
     },
 
+    addMolecule(newAtoms: Atom[]) {
+      // Add a group of atoms at once by re-initializing the worker
+      // with the combined atom set. This avoids per-atom topology
+      // rebuilds that occur with individual addAtom calls.
+      const existingAtoms = get().atoms;
+      const baseId = existingAtoms.length;
+      const reindexed = newAtoms.map((a, i) => ({
+        ...a,
+        id: baseId + i,
+      }));
+      const allAtoms = [...existingAtoms, ...reindexed];
+      // Re-init preserves config but resets with new atom set
+      set({ atoms: allAtoms, bonds: [], energyHistory: [], step: 0 });
+      const { worker, config, box } = get();
+      worker?.init(allAtoms, [], box, { ...config, running: false });
+    },
+
     removeAtom(atomId: number) {
       const atoms = get().atoms.filter((_, i) => i !== atomId);
       set({ atoms });
@@ -201,6 +226,142 @@ function buildStoreSlice(
     releaseDrag() {
       // Send drag with invalid id to disable
       get().worker?.drag(-1, [0, 0, 0]);
+    },
+
+    launchEncounter(
+      molAIndices: number[],
+      molBIndices: number[],
+      speed: number,
+      impactParam: number,
+    ) {
+      const { atoms, positions, worker } = get();
+      if (!worker || molAIndices.length === 0 || molBIndices.length === 0)
+        return;
+
+      // Compute center of mass for each molecule group
+      const computeCOM = (
+        indices: number[],
+      ): { cx: number; cy: number; cz: number; totalMass: number } => {
+        let totalMass = 0;
+        let cx = 0;
+        let cy = 0;
+        let cz = 0;
+        for (const i of indices) {
+          const el = elements[atoms[i].elementNumber];
+          const mass = el ? el.mass : 1.0;
+          // Use the flat positions array which is more up-to-date than atom.position
+          const px =
+            positions.length > i * 3 ? positions[i * 3] : atoms[i].position[0];
+          const py =
+            positions.length > i * 3 + 1
+              ? positions[i * 3 + 1]
+              : atoms[i].position[1];
+          const pz =
+            positions.length > i * 3 + 2
+              ? positions[i * 3 + 2]
+              : atoms[i].position[2];
+          totalMass += mass;
+          cx += mass * px;
+          cy += mass * py;
+          cz += mass * pz;
+        }
+        if (totalMass > 0) {
+          cx /= totalMass;
+          cy /= totalMass;
+          cz /= totalMass;
+        }
+        return { cx, cy, cz, totalMass };
+      };
+
+      const comA = computeCOM(molAIndices);
+      const comB = computeCOM(molBIndices);
+
+      // Direction vector from B to A (approach direction)
+      let dx = comA.cx - comB.cx;
+      let dy = comA.cy - comB.cy;
+      let dz = comA.cz - comB.cz;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist > 0) {
+        dx /= dist;
+        dy /= dist;
+        dz /= dist;
+      } else {
+        dx = 1;
+        dy = 0;
+        dz = 0;
+      }
+
+      // Perpendicular vector for impact parameter offset
+      // Choose a vector not parallel to direction
+      let perpX: number;
+      let perpY: number;
+      let perpZ: number;
+      if (Math.abs(dx) < 0.9) {
+        perpX = 0;
+        perpY = -dz;
+        perpZ = dy;
+      } else {
+        perpX = -dz;
+        perpY = 0;
+        perpZ = dx;
+      }
+      const perpLen = Math.sqrt(perpX * perpX + perpY * perpY + perpZ * perpZ);
+      if (perpLen > 0) {
+        perpX /= perpLen;
+        perpY /= perpLen;
+        perpZ /= perpLen;
+      }
+
+      // Apply impact parameter: offset molecule B perpendicular to approach
+      if (impactParam !== 0) {
+        // Physically offset molecule B perpendicular to the approach axis
+        // before setting velocities, then re-init the worker
+        const shiftedAtoms = get().atoms.map((atom, i) => {
+          if (molBIndices.includes(i)) {
+            return {
+              ...atom,
+              position: [
+                atom.position[0] + perpX * impactParam,
+                atom.position[1] + perpY * impactParam,
+                atom.position[2] + perpZ * impactParam,
+              ] as [number, number, number],
+            };
+          }
+          return atom;
+        });
+        // Re-init with offset positions, paused
+        set({ atoms: shiftedAtoms });
+        worker.init(shiftedAtoms, [], get().box, {
+          ...get().config,
+          running: false,
+        });
+      }
+
+      // Set approach velocities: each molecule gets half the relative speed
+      // in the center-of-mass frame
+      const halfSpeed = speed / 2;
+      const entries: Array<{
+        atomIndex: number;
+        velocity: [number, number, number];
+      }> = [];
+      // Molecule A moves toward B (negative direction)
+      for (const i of molAIndices) {
+        entries.push({
+          atomIndex: i,
+          velocity: [-halfSpeed * dx, -halfSpeed * dy, -halfSpeed * dz],
+        });
+      }
+      // Molecule B moves toward A (positive direction)
+      for (const i of molBIndices) {
+        entries.push({
+          atomIndex: i,
+          velocity: [halfSpeed * dx, halfSpeed * dy, halfSpeed * dz],
+        });
+      }
+      worker.setVelocities(entries);
+
+      // Start the simulation
+      get().setConfig({ running: true });
     },
   };
 }
