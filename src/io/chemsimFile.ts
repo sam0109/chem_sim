@@ -18,6 +18,9 @@ import type {
   ColorMode,
   Hybridization,
   BondType,
+  AlchemicalAtom,
+  FEPSample,
+  FEPResult,
 } from '../data/types';
 
 // --------------- Schema Types ---------------
@@ -56,6 +59,13 @@ export interface ChemSimFileV1 {
   box: SimulationBox;
   ui: SavedUISettings;
   metadata: LessonMetadata;
+  /** Optional FEP (Free Energy Perturbation) state — backward compatible */
+  fep?: {
+    alchemicalAtoms: AlchemicalAtom[];
+    lambdaSchedule: number[];
+    samples: FEPSample[];
+    result?: FEPResult;
+  };
 }
 
 // --------------- Serialize / Deserialize ---------------
