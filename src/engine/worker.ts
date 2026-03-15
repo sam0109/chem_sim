@@ -24,7 +24,6 @@ import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
 import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
-import { pauliRepulsion } from './forces/pauli';
 import { torsionForce } from './forces/torsion';
 import { inversionForce } from './forces/inversion';
 import {
@@ -447,31 +446,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
     cellList!.forEachPair(pos, cutoff, pairCallback);
   }
 
-  // 4. Pauli repulsion — prevents atomic overlap for ALL pairs
-  // This is a short-range exponential wall that acts regardless of bonding
-  for (let i = 0; i < nAtoms; i++) {
-    for (let j = i + 1; j < nAtoms; j++) {
-      // Use element-dependent minimum approach distance (~0.5 × smallest covalent radius)
-      const elI = elements[atomicNumbers[i]];
-      const elJ = elements[atomicNumbers[j]];
-      const rMin =
-        0.5 *
-        Math.min(
-          elI ? elI.covalentRadius : 0.5,
-          elJ ? elJ.covalentRadius : 0.5,
-        );
-      potentialEnergy += pauliRepulsion(
-        pos,
-        frc,
-        i,
-        j,
-        Math.max(rMin, 0.15),
-        20.0,
-      );
-    }
-  }
-
-  // 5. Drag force (spring to target position)
+  // 4. Drag force (spring to target position)
   if (dragAtomId >= 0 && dragAtomId < nAtoms) {
     const i3 = dragAtomId * 3;
     const dx = dragTarget[0] - pos[i3];
