@@ -134,6 +134,22 @@ function lerpColor(colorA: string, colorB: string, t: number): string {
 }
 
 /**
+ * Compute relative luminance of a hex color.
+ * Formula: ITU-R BT.709 (sRGB luminance with gamma linearization)
+ * Source: W3C WCAG 2.1, §1.4.3 Contrast
+ * Returns 0 (black) to 1 (white).
+ */
+function hexLuminance(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  // sRGB → linear
+  const toLinear = (c: number) =>
+    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+/**
  * Map a value to a 3-stop gradient: low → mid → high.
  * Uses blue (#3366cc) → white (#f0f0f0) → red (#cc3333)
  * as a diverging colormap familiar from chemistry heatmaps.
@@ -824,9 +840,8 @@ const ElementCell: React.FC<{
   onHoverStart,
   onHoverEnd,
 }) => {
-  // For gradient color modes, use dark text on light backgrounds
-  const isLightBg =
-    bgColor !== '#333' && bgColor !== '#555' && bgColor > '#888888';
+  // Use dark text on light backgrounds (luminance > 0.4 threshold)
+  const isLightBg = hexLuminance(bgColor) > 0.4;
   const textColor = isLightBg ? '#111' : '#fff';
 
   return (
@@ -923,12 +938,13 @@ export const PeriodicTable: React.FC = () => {
   let tooltipCol = 0;
   let tooltipEl: ChemicalElement | null = null;
   if (hoveredElement !== null) {
-    for (let r = 0; r < GRID.length; r++) {
+    outer: for (let r = 0; r < GRID.length; r++) {
       for (let c = 0; c < GRID[r].length; c++) {
         if (GRID[r][c] === hoveredElement) {
           tooltipRow = r;
           tooltipCol = c;
           tooltipEl = elements[hoveredElement] ?? null;
+          break outer;
         }
       }
     }
