@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "test": "vitest",
     "test:all": "bash scripts/test-all.sh",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "preview": "vite preview",
     "prepare": "husky"
   },
@@ -45,7 +47,11 @@
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "eslint --fix"
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
     ]
   }
 }
