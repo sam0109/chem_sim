@@ -2,7 +2,8 @@
 // App — main application shell
 // ==============================================================
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import type { StoreApi } from 'zustand';
 import { Scene } from './renderer/Scene';
 import { PeriodicTable } from './ui/PeriodicTable';
 import { SimulationControls } from './ui/SimulationControls';
@@ -10,7 +11,13 @@ import { PropertyPanel } from './ui/PropertyPanel';
 import { Toolbar } from './ui/Toolbar';
 import { EnergyPlot } from './ui/EnergyPlot';
 import { ChallengePanel } from './ui/ChallengePanel';
-import { useSimulationStore } from './store/simulationStore';
+import { SimulationPanel } from './SimulationPanel';
+import { ComparisonTable } from './ui/ComparisonTable';
+import {
+  useSimulationStore,
+  createSimulationStoreInstance,
+} from './store/simulationStore';
+import type { SimulationStoreState } from './store/simulationStore';
 import { SimulationContext } from './store/SimulationContext';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
@@ -86,16 +93,177 @@ const onItemHover = (e: React.MouseEvent<HTMLButtonElement>) =>
 const onItemLeave = (e: React.MouseEvent<HTMLButtonElement>) =>
   (e.currentTarget.style.background = 'transparent');
 
+/**
+ * Shared controls bar for comparison mode — dispatches config changes
+ * to both the primary store (via context) and the secondary store (via prop).
+ */
+const SharedControlsBar: React.FC<{
+  secondaryStore: StoreApi<SimulationStoreState> | null;
+}> = ({ secondaryStore }) => {
+  const config = useSimulationStore((s) => s.config);
+
+  const setConfigBoth = (
+    partial: Partial<import('./data/types').SimulationConfig>,
+  ) => {
+    useSimulationStore.getState().setConfig(partial);
+    secondaryStore?.getState().setConfig(partial);
+  };
+
+  const toggleBothRunning = () => {
+    const running = !config.running;
+    setConfigBoth({ running });
+  };
+
+  const minimizeBoth = () => {
+    useSimulationStore.getState().minimize();
+    secondaryStore?.getState().minimize();
+  };
+
+  return (
+    <div
+      data-testid="shared-controls"
+      style={{
+        flexShrink: 0,
+        background: 'rgba(10,10,25,0.95)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        zIndex: 100,
+        gap: 16,
+        padding: '6px 60px',
+        fontFamily: 'monospace',
+        fontSize: 11,
+        color: '#ddd',
+      }}
+    >
+      {/* Play/Pause */}
+      <button
+        data-testid="play-pause-button"
+        onClick={toggleBothRunning}
+        style={{
+          padding: '4px 14px',
+          borderRadius: 4,
+          border: 'none',
+          background: config.running ? '#c44e52' : '#4a9c47',
+          color: '#fff',
+          cursor: 'pointer',
+          fontFamily: 'monospace',
+          fontSize: 11,
+          fontWeight: 'bold',
+        }}
+      >
+        {config.running ? '⏸ Pause' : '▶ Play'}
+      </button>
+
+      {/* Minimize */}
+      <button
+        onClick={minimizeBoth}
+        style={{
+          padding: '4px 14px',
+          borderRadius: 4,
+          border: 'none',
+          background: '#4e7dc4',
+          color: '#fff',
+          cursor: 'pointer',
+          fontFamily: 'monospace',
+          fontSize: 11,
+        }}
+      >
+        Minimize
+      </button>
+
+      {/* Temperature */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: '#888' }}>Temp</span>
+        <input
+          data-testid="temperature-slider"
+          type="range"
+          min={0}
+          max={1000}
+          step={10}
+          value={config.temperature}
+          onChange={(e) =>
+            setConfigBoth({ temperature: Number(e.target.value) })
+          }
+          style={{ width: 100, accentColor: '#ffaa44' }}
+        />
+        <span style={{ color: '#ffaa44', minWidth: 48 }}>
+          {config.temperature} K
+        </span>
+      </div>
+
+      {/* Timestep */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: '#888' }}>dt</span>
+        <input
+          type="range"
+          min={0.1}
+          max={5.0}
+          step={0.1}
+          value={config.timestep}
+          onChange={(e) => setConfigBoth({ timestep: Number(e.target.value) })}
+          style={{ width: 80, accentColor: '#88ccff' }}
+        />
+        <span style={{ color: '#88ccff', minWidth: 40 }}>
+          {config.timestep.toFixed(1)} fs
+        </span>
+      </div>
+
+      {/* Thermostat */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: '#888' }}>Thermo</span>
+        <select
+          data-testid="thermostat-select"
+          value={config.thermostat}
+          onChange={(e) =>
+            setConfigBoth({
+              thermostat: e.target.value as
+                | 'none'
+                | 'berendsen'
+                | 'nose-hoover',
+            })
+          }
+          style={{
+            padding: '2px 6px',
+            borderRadius: 4,
+            border: '1px solid rgba(255,255,255,0.2)',
+            background: 'rgba(30,30,50,0.9)',
+            color: '#ddd',
+            fontFamily: 'monospace',
+            fontSize: 10,
+          }}
+        >
+          <option value="none">NVE</option>
+          <option value="berendsen">Berendsen</option>
+        </select>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   const initWorker = useSimulationStore((s) => s.initWorker);
   const initSimulation = useSimulationStore((s) => s.initSimulation);
   const setConfig = useSimulationStore((s) => s.setConfig);
   const setRenderMode = useUIStore((s) => s.setRenderMode);
   const setColorMode = useUIStore((s) => s.setColorMode);
+  const comparisonMode = useUIStore((s) => s.comparisonMode);
   const [loading, setLoading] = useState(true);
   const [showExamples, setShowExamples] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+
+  // Secondary simulation store for comparison mode
+  // Created once and reused; its worker is initialized lazily
+  const secondaryStoreRef = useRef<StoreApi<SimulationStoreState> | null>(null);
+  const secondaryStore = useMemo(() => {
+    if (!comparisonMode) return null;
+    if (!secondaryStoreRef.current) {
+      secondaryStoreRef.current = createSimulationStoreInstance();
+    }
+    return secondaryStoreRef.current;
+  }, [comparisonMode]);
 
   /** Apply a deserialized .chemsim state to both stores */
   const applyChemSimState = useCallback(
@@ -227,6 +395,71 @@ const App: React.FC = () => {
     );
   }
 
+  // ---- Comparison mode: two panels side-by-side ----
+  if (comparisonMode) {
+    const primaryStore =
+      useSimulationStore as unknown as StoreApi<SimulationStoreState>;
+
+    return (
+      <div
+        data-testid="app-container"
+        style={{
+          width: '100vw',
+          height: '100vh',
+          overflow: 'hidden',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {/* Shared controls bar — uses primary store via context */}
+        <SimulationContext.Provider value={primaryStore}>
+          <SharedControlsBar secondaryStore={secondaryStore} />
+        </SimulationContext.Provider>
+
+        {/* Two simulation panels side-by-side */}
+        <div style={{ flex: 1, display: 'flex', position: 'relative' }}>
+          <SimulationPanel role="primary" label="Panel A" />
+          <SimulationPanel role="secondary" label="Panel B" />
+
+          {/* Comparison table at bottom center */}
+          {secondaryStore && (
+            <ComparisonTable
+              leftStore={primaryStore}
+              rightStore={secondaryStore}
+            />
+          )}
+        </div>
+
+        {/* Shared UI overlays */}
+        <Toolbar />
+        <PeriodicTable />
+
+        {/* Status bar */}
+        <div
+          data-testid="status-bar"
+          style={{
+            height: 22,
+            flexShrink: 0,
+            background: 'rgba(10, 10, 25, 0.9)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 12px',
+            color: '#666',
+            fontFamily: 'monospace',
+            fontSize: 10,
+            zIndex: 50,
+          }}
+        >
+          <span>ChemSim — Side-by-Side Comparison Mode</span>
+          <span>Press S/A/D/G/M for tools | L toggle labels</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Single-panel mode (default) ----
   return (
     <SimulationContext.Provider value={useSimulationStore}>
       <div
