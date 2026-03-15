@@ -48,6 +48,13 @@ interface UIStore {
   toggleEncounterPanel: () => void;
   toggleReactionLog: () => void;
 
+  // ---- Quantity dashboard ----
+  showDashboard: boolean;
+  toggleDashboard: () => void;
+  /** IDs of expanded dashboard cards (e.g. 'temperature', 'ke', 'pe', 'total') */
+  expandedDashboardCards: Set<string>;
+  toggleDashboardCard: (cardId: string) => void;
+
   // ---- Hover ----
   hoveredAtomId: number | null;
   setHoveredAtom: (id: number | null) => void;
@@ -121,6 +128,10 @@ export const useUIStore = create<UIStore>((set, get) => ({
   showEncounterPanel: false,
   showReactionLog: false,
   hoveredAtomId: null,
+
+  // Quantity dashboard
+  showDashboard: false,
+  expandedDashboardCards: new Set<string>(),
   renderMode: 'ball-and-stick',
   showLabels: true,
   colorMode: 'element' as ColorMode,
@@ -170,6 +181,17 @@ export const useUIStore = create<UIStore>((set, get) => ({
   toggleEncounterPanel: () =>
     set({ showEncounterPanel: !get().showEncounterPanel }),
   toggleReactionLog: () => set({ showReactionLog: !get().showReactionLog }),
+
+  toggleDashboard: () => set({ showDashboard: !get().showDashboard }),
+  toggleDashboardCard: (cardId: string) => {
+    const cards = new Set(get().expandedDashboardCards);
+    if (cards.has(cardId)) {
+      cards.delete(cardId);
+    } else {
+      cards.add(cardId);
+    }
+    set({ expandedDashboardCards: cards });
+  },
 
   setHoveredAtom: (id) => set({ hoveredAtomId: id }),
 
