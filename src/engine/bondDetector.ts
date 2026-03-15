@@ -70,7 +70,19 @@ export function detectBonds(
       // Hysteresis: existing bonds get a wider tolerance before breaking
       const pairKey = Math.min(i, j) + '-' + Math.max(i, j);
       const isExisting = existingPairs.has(pairKey);
-      const tol = isExisting ? breakTolerance : formTolerance;
+      const baseTol = isExisting ? breakTolerance : formTolerance;
+      // Widen tolerance for pairs involving heavy atoms or transition metals,
+      // whose covalent radii have more uncertainty (variable oxidation state,
+      // coordination geometry). Source: Cordero et al., Dalton Trans. 2008,
+      // Table 2 — covalent radii uncertainties for transition metals are
+      // typically ±0.04–0.11 Å vs ±0.01–0.03 Å for light main-group elements.
+      const tolScale = pairToleranceScale(
+        elI.category,
+        elJ.category,
+        atomicNumbers[i],
+        atomicNumbers[j],
+      );
+      const tol = baseTol * tolScale;
       const maxBondDist = (elI.covalentRadius + elJ.covalentRadius) * tol;
 
       if (dist < maxBondDist && dist > 0.4) {
@@ -145,6 +157,34 @@ function isMetallic(category: string): boolean {
     category === 'lanthanide' ||
     category === 'actinide'
   );
+}
+
+/**
+ * Compute a tolerance scale factor for a pair of atoms.
+ *
+ * Heavy atoms and transition metals have larger covalent-radius uncertainties
+ * than light main-group elements (Cordero et al., Dalton Trans. 2008,
+ * Table 2), so we widen the detection window to reduce flickering.
+ *
+ * Scale factors (multiplicative on top of base formTolerance/breakTolerance):
+ *   1.00 — both atoms are light main-group (Z ≤ 36, non-metal categories)
+ *   1.05 — one atom is a transition metal or heavy (Z > 36)
+ *   1.10 — both atoms are transition metals or heavy (Z > 36)
+ *
+ * These are conservative — they add at most ≈0.15 Å to the detection
+ * threshold for a typical heavy-atom pair (sum of cov radii ≈ 2.5 Å).
+ */
+function pairToleranceScale(
+  catA: string,
+  catB: string,
+  zA: number,
+  zB: number,
+): number {
+  const aIsHeavy = isMetallic(catA) || zA > 36;
+  const bIsHeavy = isMetallic(catB) || zB > 36;
+  if (aIsHeavy && bIsHeavy) return 1.1;
+  if (aIsHeavy || bIsHeavy) return 1.05;
+  return 1.0;
 }
 
 /**
