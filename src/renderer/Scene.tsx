@@ -12,6 +12,7 @@ import { BondRenderer } from './BondRenderer';
 import { AtomLabels } from './AtomLabels';
 import { BoxWireframe } from './BoxWireframe';
 import { OrbitalRenderer } from './OrbitalRenderer';
+import { ElectronDensityRenderer } from './ElectronDensityRenderer';
 import { useSimContextStoreApi } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
@@ -246,6 +247,7 @@ export const Scene: React.FC = () => {
       <AtomLabels />
       <BoxWireframe />
       <OrbitalRenderer />
+      <ElectronDensityRenderer />
 
       {/* Controls */}
       <OrbitControls
