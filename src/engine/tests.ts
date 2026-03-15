@@ -22,6 +22,8 @@ import {
   computeTemperature,
 } from './integrator';
 import { berendsenThermostat } from './thermostat';
+import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
+import { detectHybridization } from './hybridization';
 import {
   waterMolecule,
   methaneMolecule,
@@ -195,6 +197,23 @@ function rebuildTopo(s: SimState): void {
   for (const [ti, c, tk] of s.angles) {
     const a = getUFFAngleK(s.Z[ti], s.Z[c], s.Z[tk], 1, 1, s.hybridizations[c]);
     s.angleParams.push({ i: ti, j: c, k: tk, kA: a.kAngle, t0: a.theta0 });
+  }
+
+  // Compute Gasteiger charges from bond topology
+  const hyb = detectHybridization(new Int32Array(s.Z), s.bonds, s.N);
+  const gasteigerQ = computeGasteigerCharges(
+    new Int32Array(s.Z),
+    s.bonds,
+    s.N,
+    hyb,
+  );
+  const covalentAtoms = buildCovalentAtomSet(s.bonds, s.N);
+  for (let i = 0; i < s.N; i++) {
+    // Only overwrite with Gasteiger if the atom has covalent bonds.
+    // Keep original charges for ionic species (e.g. NaCl).
+    if (covalentAtoms[i]) {
+      s.charges[i] = gasteigerQ[i];
+    }
   }
 }
 
@@ -807,6 +826,105 @@ function runThermodynamicTests(): void {
   );
 }
 
+// ---- Charge equilibration tests ----
+
+function runChargeTests(): void {
+  console.log('\n=== GASTEIGER CHARGE EQUILIBRATION TESTS ===\n');
+
+  // CHG-01: Water charges — O should be negative, H positive
+  {
+    const s = initSim(waterMolecule());
+    // Charges are computed by rebuildTopo via Gasteiger
+    const oCharge = s.charges[0]; // Oxygen
+    const h1Charge = s.charges[1]; // H
+    const h2Charge = s.charges[2]; // H
+
+    const oNegative = oCharge < -0.2 && oCharge > -0.8;
+    const hPositive = h1Charge > 0.1 && h1Charge < 0.5;
+    const hSymmetric = Math.abs(h1Charge - h2Charge) < 1e-10;
+    const passed = oNegative && hPositive && hSymmetric;
+    report(
+      'CHG-01',
+      'Water O negative, H positive, symmetric',
+      passed,
+      `O=${oCharge.toFixed(4)}, H=${h1Charge.toFixed(4)}, H=${h2Charge.toFixed(4)}`,
+      'O in [-0.8, -0.2], H in [0.1, 0.5], H1 == H2',
+    );
+  }
+
+  // CHG-02: Methane charges — C slightly negative, H slightly positive
+  {
+    const s = initSim(methaneMolecule());
+    const cCharge = s.charges[0]; // Carbon
+    const hCharge = s.charges[1]; // H
+
+    const cNegative = cCharge < 0 && cCharge > -0.3;
+    const hPositive = hCharge > 0 && hCharge < 0.1;
+    const passed = cNegative && hPositive;
+    report(
+      'CHG-02',
+      'Methane C slightly negative, H slightly positive',
+      passed,
+      `C=${cCharge.toFixed(4)}, H=${hCharge.toFixed(4)}`,
+      'C in [-0.3, 0], H in [0, 0.1]',
+    );
+  }
+
+  // CHG-03: Charge neutrality — sum of charges ≈ 0 for neutral molecules
+  {
+    const molecules: Array<[string, Atom[]]> = [
+      ['Water', waterMolecule()],
+      ['Methane', methaneMolecule()],
+      ['Ethanol', ethanolMolecule()],
+    ];
+    let allNeutral = true;
+    const details: string[] = [];
+    for (const [name, atoms] of molecules) {
+      const s = initSim(atoms);
+      const sum = s.charges.reduce((a, b) => a + b, 0);
+      const neutral = Math.abs(sum) < 1e-10;
+      if (!neutral) allNeutral = false;
+      details.push(`${name}: sum=${sum.toExponential(3)}`);
+    }
+    report(
+      'CHG-03',
+      'Charge neutrality for neutral molecules',
+      allNeutral,
+      details.join(', '),
+      '|sum| < 1e-10 for each',
+    );
+  }
+
+  // CHG-04: Ethanol O is most negative, O-H hydrogen is most positive
+  {
+    const s = initSim(ethanolMolecule());
+    // Ethanol: C(0), C(1), O(2), H-O(3), H-C(4,5,6), H-C(7,8)
+    const oCharge = s.charges[2]; // O
+    const ohCharge = s.charges[3]; // H on O
+
+    // O should be the most negative atom
+    let oMostNegative = true;
+    for (let i = 0; i < s.N; i++) {
+      if (i !== 2 && s.charges[i] < oCharge) oMostNegative = false;
+    }
+
+    // H on O should be the most positive
+    let ohMostPositive = true;
+    for (let i = 0; i < s.N; i++) {
+      if (i !== 3 && s.charges[i] > ohCharge) ohMostPositive = false;
+    }
+
+    const passed = oMostNegative && ohMostPositive;
+    report(
+      'CHG-04',
+      'Ethanol O most negative, O-H most positive',
+      passed,
+      `O=${oCharge.toFixed(4)}, O-H=${ohCharge.toFixed(4)}`,
+      'O is most negative, H(O) is most positive',
+    );
+  }
+}
+
 // ---- Main ----
 
 console.log('╔══════════════════════════════════════════════════╗');
@@ -817,6 +935,7 @@ runGradientTests();
 runNVETests();
 runGeometryTests();
 runThermodynamicTests();
+runChargeTests();
 
 // Summary
 console.log('\n' + '='.repeat(50));
