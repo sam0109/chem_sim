@@ -3,7 +3,7 @@
 // Uses InstancedMesh with per-instance color/scale for performance
 // ==============================================================
 
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useSimContextStoreApi } from '../store/SimulationContext';
@@ -47,6 +47,19 @@ export const AtomRenderer: React.FC = () => {
     const detail = renderMode === 'space-filling' ? 32 : 16;
     return new THREE.SphereGeometry(1, detail, detail);
   }, [renderMode]);
+
+  // Pre-initialize instanceColor so the material shader compiles with
+  // instance color support. Without this, Three.js compiles the
+  // meshStandardMaterial shader before useFrame first sets instanceColor,
+  // and vertexColors never takes effect. (See issue #120)
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(
+      new Float32Array(MAX_ATOMS * 3),
+      3,
+    );
+  }, []);
 
   useFrame(() => {
     const mesh = meshRef.current;
