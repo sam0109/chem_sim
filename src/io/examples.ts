@@ -596,6 +596,141 @@ export function twoWaterMolecules(): Atom[] {
   ];
 }
 
+/**
+ * Create a hydrogen chloride molecule (HCl).
+ * Used as a building block for acid-base pair examples.
+ * Charges computed by Gasteiger: H ≈ +0.28, Cl ≈ -0.28
+ */
+export function hclMolecule(): Atom[] {
+  // Experimental geometry: H-Cl = 1.275 Å
+  // Source: NIST CCCBDB experimental geometry for HCl
+  return [
+    {
+      id: 0,
+      elementNumber: 17,
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'sp3',
+      fixed: false,
+    },
+    {
+      id: 1,
+      elementNumber: 1,
+      position: [1.275, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+  ];
+}
+
+/**
+ * Helper: combine two molecule factories with a separation distance.
+ * Offsets the second molecule along +x and renumbers atom IDs.
+ */
+function combineMolecules(
+  mol1: Atom[],
+  mol2: Atom[],
+  separation: number,
+): Atom[] {
+  return [
+    ...mol1,
+    ...mol2.map((a, i) => ({
+      ...a,
+      id: mol1.length + i,
+      position: [a.position[0] + separation, a.position[1], a.position[2]] as [
+        number,
+        number,
+        number,
+      ],
+    })),
+  ];
+}
+
+/**
+ * Create an HCl + NH₃ pair separated by ~5 Å.
+ * Demonstrates acid-base chemistry: proton transfer from HCl to NH₃.
+ * In encounter mode, this can model the reaction HCl + NH₃ → NH₄Cl.
+ */
+export function hclNh3Pair(): Atom[] {
+  return combineMolecules(hclMolecule(), ammoniaMolecule(), 5);
+}
+
+/**
+ * Create an H₂ molecule.
+ * Used as a building block for the H₂ + F₂ reaction pair.
+ */
+function h2Molecule(): Atom[] {
+  // Experimental geometry: H-H = 0.74 Å
+  // Source: NIST CCCBDB experimental geometry for H2
+  return [
+    {
+      id: 0,
+      elementNumber: 1,
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+    {
+      id: 1,
+      elementNumber: 1,
+      position: [0.74, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+  ];
+}
+
+/**
+ * Create an F₂ molecule.
+ * Used as a building block for the H₂ + F₂ reaction pair.
+ */
+function f2Molecule(): Atom[] {
+  // Experimental geometry: F-F = 1.412 Å
+  // Source: NIST CCCBDB experimental geometry for F2
+  return [
+    {
+      id: 0,
+      elementNumber: 9,
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'sp3',
+      fixed: false,
+    },
+    {
+      id: 1,
+      elementNumber: 9,
+      position: [1.412, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'sp3',
+      fixed: false,
+    },
+  ];
+}
+
+/**
+ * Create an H₂ + F₂ pair separated by ~5 Å.
+ * Classic reaction: H₂ + F₂ → 2 HF. Demonstrates bond breaking
+ * and forming in encounter mode.
+ */
+export function h2F2Pair(): Atom[] {
+  return combineMolecules(h2Molecule(), f2Molecule(), 5);
+}
+
 export const exampleMolecules = {
   'Water (H₂O)': waterMolecule,
   'Methane (CH₄)': methaneMolecule,
