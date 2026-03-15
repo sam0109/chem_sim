@@ -2,8 +2,26 @@ import { describe, it, expect } from 'vitest';
 import {
   velocityVerletStep,
   computeTemperature,
+  computeDOF,
   initializeVelocities,
 } from '../integrator.ts';
+
+describe('computeDOF', () => {
+  it('returns 3 for nAtoms=0 (guard case)', () => {
+    expect(computeDOF(0)).toBe(3);
+  });
+
+  it('returns 3 for nAtoms=1 (guard case)', () => {
+    expect(computeDOF(1)).toBe(3);
+  });
+
+  it('returns 3N-3 for nAtoms > 1', () => {
+    expect(computeDOF(2)).toBe(3);
+    expect(computeDOF(3)).toBe(6);
+    expect(computeDOF(10)).toBe(27);
+    expect(computeDOF(100)).toBe(297);
+  });
+});
 
 describe('computeTemperature', () => {
   it('returns 0 for zero kinetic energy', () => {
@@ -18,7 +36,7 @@ describe('computeTemperature', () => {
     // T = 2 * KE / (Nf * kB) where Nf = 3N - 3 for N > 1
     const kB = 8.617333262e-5; // eV/K
     const N = 3;
-    const Nf = 3 * N - 3; // 6 DOF after COM removal
+    const Nf = computeDOF(N);
     const targetT = 300; // K
     const KE = (Nf * kB * targetT) / 2.0;
     const T = computeTemperature(KE, N);
