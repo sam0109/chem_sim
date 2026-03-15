@@ -7,6 +7,7 @@ import type {
   Bond,
   Hybridization,
   MoleculeInfo,
+  ReactionEvent,
   SimulationBox,
   SimulationConfig,
   WorkerInMessage,
@@ -49,6 +50,7 @@ import { CellList } from './neighborList';
 import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
 import { detectHybridization } from './hybridization';
 import { findMolecules, computeMoleculeInfo } from './moleculeTracker';
+import { diffBonds, detectReactions } from './reactionDetector';
 
 // ---- Simulation state ----
 let nAtoms = 0;
@@ -135,8 +137,21 @@ const DRAG_SPRING_K = 5.0; // eV/ų
 let moleculeIds: Int32Array = new Int32Array(0);
 let moleculeInfo: MoleculeInfo[] = [];
 
+// Reaction detection state — snapshots from the previous topology rebuild
+let prevMoleculeIds: Int32Array = new Int32Array(0);
+let prevMoleculeInfo: MoleculeInfo[] = [];
+/** Whether we have a valid previous state to diff against */
+let hasPrevTopology = false;
+/** Reaction events detected in the most recent topology rebuild */
+let pendingReactionEvents: ReactionEvent[] = [];
+
 // ---- Force field parameter setup ----
 function rebuildTopology(): void {
+  // Snapshot previous topology for reaction detection
+  const savedPrevBonds = hasPrevTopology ? [...bonds] : [];
+  const savedPrevMolIds = prevMoleculeIds;
+  const savedPrevMolInfo = prevMoleculeInfo;
+
   // Detect bonds with hysteresis (existing bonds get wider break tolerance)
   bonds = detectBonds(positions, Array.from(atomicNumbers), 1.2, bonds, 1.5);
 
@@ -219,6 +234,29 @@ function rebuildTopology(): void {
   if (!cellList) {
     cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
   }
+
+  // Detect reactions by comparing current topology with previous snapshot.
+  // buildTorsionParams() has already computed moleculeIds and moleculeInfo,
+  // so both the previous and current molecule data are available.
+  if (hasPrevTopology) {
+    const bondChanges = diffBonds(savedPrevBonds, bonds);
+    if (bondChanges.length > 0) {
+      const events = detectReactions(
+        bondChanges,
+        savedPrevMolIds,
+        moleculeIds,
+        savedPrevMolInfo,
+        moleculeInfo,
+        atomicNumbers,
+        step,
+      );
+      pendingReactionEvents.push(...events);
+    }
+  }
+  // Save current state as "previous" for next topology rebuild
+  prevMoleculeIds = moleculeIds.slice();
+  prevMoleculeInfo = [...moleculeInfo];
+  hasPrevTopology = true;
 }
 
 /**
@@ -572,6 +610,12 @@ function initSimulation(
   step = 0;
   ljCache.clear();
 
+  // Reset reaction detection state for fresh simulation
+  hasPrevTopology = false;
+  prevMoleculeIds = new Int32Array(0);
+  prevMoleculeInfo = [];
+  pendingReactionEvents = [];
+
   // Initialize Nosé-Hoover chain state for the new system
   nhChainState = createNoseHooverChainState(
     nAtoms,
@@ -766,7 +810,11 @@ function sendState(): void {
     temperature,
     moleculeIds: moleculeIds.slice(),
     molecules: [...moleculeInfo],
+    reactionEvents: [...pendingReactionEvents],
   };
+
+  // Clear pending reaction events after sending
+  pendingReactionEvents = [];
 
   self.postMessage(msg);
 }

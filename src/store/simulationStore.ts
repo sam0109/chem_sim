@@ -9,6 +9,7 @@ import type {
   Atom,
   Bond,
   MoleculeInfo,
+  ReactionEvent,
   SimulationConfig,
   SimulationBox,
   WorkerStateUpdate,
@@ -32,6 +33,9 @@ export interface SimulationStoreState {
   // ---- Molecule tracking (from worker updates) ----
   moleculeIds: Int32Array;
   molecules: MoleculeInfo[];
+
+  // ---- Reaction detection (from worker updates) ----
+  reactionLog: ReactionEvent[];
 
   // ---- Simulation state ----
   step: number;
@@ -83,6 +87,7 @@ const DEFAULT_BOX: SimulationBox = {
 };
 
 const MAX_HISTORY = 500;
+const MAX_REACTION_LOG = 200;
 
 /**
  * Factory: creates a vanilla Zustand store with its own SimulationWorker.
@@ -108,6 +113,7 @@ function buildStoreSlice(
     charges: new Float64Array(0),
     moleculeIds: new Int32Array(0),
     molecules: [],
+    reactionLog: [],
     step: 0,
     energy: { kinetic: 0, potential: 0, total: 0 },
     temperature: 0,
@@ -166,6 +172,14 @@ function buildStoreSlice(
         energyHistory: newHistory,
         moleculeIds: state.moleculeIds ?? new Int32Array(0),
         molecules: state.molecules ?? [],
+        ...(state.reactionEvents && state.reactionEvents.length > 0
+          ? {
+              reactionLog: [
+                ...get().reactionLog,
+                ...state.reactionEvents,
+              ].slice(-MAX_REACTION_LOG),
+            }
+          : {}),
       });
     },
 
@@ -193,7 +207,13 @@ function buildStoreSlice(
       }));
       const allAtoms = [...existingAtoms, ...reindexed];
       // Re-init preserves config but resets with new atom set
-      set({ atoms: allAtoms, bonds: [], energyHistory: [], step: 0 });
+      set({
+        atoms: allAtoms,
+        bonds: [],
+        energyHistory: [],
+        reactionLog: [],
+        step: 0,
+      });
       const { worker, config, box } = get();
       worker?.init(allAtoms, [], box, { ...config, running: false });
     },
@@ -205,7 +225,7 @@ function buildStoreSlice(
     },
 
     initSimulation(atoms: Atom[], bonds: Bond[] = []) {
-      set({ atoms, bonds, energyHistory: [], step: 0 });
+      set({ atoms, bonds, energyHistory: [], reactionLog: [], step: 0 });
       const { worker, config, box } = get();
       worker?.init(atoms, bonds, box, config);
     },

@@ -35,11 +35,13 @@ interface UIStore {
   showEnergyPlot: boolean;
   showChallengePanel: boolean;
   showEncounterPanel: boolean;
+  showReactionLog: boolean;
   togglePeriodicTable: () => void;
   togglePropertyPanel: () => void;
   toggleEnergyPlot: () => void;
   toggleChallengePanel: () => void;
   toggleEncounterPanel: () => void;
+  toggleReactionLog: () => void;
 
   // ---- Hover ----
   hoveredAtomId: number | null;
@@ -95,6 +97,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   showEnergyPlot: false,
   showChallengePanel: false,
   showEncounterPanel: false,
+  showReactionLog: false,
   hoveredAtomId: null,
   renderMode: 'ball-and-stick',
   showLabels: true,
@@ -142,6 +145,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
     set({ showChallengePanel: !get().showChallengePanel }),
   toggleEncounterPanel: () =>
     set({ showEncounterPanel: !get().showEncounterPanel }),
+  toggleReactionLog: () => set({ showReactionLog: !get().showReactionLog }),
 
   setHoveredAtom: (id) => set({ hoveredAtomId: id }),
 
