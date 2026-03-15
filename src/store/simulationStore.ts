@@ -48,6 +48,7 @@ interface SimulationStore {
 
   // ---- Actions ----
   setConfig: (config: Partial<SimulationConfig>) => void;
+  setBox: (box: Partial<SimulationBox>) => void;
   addAtom: (atom: Atom) => void;
   addMolecule: (atoms: Atom[]) => void;
   removeAtom: (atomId: number) => void;
@@ -148,6 +149,7 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
       energyHistory: newHistory,
       moleculeIds: state.moleculeIds ?? new Int32Array(0),
       molecules: state.molecules ?? [],
+      ...(state.box ? { box: state.box } : {}),
     });
   },
 
@@ -155,6 +157,12 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
     const config = { ...get().config, ...partialConfig };
     set({ config });
     get().worker?.updateConfig(partialConfig);
+  },
+
+  setBox(partialBox: Partial<SimulationBox>) {
+    const newBox = { ...get().box, ...partialBox };
+    set({ box: newBox });
+    get().worker?.updateBox(partialBox);
   },
 
   addAtom(atom: Atom) {
