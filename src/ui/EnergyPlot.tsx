@@ -14,6 +14,7 @@ export const EnergyPlot: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const showEnergyPlot = useUIStore((s) => s.showEnergyPlot);
   const energyHistory = useSimContextStore((s) => s.energyHistory);
+  const thermostat = useSimContextStore((s) => s.config.thermostat);
 
   useEffect(() => {
     if (!showEnergyPlot) return;
@@ -40,12 +41,21 @@ export const EnergyPlot: React.FC = () => {
       return;
     }
 
-    // Compute ranges
+    // Check if NH thermostat is active (thermostat energy is non-zero)
+    const showExtended =
+      thermostat === 'nose-hoover' && data.some((d) => d.thermostat !== 0);
+
+    // Compute ranges — include extended Hamiltonian if present
     let minE = Infinity,
       maxE = -Infinity;
     for (const d of data) {
       minE = Math.min(minE, d.kinetic, d.potential, d.total);
       maxE = Math.max(maxE, d.kinetic, d.potential, d.total);
+      if (showExtended) {
+        const ext = d.total + d.thermostat;
+        minE = Math.min(minE, ext);
+        maxE = Math.max(maxE, ext);
+      }
     }
     const eRange = maxE - minE || 1;
     const minStep = data[0].step;
@@ -67,9 +77,9 @@ export const EnergyPlot: React.FC = () => {
       ctx.stroke();
     }
 
-    // Draw lines
-    const drawLine = (
-      key: 'kinetic' | 'potential' | 'total',
+    // Draw lines helper — supports computed series via accessor
+    const drawLineWith = (
+      accessor: (d: (typeof data)[0]) => number,
       color: string,
     ) => {
       ctx.strokeStyle = color;
@@ -77,16 +87,21 @@ export const EnergyPlot: React.FC = () => {
       ctx.beginPath();
       for (let i = 0; i < data.length; i++) {
         const x = toX(data[i].step);
-        const y = toY(data[i][key]);
+        const y = toY(accessor(data[i]));
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
     };
 
-    drawLine('kinetic', '#ff6666');
-    drawLine('potential', '#6688ff');
-    drawLine('total', '#66ff66');
+    drawLineWith((d) => d.kinetic, '#ff6666');
+    drawLineWith((d) => d.potential, '#6688ff');
+    drawLineWith((d) => d.total, '#66ff66');
+
+    // Extended Hamiltonian (H_ext = total + thermostat) — only for NH
+    if (showExtended) {
+      drawLineWith((d) => d.total + d.thermostat, '#ffcc44');
+    }
 
     // Axes labels
     ctx.fillStyle = '#888';
@@ -102,21 +117,25 @@ export const EnergyPlot: React.FC = () => {
     ctx.fillText(String(maxStep), WIDTH - MARGIN.right, HEIGHT - 10);
 
     // Legend
-    const legend = [
+    const legend: Array<{ label: string; color: string }> = [
       { label: 'KE', color: '#ff6666' },
       { label: 'PE', color: '#6688ff' },
       { label: 'Total', color: '#66ff66' },
     ];
+    if (showExtended) {
+      legend.push({ label: 'H_ext', color: '#ffcc44' });
+    }
+    const spacing = showExtended ? 48 : 55;
     ctx.font = '9px monospace';
     legend.forEach((l, i) => {
-      const x = MARGIN.left + i * 55;
+      const x = MARGIN.left + i * spacing;
       ctx.fillStyle = l.color;
       ctx.fillRect(x, 4, 12, 8);
       ctx.fillStyle = '#ccc';
       ctx.textAlign = 'left';
       ctx.fillText(l.label, x + 16, 12);
     });
-  }, [showEnergyPlot, energyHistory]);
+  }, [showEnergyPlot, energyHistory, thermostat]);
 
   if (!showEnergyPlot) return null;
 

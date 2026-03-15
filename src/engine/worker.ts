@@ -41,6 +41,7 @@ import {
   berendsenThermostat,
   noseHooverChainStep,
   createNoseHooverChainState,
+  computeNoseHooverEnergy,
 } from './thermostat';
 import type { NoseHooverChainState } from './thermostat';
 import { steepestDescent } from './minimizer';
@@ -860,6 +861,13 @@ function sendState(): void {
 
   const temperature = computeTemperature(kineticEnergy, nAtoms);
 
+  // Compute thermostat energy for the extended Hamiltonian diagnostic.
+  // Only non-zero when Nosé-Hoover is active.
+  const thermostatEnergy =
+    config.thermostat === 'nose-hoover' && nhChainState
+      ? computeNoseHooverEnergy(nhChainState, config.temperature)
+      : 0;
+
   const msg: WorkerStateUpdate = {
     type: 'state',
     positions: positions.slice(),
@@ -871,6 +879,7 @@ function sendState(): void {
       kinetic: kineticEnergy,
       potential: potentialEnergy,
       total: kineticEnergy + potentialEnergy,
+      thermostat: thermostatEnergy,
     },
     temperature,
     moleculeIds: moleculeIds.slice(),

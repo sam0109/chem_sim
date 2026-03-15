@@ -192,6 +192,8 @@ export interface SimulationState {
     kinetic: number;
     potential: number;
     total: number;
+    /** Nosé-Hoover thermostat energy (eV). 0 when NH is not active. */
+    thermostat: number;
   };
 }
 
@@ -296,7 +298,12 @@ export interface WorkerStateUpdate {
   /** Charges */
   charges: Float64Array;
   step: number;
-  energy: { kinetic: number; potential: number; total: number };
+  energy: {
+    kinetic: number;
+    potential: number;
+    total: number;
+    thermostat: number;
+  };
   temperature: number;
   /** Molecule ID per atom (from union-find on bond graph) */
   moleculeIds: Int32Array;
