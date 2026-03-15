@@ -25,7 +25,7 @@ This document defines the process by which an AI agent claims, plans, implements
    gh issue list --assignee "" --limit 20 --json number,title,labels
    ```
 
-2. **Pick an issue based on priority.** Priority order: `guardrails > P1 > P2 > P3 > P4 > P6 > P5`. If multiple issues share the same highest priority, **pick one at random** (do not always pick the first).
+2. **Pick an issue based on priority.** Priority order: `guardrails > P1 > P2 > P3 > P4 > P6 > unlabeled/unknown > P5`. Issues with no priority label or unrecognized labels should be picked before P5 issues. If multiple issues share the same highest priority, **pick one at random** (do not always pick the first).
 
 3. **Assign the issue to yourself:**
 
