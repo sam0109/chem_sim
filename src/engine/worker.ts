@@ -815,11 +815,14 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
 
     case 'config': {
       const wasRunning = config.running;
-      // Detect if thermostat parameters changed (requires NH chain reset)
+      // Only reset NH chain state when thermostat parameters actually change value
       const needsNHReset =
-        msg.config.thermostat !== undefined ||
-        msg.config.temperature !== undefined ||
-        msg.config.thermostatTau !== undefined;
+        (msg.config.thermostat !== undefined &&
+          msg.config.thermostat !== config.thermostat) ||
+        (msg.config.temperature !== undefined &&
+          msg.config.temperature !== config.temperature) ||
+        (msg.config.thermostatTau !== undefined &&
+          msg.config.thermostatTau !== config.thermostatTau);
       Object.assign(config, msg.config);
       if (needsNHReset && nAtoms > 0) {
         nhChainState = createNoseHooverChainState(

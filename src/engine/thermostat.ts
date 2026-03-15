@@ -198,17 +198,17 @@ export function noseHooverChainStep(
     }
 
     // --- Scale particle velocities ---
+    // No clamping: preserving the exact exp(-vξ₁·dt/2) factor is essential
+    // for time-reversibility and correct canonical sampling.
     const scaleFactor = Math.exp(-vxi[0] * wdt2);
-    // Clamp to prevent numerical blowup
-    const clampedScale = Math.max(0.8, Math.min(1.25, scaleFactor));
     for (let i = 0; i < N; i++) {
       if (fixed[i]) continue;
-      velocities[i * 3] *= clampedScale;
-      velocities[i * 3 + 1] *= clampedScale;
-      velocities[i * 3 + 2] *= clampedScale;
+      velocities[i * 3] *= scaleFactor;
+      velocities[i * 3 + 1] *= scaleFactor;
+      velocities[i * 3 + 2] *= scaleFactor;
     }
     // Update KE after scaling
-    KE2 *= clampedScale * clampedScale;
+    KE2 *= scaleFactor * scaleFactor;
 
     // --- Update chain positions ---
     for (let m = 0; m < M; m++) {
