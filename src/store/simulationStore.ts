@@ -26,6 +26,7 @@ import {
   detectEnergyDrift,
   detectBondStrain,
 } from '../eventDetector';
+import { writeTrajectoryXYZ, downloadTextFile } from '../trajectoryExport';
 
 /** Full simulation store state + actions (exported for context typing) */
 export interface SimulationStoreState {
@@ -111,6 +112,8 @@ export interface SimulationStoreState {
   clearTrajectory: () => void;
   /** Toggle trajectory recording on/off */
   toggleRecording: () => void;
+  /** Export trajectory as multi-frame XYZ file download */
+  exportTrajectoryXYZ: () => void;
 }
 
 const DEFAULT_CONFIG: SimulationConfig = {
@@ -621,6 +624,14 @@ function buildStoreSlice(
       set({
         trajectory: { ...trajectory, recording: !trajectory.recording },
       });
+    },
+
+    exportTrajectoryXYZ() {
+      const { trajectory, atoms } = get();
+      if (trajectory.frames.length === 0) return;
+      const atomicNumbers = atoms.map((a) => a.elementNumber);
+      const xyzContent = writeTrajectoryXYZ(trajectory.frames, atomicNumbers);
+      downloadTextFile(xyzContent, 'trajectory.xyz');
     },
 
     launchEncounter(

@@ -55,6 +55,7 @@ export const TimelineControls: React.FC = () => {
   const toggleRecording = useSimContextStore((s) => s.toggleRecording);
   const reactionLog = useSimContextStore((s) => s.reactionLog);
   const eventLog = useSimContextStore((s) => s.eventLog);
+  const exportXYZ = useSimContextStore((s) => s.exportTrajectoryXYZ);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -346,6 +347,17 @@ export const TimelineControls: React.FC = () => {
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />
+
+        {/* Export trajectory as XYZ */}
+        <button
+          data-testid="export-trajectory"
+          onClick={exportXYZ}
+          disabled={frameCount === 0}
+          title="Export trajectory as multi-frame XYZ file"
+          style={buttonStyle}
+        >
+          Export XYZ
+        </button>
 
         {/* Clear trajectory */}
         <button
