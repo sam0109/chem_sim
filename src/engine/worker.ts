@@ -161,8 +161,21 @@ function rebuildTopology(): void {
     angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
   }
 
-  // Build dihedral list and precompute torsion parameters
+  // Build dihedral list and precompute torsion parameters.
+  // The UFF barrier V is the total barrier for rotation around the
+  // central bond j-k. When multiple dihedrals share the same j-k
+  // bond, V must be divided by the count to avoid over-counting.
+  // Source: Rappé et al., JACS 114, 10024 (1992), p. 10034.
   dihedrals = buildDihedralList(bonds, nAtoms);
+  // Count dihedrals per central bond
+  const dihedralCountPerBond = new Map<string, number>();
+  for (const [, dj, dk] of dihedrals) {
+    const bondKey = `${Math.min(dj, dk)}-${Math.max(dj, dk)}`;
+    dihedralCountPerBond.set(
+      bondKey,
+      (dihedralCountPerBond.get(bondKey) ?? 0) + 1,
+    );
+  }
   torsionParams = [];
   for (const [di, dj, dk, dl] of dihedrals) {
     const {
@@ -177,10 +190,18 @@ function rebuildTopology(): void {
       1,
     );
     if (V > 0) {
-      torsionParams.push({ i: di, j: dj, k: dk, l: dl, V, n: nPeriod, phi0 });
+      const bondKey = `${Math.min(dj, dk)}-${Math.max(dj, dk)}`;
+      const nDihedrals = dihedralCountPerBond.get(bondKey) ?? 1;
+      torsionParams.push({
+        i: di,
+        j: dj,
+        k: dk,
+        l: dl,
+        V: V / nDihedrals,
+        n: nPeriod,
+        phi0,
+      });
     }
-    // 1-4 exclusion: dihedral terminal pairs skip LJ/Coulomb
-    exclusionSet.add(`${Math.min(di, dl)}-${Math.max(di, dl)}`);
   }
 
   // Compute Gasteiger partial charges from bond topology.
@@ -412,8 +433,13 @@ function initSimulation(
       );
       angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
     }
-    // Precompute torsion params and 1-4 exclusions
+    // Precompute torsion params (barrier normalized per central bond)
     dihedrals = buildDihedralList(bonds, nAtoms);
+    const initDihedralCount = new Map<string, number>();
+    for (const [, dj, dk] of dihedrals) {
+      const bk = `${Math.min(dj, dk)}-${Math.max(dj, dk)}`;
+      initDihedralCount.set(bk, (initDihedralCount.get(bk) ?? 0) + 1);
+    }
     torsionParams = [];
     for (const [di, dj, dk, dl] of dihedrals) {
       const {
@@ -428,9 +454,18 @@ function initSimulation(
         1,
       );
       if (V > 0) {
-        torsionParams.push({ i: di, j: dj, k: dk, l: dl, V, n: nPeriod, phi0 });
+        const bk = `${Math.min(dj, dk)}-${Math.max(dj, dk)}`;
+        const nDih = initDihedralCount.get(bk) ?? 1;
+        torsionParams.push({
+          i: di,
+          j: dj,
+          k: dk,
+          l: dl,
+          V: V / nDih,
+          n: nPeriod,
+          phi0,
+        });
       }
-      exclusionSet.add(`${Math.min(di, dl)}-${Math.max(di, dl)}`);
     }
   } else {
     rebuildTopology();

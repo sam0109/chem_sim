@@ -21,7 +21,7 @@ import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
 import { pauliRepulsion } from './forces/pauli';
 import { torsionForce } from './forces/torsion';
-import { detectBonds, buildAngleList } from './bondDetector';
+import { detectBonds, buildAngleList, buildDihedralList } from './bondDetector';
 import {
   velocityVerletStep,
   initializeVelocities,
@@ -61,10 +61,13 @@ Math.random = seededRng;
 // Each entry maps a test ID to the issue(s) that will fix it.
 // These tests are skipped (not run) and don't count as pass or fail.
 const KNOWN_FAILURES: Record<string, string> = {
-  'NVE-02': 'Methane NVE explodes — needs torsion potential (#1)',
-  'GEO-05': 'Methane HCH angle — needs torsion potential (#1)',
-  'GEO-06': 'Methane C-H distance — needs torsion potential (#1)',
-  'GEO-07': 'Methane bond count — needs torsion potential (#1)',
+  'NVE-02':
+    'Methane NVE explodes — needs out-of-plane/improper torsion (no proper dihedrals in CH4)',
+  'GEO-05': 'Methane HCH angle — needs out-of-plane/improper torsion',
+  'GEO-06': 'Methane C-H distance — needs out-of-plane/improper torsion',
+  'GEO-07': 'Methane bond count — needs out-of-plane/improper torsion',
+  'GEO-09':
+    'CO2 C=O distance — needs double bond params (#3) for correct bond detection',
 };
 
 // ---- Test infrastructure ----
@@ -136,6 +139,16 @@ interface SimState {
     kA: number;
     t0: number;
   }>;
+  dihedrals: Array<[number, number, number, number]>;
+  torsionParams: Array<{
+    i: number;
+    j: number;
+    k: number;
+    l: number;
+    V: number;
+    n: number;
+    phi0: number;
+  }>;
 }
 
 function initSim(atoms: Atom[]): SimState {
@@ -176,6 +189,8 @@ function initSim(atoms: Atom[]): SimState {
     exclusionSet: new Set(),
     bondParams: [],
     angleParams: [],
+    dihedrals: [],
+    torsionParams: [],
   };
 
   rebuildTopo(state);
@@ -210,13 +225,49 @@ function rebuildTopo(s: SimState): void {
     s.angleParams.push({ i: ti, j: c, k: tk, kA: a.kAngle, t0: a.theta0 });
   }
 
+  // Build dihedral list and precompute torsion parameters.
+  // Normalize V by the number of dihedrals sharing the same central bond.
+  s.dihedrals = buildDihedralList(s.bonds, s.N);
+  s.torsionParams = [];
+  const detectedHyb = detectHybridization(new Int32Array(s.Z), s.bonds, s.N);
+  const dihedralCount = new Map<string, number>();
+  for (const [, dj, dk] of s.dihedrals) {
+    const bk = Math.min(dj, dk) + '-' + Math.max(dj, dk);
+    dihedralCount.set(bk, (dihedralCount.get(bk) ?? 0) + 1);
+  }
+  for (const [di, dj, dk, dl] of s.dihedrals) {
+    const {
+      V,
+      n: nPeriod,
+      phi0,
+    } = getUFFTorsionParams(
+      s.Z[dj],
+      s.Z[dk],
+      detectedHyb[dj],
+      detectedHyb[dk],
+      1,
+    );
+    if (V > 0) {
+      const bk = Math.min(dj, dk) + '-' + Math.max(dj, dk);
+      const nDih = dihedralCount.get(bk) ?? 1;
+      s.torsionParams.push({
+        i: di,
+        j: dj,
+        k: dk,
+        l: dl,
+        V: V / nDih,
+        n: nPeriod,
+        phi0,
+      });
+    }
+  }
+
   // Compute Gasteiger charges from bond topology
-  const hyb = detectHybridization(new Int32Array(s.Z), s.bonds, s.N);
   const gasteigerQ = computeGasteigerCharges(
     new Int32Array(s.Z),
     s.bonds,
     s.N,
-    hyb,
+    detectedHyb,
   );
   const covalentAtoms = buildCovalentAtomSet(s.bonds, s.N);
   for (let i = 0; i < s.N; i++) {
@@ -234,6 +285,8 @@ function calcForces(s: SimState, p: Float64Array, f: Float64Array): number {
     pe += morseBondForce(p, f, b.i, b.j, b.De, b.alpha, b.re);
   for (const a of s.angleParams)
     pe += harmonicAngleForce(p, f, a.i, a.j, a.k, a.kA, a.t0);
+  for (const t of s.torsionParams)
+    pe += torsionForce(p, f, t.i, t.j, t.k, t.l, t.V, t.n, t.phi0);
   for (let i = 0; i < s.N; i++) {
     for (let j = i + 1; j < s.N; j++) {
       if (s.exclusionSet.has(i + '-' + j)) continue;
