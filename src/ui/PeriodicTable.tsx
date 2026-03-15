@@ -2,10 +2,15 @@
 // PeriodicTable — interactive element picker with educational features
 // ==============================================================
 
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useUIStore } from '../store/uiStore';
+import { useSimulationStore } from '../store/simulationStore';
 import elements from '../data/elements';
-import type { ChemicalElement, PeriodicTableColorMode } from '../data/types';
+import type {
+  Atom,
+  ChemicalElement,
+  PeriodicTableColorMode,
+} from '../data/types';
 
 // Periodic table grid layout: [row][col] = atomic number (0 = empty)
 const GRID: number[][] = [
@@ -650,12 +655,61 @@ const CompareBar: React.FC<{
   );
 };
 
+/**
+ * Create a diatomic molecule from two elements for simulation.
+ * Places atom A at the origin and atom B along the x-axis at the
+ * sum of covalent radii + 0.5 Å (a reasonable starting separation
+ * that will relax to equilibrium during minimization).
+ *
+ * Source: initial separation heuristic from issue #90
+ */
+function createDiatomic(elA: ChemicalElement, elB: ChemicalElement): Atom[] {
+  const separation = elA.covalentRadius + elB.covalentRadius + 0.5;
+  return [
+    {
+      id: 0,
+      elementNumber: elA.number,
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+    {
+      id: 1,
+      elementNumber: elB.number,
+      position: [separation, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+  ];
+}
+
 /** Floating comparison card for two elements */
 const ElementComparison: React.FC<{
   elA: ChemicalElement;
   elB: ChemicalElement;
   onClose: () => void;
 }> = ({ elA, elB, onClose }) => {
+  const initSimulation = useSimulationStore((s) => s.initSimulation);
+  const minimize = useSimulationStore((s) => s.minimize);
+
+  const handleSimulateDiatomic = useCallback(async () => {
+    const atoms = createDiatomic(elA, elB);
+    initSimulation(atoms);
+
+    // Brief delay for the web worker to initialize (matches ChallengePanel pattern)
+    await new Promise((r) => setTimeout(r, 500));
+    minimize();
+
+    // Close the comparison card so the simulation view is visible
+    onClose();
+  }, [elA, elB, initSimulation, minimize, onClose]);
+
   const deltaEN = Math.abs(elA.electronegativity - elB.electronegativity);
   const bondPrediction =
     elA.electronegativity > 0 && elB.electronegativity > 0
@@ -806,6 +860,34 @@ const ElementComparison: React.FC<{
           </div>
         </div>
       )}
+
+      {/* Simulate diatomic button */}
+      <button
+        onClick={handleSimulateDiatomic}
+        style={{
+          display: 'block',
+          width: '100%',
+          marginTop: 8,
+          padding: '6px 10px',
+          background: 'rgba(80, 140, 255, 0.15)',
+          border: '1px solid rgba(80, 140, 255, 0.4)',
+          borderRadius: 4,
+          color: '#8ab4ff',
+          fontSize: 11,
+          fontFamily: 'sans-serif',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(80, 140, 255, 0.3)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(80, 140, 255, 0.15)';
+        }}
+      >
+        Bond {elA.symbol} + {elB.symbol} — Simulate
+      </button>
 
       <div
         style={{
