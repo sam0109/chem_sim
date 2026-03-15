@@ -8,11 +8,11 @@ test.describe('Periodic table', () => {
     });
   });
 
-  test('periodic table is visible on load', async ({ page }) => {
+  test('periodic table is visible on load in compact mode', async ({
+    page,
+  }) => {
     await expect(page.getByTestId('periodic-table')).toBeVisible();
-    await expect(page.getByTestId('periodic-table')).toContainText(
-      'Periodic Table',
-    );
+    await expect(page.getByTestId('periodic-table')).toContainText('Elements');
   });
 
   test('Carbon is selected by default', async ({ page }) => {
@@ -45,15 +45,45 @@ test.describe('Periodic table', () => {
     await expect(oxygen).toHaveCSS('border-width', '2px');
   });
 
-  test('contains at least 36 elements', async ({ page }) => {
-    // The periodic table should show elements from H (1) through Kr (36)
+  test('expand button reveals full periodic table', async ({ page }) => {
     const periodicTable = page.getByTestId('periodic-table');
-    const elementButtons = periodicTable.locator('button');
+
+    // Should start collapsed with Expand button
+    const expandBtn = periodicTable.getByRole('button', { name: /Expand/ });
+    await expect(expandBtn).toBeVisible();
+
+    // Click to expand
+    await expandBtn.click();
+
+    // Should now show Collapse button and full table text
+    const collapseBtn = periodicTable.getByRole('button', { name: /Collapse/ });
+    await expect(collapseBtn).toBeVisible();
+    await expect(periodicTable).toContainText('Periodic Table');
+  });
+
+  test('expanded table contains at least 36 elements', async ({ page }) => {
+    // Expand the periodic table first
+    const periodicTable = page.getByTestId('periodic-table');
+    await periodicTable.getByRole('button', { name: /Expand/ }).click();
+
+    // Wait for expansion to complete
+    await expect(
+      periodicTable.getByRole('button', { name: /Collapse/ }),
+    ).toBeVisible();
+
+    // Count element buttons by their data-testid pattern (element-{Symbol})
+    const elementButtons = periodicTable.locator(
+      'button[data-testid^="element-"]',
+    );
     const count = await elementButtons.count();
     expect(count).toBeGreaterThanOrEqual(36);
   });
 
-  test('key elements are present', async ({ page }) => {
+  test('expanded table has key elements present', async ({ page }) => {
+    // Expand the periodic table first
+    const periodicTable = page.getByTestId('periodic-table');
+    await periodicTable.getByRole('button', { name: /Expand/ }).click();
+
     // Spot-check several elements across the table
     await expect(page.getByTestId('element-H')).toBeVisible(); // Hydrogen
     await expect(page.getByTestId('element-He')).toBeVisible(); // Helium
@@ -65,5 +95,15 @@ test.describe('Periodic table', () => {
     await expect(page.getByTestId('element-Cl')).toBeVisible(); // Chlorine
     await expect(page.getByTestId('element-Fe')).toBeVisible(); // Iron
     await expect(page.getByTestId('element-Kr')).toBeVisible(); // Krypton
+  });
+
+  test('compact view shows common elements', async ({ page }) => {
+    // In collapsed mode, common elements should be visible
+    await expect(page.getByTestId('element-H')).toBeVisible(); // Hydrogen
+    await expect(page.getByTestId('element-C')).toBeVisible(); // Carbon
+    await expect(page.getByTestId('element-N')).toBeVisible(); // Nitrogen
+    await expect(page.getByTestId('element-O')).toBeVisible(); // Oxygen
+    await expect(page.getByTestId('element-Cl')).toBeVisible(); // Chlorine
+    await expect(page.getByTestId('element-Fe')).toBeVisible(); // Iron
   });
 });

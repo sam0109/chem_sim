@@ -38,6 +38,13 @@ const CELL_H = 42;
 /** Gap between cells in px */
 const CELL_GAP = 2;
 
+/**
+ * Common elements shown in the collapsed (compact) view.
+ * Covers organic chemistry (C, H, N, O), biochemistry (P, S),
+ * halogens (F, Cl, Br), and a common metal (Fe).
+ */
+const COMPACT_ELEMENTS: number[] = [1, 6, 7, 8, 9, 15, 16, 17, 26, 35];
+
 const categoryColors: Record<string, string> = {
   nonmetal: '#4a9c47',
   'noble-gas': '#7b5ea7',
@@ -990,12 +997,20 @@ export const PeriodicTable: React.FC = () => {
   const comparedElements = useUIStore((s) => s.comparedElements);
   const setComparedElements = useUIStore((s) => s.setComparedElements);
   const clearComparedElements = useUIStore((s) => s.clearComparedElements);
+  const expanded = useUIStore((s) => s.periodicTableExpanded);
+  const toggleExpanded = useUIStore((s) => s.togglePeriodicTableExpanded);
 
   // Compute property range for current color mode (memoized)
   const propertyRange = useMemo(
     () => computePropertyRange(ptColorMode),
     [ptColorMode],
   );
+
+  /** Elements to show in compact mode: common set + currently selected */
+  const compactElementList = useMemo(() => {
+    if (COMPACT_ELEMENTS.includes(selectedElement)) return COMPACT_ELEMENTS;
+    return [...COMPACT_ELEMENTS, selectedElement];
+  }, [selectedElement]);
 
   if (!showPeriodicTable) return null;
 
@@ -1073,59 +1088,171 @@ export const PeriodicTable: React.FC = () => {
         overflow: 'visible',
       }}
     >
+      {/* Header with expand/collapse toggle */}
       <div
         style={{
-          fontSize: 11,
-          color: '#888',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
           marginBottom: 4,
           fontFamily: 'sans-serif',
-          textAlign: 'center',
         }}
       >
-        Periodic Table — click to select · shift+click to compare
+        <span style={{ fontSize: 11, color: '#888' }}>
+          {expanded
+            ? 'Periodic Table — click to select · shift+click to compare'
+            : 'Elements — click to select'}
+        </span>
+        <button
+          onClick={toggleExpanded}
+          style={{
+            background: 'rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: 4,
+            color: '#aaa',
+            fontSize: 10,
+            padding: '2px 8px',
+            cursor: 'pointer',
+            fontFamily: 'sans-serif',
+            whiteSpace: 'nowrap',
+          }}
+          title={
+            expanded ? 'Collapse periodic table' : 'Expand full periodic table'
+          }
+        >
+          {expanded ? 'Collapse ▲' : 'Expand ▼'}
+        </button>
       </div>
 
-      {/* Color mode selector */}
-      <ColorModeSelector
-        active={ptColorMode}
-        onSelect={setPtColorMode}
-        showTrends={showTrends}
-        onToggleTrends={toggleTrends}
-      />
-
-      {/* Grid container — relative for tooltip and trend positioning */}
-      <div
-        style={{
-          position: 'relative',
-          paddingLeft: showTrends ? 16 : 0,
-          paddingTop: showTrends ? 18 : 0,
-          transition: 'padding 0.15s',
-        }}
-      >
-        {/* Trend annotation overlays */}
-        {showTrends && <TrendAnnotations />}
-
+      {/* ---- Compact (collapsed) view ---- */}
+      {!expanded && (
         <div
-          style={{ display: 'flex', flexDirection: 'column', gap: CELL_GAP }}
+          style={{
+            display: 'flex',
+            gap: CELL_GAP,
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+          }}
         >
-          {GRID.map((row, rowIdx) => (
-            <div key={rowIdx} style={{ display: 'flex', gap: CELL_GAP }}>
-              {row.map((z, colIdx) => {
-                if (z === 0) {
-                  return (
-                    <div
-                      key={colIdx}
-                      style={{ width: CELL_W, height: CELL_H }}
-                    />
-                  );
-                }
+          {compactElementList.map((z) => {
+            const el = elements[z];
+            if (!el) return null;
+            const cellBg = getCellColor(el, ptColorMode, propertyRange);
+            return (
+              <ElementCell
+                key={z}
+                el={el}
+                selected={selectedElement === z}
+                compared={false}
+                bgColor={cellBg}
+                onClick={() => setSelectedElement(z)}
+                onHoverStart={() => setHoveredElement(z)}
+                onHoverEnd={() => setHoveredElement(null)}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* ---- Expanded (full) view ---- */}
+      {expanded && (
+        <>
+          {/* Color mode selector */}
+          <ColorModeSelector
+            active={ptColorMode}
+            onSelect={setPtColorMode}
+            showTrends={showTrends}
+            onToggleTrends={toggleTrends}
+          />
+
+          {/* Grid container — relative for tooltip and trend positioning */}
+          <div
+            style={{
+              position: 'relative',
+              paddingLeft: showTrends ? 16 : 0,
+              paddingTop: showTrends ? 18 : 0,
+              transition: 'padding 0.15s',
+            }}
+          >
+            {/* Trend annotation overlays */}
+            {showTrends && <TrendAnnotations />}
+
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: CELL_GAP,
+              }}
+            >
+              {GRID.map((row, rowIdx) => (
+                <div key={rowIdx} style={{ display: 'flex', gap: CELL_GAP }}>
+                  {row.map((z, colIdx) => {
+                    if (z === 0) {
+                      return (
+                        <div
+                          key={colIdx}
+                          style={{ width: CELL_W, height: CELL_H }}
+                        />
+                      );
+                    }
+                    const el = elements[z];
+                    if (!el)
+                      return (
+                        <div
+                          key={colIdx}
+                          style={{ width: CELL_W, height: CELL_H }}
+                        />
+                      );
+                    const cellBg = getCellColor(el, ptColorMode, propertyRange);
+                    const isCompared =
+                      comparedElements !== null &&
+                      (comparedElements[0] === z || comparedElements[1] === z);
+                    return (
+                      <ElementCell
+                        key={z}
+                        el={el}
+                        selected={selectedElement === z}
+                        compared={isCompared}
+                        bgColor={cellBg}
+                        onClick={(shiftKey) => handleCellClick(z, shiftKey)}
+                        onHoverStart={() => setHoveredElement(z)}
+                        onHoverEnd={() => setHoveredElement(null)}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            {/* Lanthanide row — separate from main grid with label */}
+            <div
+              style={{
+                marginTop: CELL_GAP * 3,
+                display: 'flex',
+                alignItems: 'center',
+                gap: CELL_GAP,
+              }}
+            >
+              <div
+                style={{
+                  width: CELL_W * 2 + CELL_GAP,
+                  height: CELL_H,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 8,
+                  color: '#9e6fa0',
+                  fontFamily: 'sans-serif',
+                }}
+              >
+                Lanthanides
+              </div>
+              {LANTHANIDE_ROW.map((z) => {
                 const el = elements[z];
                 if (!el)
                   return (
-                    <div
-                      key={colIdx}
-                      style={{ width: CELL_W, height: CELL_H }}
-                    />
+                    <div key={z} style={{ width: CELL_W, height: CELL_H }} />
                   );
                 const cellBg = getCellColor(el, ptColorMode, propertyRange);
                 const isCompared =
@@ -1145,76 +1272,30 @@ export const PeriodicTable: React.FC = () => {
                 );
               })}
             </div>
-          ))}
-        </div>
 
-        {/* Lanthanide row — separate from main grid with label */}
-        <div
-          style={{
-            marginTop: CELL_GAP * 3,
-            display: 'flex',
-            alignItems: 'center',
-            gap: CELL_GAP,
-          }}
-        >
-          <div
-            style={{
-              width: CELL_W * 2 + CELL_GAP,
-              height: CELL_H,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 8,
-              color: '#9e6fa0',
-              fontFamily: 'sans-serif',
-            }}
-          >
-            Lanthanides
-          </div>
-          {LANTHANIDE_ROW.map((z) => {
-            const el = elements[z];
-            if (!el)
-              return <div key={z} style={{ width: CELL_W, height: CELL_H }} />;
-            const cellBg = getCellColor(el, ptColorMode, propertyRange);
-            const isCompared =
-              comparedElements !== null &&
-              (comparedElements[0] === z || comparedElements[1] === z);
-            return (
-              <ElementCell
-                key={z}
-                el={el}
-                selected={selectedElement === z}
-                compared={isCompared}
-                bgColor={cellBg}
-                onClick={(shiftKey) => handleCellClick(z, shiftKey)}
-                onHoverStart={() => setHoveredElement(z)}
-                onHoverEnd={() => setHoveredElement(null)}
+            {/* Rich tooltip */}
+            {tooltipEl && (
+              <ElementTooltip
+                el={tooltipEl}
+                gridRow={tooltipRow}
+                gridCol={tooltipCol}
               />
-            );
-          })}
-        </div>
+            )}
+          </div>
 
-        {/* Rich tooltip */}
-        {tooltipEl && (
-          <ElementTooltip
-            el={tooltipEl}
-            gridRow={tooltipRow}
-            gridCol={tooltipCol}
-          />
-        )}
-      </div>
+          {/* Element comparison card */}
+          {compElA && compElB && (
+            <ElementComparison
+              elA={compElA}
+              elB={compElB}
+              onClose={clearComparedElements}
+            />
+          )}
 
-      {/* Element comparison card */}
-      {compElA && compElB && (
-        <ElementComparison
-          elA={compElA}
-          elB={compElB}
-          onClose={clearComparedElements}
-        />
+          {/* Color legend */}
+          <ColorLegend mode={ptColorMode} range={propertyRange} />
+        </>
       )}
-
-      {/* Color legend */}
-      <ColorLegend mode={ptColorMode} range={propertyRange} />
     </div>
   );
 };

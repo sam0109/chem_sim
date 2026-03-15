@@ -77,6 +77,8 @@ interface UIStore {
   clearComparedElements: () => void;
   showTrendAnnotations: boolean;
   toggleTrendAnnotations: () => void;
+  periodicTableExpanded: boolean;
+  togglePeriodicTableExpanded: () => void;
 
   // ---- Rendering options ----
   renderMode: 'ball-and-stick' | 'space-filling' | 'wireframe';
@@ -180,6 +182,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   hoveredElement: null,
   comparedElements: null,
   showTrendAnnotations: false,
+  periodicTableExpanded: false,
   comparisonMode: false,
 
   // Encounter defaults
@@ -247,6 +250,8 @@ export const useUIStore = create<UIStore>((set, get) => ({
   clearComparedElements: () => set({ comparedElements: null }),
   toggleTrendAnnotations: () =>
     set({ showTrendAnnotations: !get().showTrendAnnotations }),
+  togglePeriodicTableExpanded: () =>
+    set({ periodicTableExpanded: !get().periodicTableExpanded }),
 
   setRenderMode: (mode) => set({ renderMode: mode }),
   toggleLabels: () => set({ showLabels: !get().showLabels }),
