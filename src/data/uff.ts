@@ -593,10 +593,27 @@ export function getLJParams(
   return { sigma, epsilon };
 }
 
+// Safety clamp for angle force constants.
+// Range [0.05, 15.0] eV/rad² covers all UFF atom combinations:
+//   - Lower bound: very soft angles like H-S-H (~1.3 eV/rad²) plus margin
+//   - Upper bound: stiff bridges like C-O-C (~7 eV/rad²) plus margin
+// Previous [0.5, 5.0] range was too tight and masked correct results.
+function clampK(k: number): number {
+  return Math.max(0.05, Math.min(15.0, k));
+}
+
 /**
  * Compute UFF angle bending force constant for angle I-J-K.
- * Uses the UFF formula from Rappé et al. JACS 1992, Eq. 13.
- * Returns k_angle in eV/rad².
+ * Uses the UFF formula from Rappé et al. JACS 114, 10024 (1992), Eq. 13.
+ * Returns k_angle in eV/rad² (harmonic in θ). The cosine-harmonic
+ * conversion (K/sin²θ₀) is done downstream in harmonicAngleForce().
+ *
+ * Validated K values (from Eq. 13 with UFF Table I parameters):
+ *   H-O-H (water):      5.33 eV/rad² (123 kcal/mol/rad²)
+ *   H-C-H (methane):    2.66 eV/rad² ( 61 kcal/mol/rad²)
+ *   H-N-H (ammonia):    3.86 eV/rad² ( 89 kcal/mol/rad²)
+ *   C-C-C (alkane):     4.05 eV/rad² ( 93 kcal/mol/rad²)
+ *   O=C=O (CO₂, lin.):  5.92 eV      (137 kcal/mol, linear kA)
  *
  * @param zI atomic number of terminal atom I
  * @param zJ atomic number of central atom J
@@ -621,26 +638,23 @@ export function getUFFAngleK(
 
   const theta0 = (tJ.theta0 * Math.PI) / 180.0;
 
-  // For linear angles (θ₀ > 170°), the general UFF Eq. 13 formula breaks
-  // down (sin²θ₀ → 0). Use a direct force constant estimate instead.
-  // Source: Rappé et al., JACS 114, 10024 (1992), Eq. 10:
-  //   V(θ) = kA * (1 + cos θ) for linear sp geometry
-  // kA is calibrated so that a 10° bend costs ~0.5 eV — typical for
-  // sp-hybridized centers like CO₂, acetylene, etc.
+  // For linear angles (θ₀ > 170°), harmonicAngleForce uses Eq. 10:
+  //   V(θ) = kA * (1 + cosθ)
+  // so kA has units of eV (not eV/rad²).
+  //
+  // We derive kA from the θ₀→180° limit of Eq. 13. As cosθ₀→−1 and
+  // sin²θ₀→0, the bracket reduces to rIK², giving:
+  //   K = (664.12 / (rIJ·rJK)) · (Z*I·Z*K / rIK³)   [kcal/mol]
+  // Source: Rappé et al., JACS 114, 10024 (1992), Eqs. 10 & 13.
   if (tJ.theta0 > 170.0) {
-    // kA in eV — for V = kA*(1+cosθ), the barrier for bending from 180°
-    // to 170° is kA*(1 + cos170°) = kA*0.015. Setting this to ~0.023 eV
-    // (~0.53 kcal/mol) gives kA ≈ 1.5 eV, a reasonable stiffness for
-    // sp-hybridized centers (UFF literature range 1–3 eV).
     const rIJ = getUFFBondLength(zI, zJ, bondOrderIJ);
     const rJK = getUFFBondLength(zJ, zK, bondOrderJK);
-    const rIK = rIJ + rJK; // linear 1-3 distance
-    const rIK5 = rIK * rIK * rIK * rIK * rIK;
-    // Simplified UFF K for linear: dominated by Z*_I * Z*_K / rIK^5 term
-    const K_kcal = ((664.12 * tI.Z * tK.Z) / rIK5) * rIK * 3.0;
+    const rIK = rIJ + rJK; // linear 1-3 distance (θ₀ ≈ 180°)
+    const rIK3 = rIK * rIK * rIK;
+    const K_kcal = (664.12 / (rIJ * rJK)) * ((tI.Z * tK.Z) / rIK3);
     const kAngle = Math.abs(K_kcal) * KCAL_TO_EV;
     return {
-      kAngle: Math.max(0.5, Math.min(5.0, kAngle)),
+      kAngle: clampK(kAngle),
       theta0,
     };
   }
@@ -655,25 +669,20 @@ export function getUFFAngleK(
   const rIK = Math.sqrt(Math.max(rIK2, 0.01));
   const rIK5 = rIK * rIK * rIK * rIK * rIK;
 
-  // UFF angle constant: K_IJK from Eq. 13
-  // K = (664.12 / (rIJ * rJK)) * (Z*_I * Z*_K / rIK^5) *
-  //     [rIJ*rJK*(1-cos²θ₀)*3 - rIK²*cosθ₀]
+  // UFF angle force constant K_IJK from Rappé et al. JACS 114, 10024 (1992), Eq. 13:
+  //   K = (664.12 / (r_IJ · r_JK)) · (Z*_I · Z*_K / r_IK^5) ·
+  //       [3·r_IJ·r_JK·(1 − cos²θ₀) − r_IK²·cosθ₀]
+  // This gives K in kcal/(mol·rad²). The cosine-harmonic conversion
+  // (dividing by sin²θ₀) is handled downstream in harmonicAngleForce().
   const sinTheta0_2 = 1 - cosTheta0 * cosTheta0;
   const bracket = 3 * rIJ * rJK * sinTheta0_2 - rIK2 * cosTheta0;
-  const K_kcal =
-    (664.12 / (rIJ * rJK)) * ((tI.Z * tK.Z) / rIK5) * rIJ * rJK * bracket;
+  const K_kcal = (664.12 / (rIJ * rJK)) * ((tI.Z * tK.Z) / rIK5) * bracket;
 
-  // Convert to harmonic k: K_harmonic = K / sin²(θ₀) for the general nonlinear case
-  const sinTheta0 = Math.sin(theta0);
-  const kHarmonic = Math.abs(K_kcal) / Math.max(sinTheta0 * sinTheta0, 0.01);
+  // Convert to eV/rad² (no sin²θ₀ division here — harmonicAngleForce does that)
+  const kAngle = Math.abs(K_kcal) * KCAL_TO_EV;
 
-  // Convert to eV/rad²
-  const kAngle = kHarmonic * KCAL_TO_EV;
-
-  // Clamp to reasonable range: 0.5 - 5.0 eV/rad²
-  // (5 eV/rad² \u2248 115 kcal/(mol\u00b7rad²), typical maximum for angle bending)
   return {
-    kAngle: Math.max(0.5, Math.min(5.0, kAngle)),
+    kAngle: clampK(kAngle),
     theta0,
   };
 }

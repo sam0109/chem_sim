@@ -204,8 +204,10 @@ describe('getUFFAngleK', () => {
   it('returns reasonable kAngle and theta0 for H-O-H (water)', () => {
     const { kAngle, theta0 } = getUFFAngleK(1, 8, 1);
     expect(kAngle).toBeGreaterThan(0);
-    expect(kAngle).toBeLessThanOrEqual(5.0); // clamped max
-    expect(kAngle).toBeGreaterThanOrEqual(0.5); // clamped min
+    expect(kAngle).toBeLessThanOrEqual(15.0); // clamped max
+    expect(kAngle).toBeGreaterThanOrEqual(0.05); // clamped min
+    // Validated: H-O-H K ≈ 5.33 eV/rad² from Eq. 13
+    expect(kAngle).toBeCloseTo(5.33, 0);
     // theta0 for oxygen sp3 ≈ 104.51°
     expect(theta0).toBeCloseTo((104.51 * Math.PI) / 180, 2);
   });
@@ -224,9 +226,9 @@ describe('getUFFAngleK', () => {
 
   it('kAngle is in eV/rad² (reasonable range)', () => {
     const { kAngle } = getUFFAngleK(1, 8, 1);
-    // After clamping: 0.5 - 5.0 eV/rad²
-    expect(kAngle).toBeGreaterThanOrEqual(0.5);
-    expect(kAngle).toBeLessThanOrEqual(5.0);
+    // After clamping: 0.05 - 15.0 eV/rad²
+    expect(kAngle).toBeGreaterThanOrEqual(0.05);
+    expect(kAngle).toBeLessThanOrEqual(15.0);
   });
 
   it('is symmetric in terminal atoms', () => {
