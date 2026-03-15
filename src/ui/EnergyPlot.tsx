@@ -116,7 +116,7 @@ export const EnergyPlot: React.FC = () => {
   if (!showEnergyPlot) return null;
 
   return (
-    <div style={{
+    <div data-testid="energy-plot" style={{
       position: 'absolute',
       bottom: 10,
       right: 10,

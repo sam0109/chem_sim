@@ -56,7 +56,7 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{
+      <div data-testid="loading-screen" style={{
         width: '100vw', height: '100vh',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: '#1a1a2e', color: '#aaccff',
@@ -68,7 +68,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+    <div data-testid="app-container" style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative' }}>
       <Scene />
 
       {/* Header bar */}
@@ -88,6 +88,7 @@ const App: React.FC = () => {
         <div style={{ display: 'flex', gap: 6, pointerEvents: 'auto' }}>
           <div style={{ position: 'relative' }}>
             <button
+              data-testid="examples-button"
               onClick={() => setShowExamples(!showExamples)}
               style={{
                 padding: '6px 12px', borderRadius: 4,
@@ -101,7 +102,7 @@ const App: React.FC = () => {
               📦 Examples
             </button>
             {showExamples && (
-              <div style={{
+              <div data-testid="examples-dropdown" style={{
                 position: 'absolute', top: '100%', left: 0, marginTop: 4,
                 background: 'rgba(20, 20, 40, 0.98)', borderRadius: 6,
                 border: '1px solid rgba(255,255,255,0.1)',
@@ -110,6 +111,7 @@ const App: React.FC = () => {
                 {Object.keys(exampleMolecules).map((name) => (
                   <button
                     key={name}
+                    data-testid={`example-${name}`}
                     onClick={() => handleLoadExample(name)}
                     style={{
                       display: 'block', width: '100%', padding: '6px 10px',
@@ -128,6 +130,7 @@ const App: React.FC = () => {
             )}
           </div>
           <button
+            data-testid="import-xyz-button"
             onClick={handleFileImport}
             style={{
               padding: '6px 12px', borderRadius: 4,
@@ -149,7 +152,7 @@ const App: React.FC = () => {
       <PeriodicTable />
       <EnergyPlot />
 
-      <div style={{
+      <div data-testid="status-bar" style={{
         position: 'absolute', bottom: 0, left: 0, right: 0, height: 22,
         background: 'rgba(10, 10, 25, 0.9)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',

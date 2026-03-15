@@ -38,7 +38,7 @@ export const PropertyPanel: React.FC = () => {
   }
 
   return (
-    <div style={{
+    <div data-testid="property-panel" style={{
       position: 'absolute',
       top: 10,
       left: 10,
