@@ -16,13 +16,14 @@ import type { MoleculeInfo } from '../data/types';
 /**
  * Minimum dipole magnitude (e*Å) to display an arrow.
  * Magnitudes below this are considered negligible.
- * For reference, water has ~0.7 e*Å (≈ 1.85 Debye).
+ * For reference, water has ~0.385 e·Å (≈ 1.85 Debye).
+ * Conversion: 1 Debye = 0.20819 e·Å (1 D = 3.336e-30 C·m).
  */
 const DIPOLE_DISPLAY_THRESHOLD = 0.05;
 
 /**
- * Scale factor: arrow length (Å) = magnitude (e*Å) * scale.
- * Chosen so that water's dipole (~0.7 e*Å) gives a ~2.8 Å arrow,
+ * Scale factor: arrow length (Å) = magnitude (e·Å) * scale.
+ * Chosen so that water's dipole (~0.385 e·Å) gives a ~1.5 Å arrow,
  * clearly visible but not overwhelming.
  */
 const DIPOLE_ARROW_SCALE = 4.0;
@@ -120,7 +121,7 @@ const DipoleArrow: React.FC<{ molecule: MoleculeInfo }> = ({ molecule }) => {
           whiteSpace: 'nowrap',
         }}
       >
-        {mag.toFixed(2)} e&middot;A
+        {mag.toFixed(2)} e&middot;&Aring;
       </Html>
     </>
   );
