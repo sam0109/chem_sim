@@ -5,7 +5,10 @@ import { morseBondForce } from '../morse.ts';
  * Helper: create a two-atom system along the x-axis.
  * Atom 0 at origin, atom 1 at distance r along +x.
  */
-function makePair(r: number): { positions: Float64Array; forces: Float64Array } {
+function makePair(r: number): {
+  positions: Float64Array;
+  forces: Float64Array;
+} {
   const positions = new Float64Array([0, 0, 0, r, 0, 0]);
   const forces = new Float64Array(6);
   return { positions, forces };
@@ -17,8 +20,11 @@ function makePair(r: number): { positions: Float64Array; forces: Float64Array } 
  * numerical -dE/dx to the analytical force.
  */
 function checkGradient(
-  De: number, alpha: number, re: number,
-  r: number, h = 1e-5, tol = 1e-6,
+  De: number,
+  alpha: number,
+  re: number,
+  r: number,
+  h = 1e-5,
 ): void {
   const { positions } = makePair(r);
   const analyticalForces = new Float64Array(6);
@@ -41,9 +47,9 @@ function checkGradient(
 }
 
 // Typical Morse parameters for O-H bond
-const De = 4.0;    // eV
+const De = 4.0; // eV
 const alpha = 2.0; // 1/Å
-const re = 0.96;   // Å
+const re = 0.96; // Å
 
 describe('morseBondForce', () => {
   it('returns zero energy at equilibrium distance', () => {
@@ -69,7 +75,7 @@ describe('morseBondForce', () => {
     }
   });
 
-  it('obeys Newton\'s 3rd law (equal and opposite forces)', () => {
+  it("obeys Newton's 3rd law (equal and opposite forces)", () => {
     const r = 1.3;
     const { positions, forces } = makePair(r);
     morseBondForce(positions, forces, 0, 1, De, alpha, re);
@@ -137,7 +143,15 @@ describe('morseBondForce', () => {
 
     // Forces should have changed from initial values (accumulated)
     const forcesClean = new Float64Array(6);
-    morseBondForce(new Float64Array(positions), forcesClean, 0, 1, De, alpha, re);
+    morseBondForce(
+      new Float64Array(positions),
+      forcesClean,
+      0,
+      1,
+      De,
+      alpha,
+      re,
+    );
 
     expect(forces[0]).toBeCloseTo(1.0 + forcesClean[0], 10);
     expect(forces[1]).toBeCloseTo(2.0 + forcesClean[1], 10);

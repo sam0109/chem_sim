@@ -5,9 +5,15 @@ describe('CellList', () => {
   it('finds all pairs within cutoff using brute force', () => {
     // 3 atoms in a line
     const positions = new Float64Array([
-      0, 0, 0,     // atom 0
-      1.5, 0, 0,   // atom 1 (1.5 Å from 0)
-      4.0, 0, 0,   // atom 2 (4.0 Å from 0, 2.5 from 1)
+      0,
+      0,
+      0, // atom 0
+      1.5,
+      0,
+      0, // atom 1 (1.5 Å from 0)
+      4.0,
+      0,
+      0, // atom 2 (4.0 Å from 0, 2.5 from 1)
     ]);
     const cutoff = 3.0;
 
@@ -24,10 +30,7 @@ describe('CellList', () => {
   });
 
   it('brute force finds no pairs beyond cutoff', () => {
-    const positions = new Float64Array([
-      0, 0, 0,
-      10, 0, 0,
-    ]);
+    const positions = new Float64Array([0, 0, 0, 10, 0, 0]);
     const cutoff = 5.0;
 
     const pairs: Array<[number, number]> = [];
@@ -39,11 +42,7 @@ describe('CellList', () => {
   });
 
   it('brute force always reports i < j', () => {
-    const positions = new Float64Array([
-      0, 0, 0,
-      1, 0, 0,
-      2, 0, 0,
-    ]);
+    const positions = new Float64Array([0, 0, 0, 1, 0, 0, 2, 0, 0]);
     const cutoff = 5.0;
 
     CellList.forEachPairBrute(positions, 3, cutoff, (i, j) => {
@@ -54,10 +53,7 @@ describe('CellList', () => {
   it('cell list finds same pairs as brute force', () => {
     // 4 atoms in a cluster
     const positions = new Float64Array([
-      0, 0, 0,
-      1.0, 0.5, 0,
-      -0.5, 1.5, 0,
-      2.0, 2.0, 0,
+      0, 0, 0, 1.0, 0.5, 0, -0.5, 1.5, 0, 2.0, 2.0, 0,
     ]);
     const cutoff = 3.0;
 
@@ -97,9 +93,15 @@ describe('CellList', () => {
 
   it('cell list handles atoms in 3D', () => {
     const positions = new Float64Array([
-      0, 0, 0,
-      1, 1, 1,   // distance = sqrt(3) ≈ 1.73
-      3, 3, 3,   // distance from origin = sqrt(27) ≈ 5.2
+      0,
+      0,
+      0,
+      1,
+      1,
+      1, // distance = sqrt(3) ≈ 1.73
+      3,
+      3,
+      3, // distance from origin = sqrt(27) ≈ 5.2
     ]);
     const cutoff = 2.0;
 

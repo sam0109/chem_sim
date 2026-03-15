@@ -41,7 +41,8 @@ export const EnergyPlot: React.FC = () => {
     }
 
     // Compute ranges
-    let minE = Infinity, maxE = -Infinity;
+    let minE = Infinity,
+      maxE = -Infinity;
     for (const d of data) {
       minE = Math.min(minE, d.kinetic, d.potential, d.total);
       maxE = Math.max(maxE, d.kinetic, d.potential, d.total);
@@ -51,7 +52,8 @@ export const EnergyPlot: React.FC = () => {
     const maxStep = data[data.length - 1].step;
     const stepRange = maxStep - minStep || 1;
 
-    const toX = (step: number) => MARGIN.left + ((step - minStep) / stepRange) * w;
+    const toX = (step: number) =>
+      MARGIN.left + ((step - minStep) / stepRange) * w;
     const toY = (e: number) => MARGIN.top + h - ((e - minE) / eRange) * h;
 
     // Grid lines
@@ -66,7 +68,10 @@ export const EnergyPlot: React.FC = () => {
     }
 
     // Draw lines
-    const drawLine = (key: 'kinetic' | 'potential' | 'total', color: string) => {
+    const drawLine = (
+      key: 'kinetic' | 'potential' | 'total',
+      color: string,
+    ) => {
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -116,15 +121,18 @@ export const EnergyPlot: React.FC = () => {
   if (!showEnergyPlot) return null;
 
   return (
-    <div data-testid="energy-plot" style={{
-      position: 'absolute',
-      bottom: 10,
-      right: 10,
-      borderRadius: 8,
-      border: '1px solid rgba(255,255,255,0.1)',
-      overflow: 'hidden',
-      zIndex: 100,
-    }}>
+    <div
+      data-testid="energy-plot"
+      style={{
+        position: 'absolute',
+        bottom: 10,
+        right: 10,
+        borderRadius: 8,
+        border: '1px solid rgba(255,255,255,0.1)',
+        overflow: 'hidden',
+        zIndex: 100,
+      }}
+    >
       <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} />
     </div>
   );

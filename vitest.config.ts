@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -6,7 +6,11 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/engine/**', 'src/data/**'],
-      exclude: ['src/engine/worker.ts', 'src/engine/debug.ts', 'src/engine/tests.ts'],
+      exclude: [
+        'src/engine/worker.ts',
+        'src/engine/debug.ts',
+        'src/engine/tests.ts',
+      ],
     },
   },
-})
+});

@@ -6,7 +6,10 @@ import { harmonicAngleForce } from '../harmonic.ts';
  * Atom j is at origin (central), atoms i and k are placed
  * to form a specified angle.
  */
-function makeAngle(angle: number, bondLen = 1.0): {
+function makeAngle(
+  angle: number,
+  bondLen = 1.0,
+): {
   positions: Float64Array;
   forces: Float64Array;
 } {
@@ -33,8 +36,10 @@ function makeAngle(angle: number, bondLen = 1.0): {
  * Central finite-difference gradient check for 3-atom system.
  */
 function checkGradient(
-  k_angle: number, theta0: number,
-  testAngle: number, bondLen = 1.0,
+  k_angle: number,
+  theta0: number,
+  testAngle: number,
+  bondLen = 1.0,
   h = 1e-5,
 ): void {
   const { positions } = makeAngle(testAngle, bondLen);
@@ -50,7 +55,15 @@ function checkGradient(
     const fPlus = new Float64Array(9);
     const fMinus = new Float64Array(9);
     const ePlus = harmonicAngleForce(posPlus, fPlus, 0, 1, 2, k_angle, theta0);
-    const eMinus = harmonicAngleForce(posMinus, fMinus, 0, 1, 2, k_angle, theta0);
+    const eMinus = harmonicAngleForce(
+      posMinus,
+      fMinus,
+      0,
+      1,
+      2,
+      k_angle,
+      theta0,
+    );
 
     const numericalForce = -(ePlus - eMinus) / (2 * h);
     expect(analyticalForces[idx]).toBeCloseTo(numericalForce, 4);
@@ -58,20 +71,36 @@ function checkGradient(
 }
 
 // Water-like angle parameters
-const k_angle = 3.0;  // eV/rad²
+const k_angle = 3.0; // eV/rad²
 const theta0 = (104.5 * Math.PI) / 180; // ~1.8238 rad
 
 describe('harmonicAngleForce', () => {
   it('returns zero energy at equilibrium angle', () => {
     const { positions, forces } = makeAngle(theta0);
-    const energy = harmonicAngleForce(positions, forces, 0, 1, 2, k_angle, theta0);
+    const energy = harmonicAngleForce(
+      positions,
+      forces,
+      0,
+      1,
+      2,
+      k_angle,
+      theta0,
+    );
     expect(energy).toBeCloseTo(0, 8);
   });
 
   it('returns positive energy away from equilibrium', () => {
     const testAngle = (120 * Math.PI) / 180;
     const { positions, forces } = makeAngle(testAngle);
-    const energy = harmonicAngleForce(positions, forces, 0, 1, 2, k_angle, theta0);
+    const energy = harmonicAngleForce(
+      positions,
+      forces,
+      0,
+      1,
+      2,
+      k_angle,
+      theta0,
+    );
     expect(energy).toBeGreaterThan(0);
   });
 
@@ -131,7 +160,15 @@ describe('harmonicAngleForce', () => {
   it('returns 0 for degenerate bond vectors (atoms at same position)', () => {
     const positions = new Float64Array([0, 0, 0, 0, 0, 0, 1, 0, 0]);
     const forces = new Float64Array(9);
-    const energy = harmonicAngleForce(positions, forces, 0, 1, 2, k_angle, theta0);
+    const energy = harmonicAngleForce(
+      positions,
+      forces,
+      0,
+      1,
+      2,
+      k_angle,
+      theta0,
+    );
     expect(energy).toBe(0);
   });
 
@@ -155,7 +192,15 @@ describe('harmonicAngleForce', () => {
     harmonicAngleForce(positions, forces, 0, 1, 2, k_angle, theta0);
 
     const forcesClean = new Float64Array(9);
-    harmonicAngleForce(new Float64Array(positions), forcesClean, 0, 1, 2, k_angle, theta0);
+    harmonicAngleForce(
+      new Float64Array(positions),
+      forcesClean,
+      0,
+      1,
+      2,
+      k_angle,
+      theta0,
+    );
 
     expect(forces[0]).toBeCloseTo(1.0 + forcesClean[0], 10);
     expect(forces[3]).toBeCloseTo(4.0 + forcesClean[3], 10);

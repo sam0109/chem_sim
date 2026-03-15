@@ -4,7 +4,10 @@
 
 import { create } from 'zustand';
 import type {
-  Atom, Bond, SimulationConfig, SimulationBox,
+  Atom,
+  Bond,
+  SimulationConfig,
+  SimulationBox,
   WorkerStateUpdate,
 } from '../data/types';
 import { SimulationWorker } from '../worker-comms';
