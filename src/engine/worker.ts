@@ -23,7 +23,12 @@ import {
 } from '../data/uff';
 import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
-import { coulombForce } from './forces/coulomb';
+import {
+  coulombForce,
+  computeWolfConstants,
+  wolfSelfEnergy,
+} from './forces/coulomb';
+import type { WolfConstants } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
 import { torsionForce } from './forces/torsion';
 import { inversionForce } from './forces/inversion';
@@ -77,6 +82,9 @@ let config: SimulationConfig = {
   running: false,
 };
 let step = 0;
+
+// Cached Wolf summation constants (recomputed when cutoff changes)
+let wolfConst: WolfConstants = computeWolfConstants(10.0);
 
 // Cached force-field parameters
 let bondParams: Array<{
@@ -456,6 +464,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   // 1-2 and 1-3 pairs are fully excluded; 1-4 pairs get SCALE_14 (0.5×).
   // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
   const cutoff = config.cutoff;
+  const wc = wolfConst;
   const pairCallback = (i: number, j: number): void => {
     // Skip 1-2 (bonded) and 1-3 (angle) pairs
     const key = `${Math.min(i, j)}-${Math.max(i, j)}`;
@@ -482,7 +491,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       j,
       charges[i] * scaleFactor,
       charges[j],
-      cutoff,
+      wc,
     );
   };
 
@@ -492,6 +501,11 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
     cellList!.build(pos, nAtoms);
     cellList!.forEachPair(pos, cutoff, pairCallback);
   }
+
+  // 3.5. Wolf self-energy correction (position-independent, affects PE only)
+  // Uses actual (unscaled) charges — the 1-4 scaling only applies to pair terms.
+  // Reference: Wolf et al., J. Chem. Phys. 110, 8254 (1999), Eq. 2.
+  potentialEnergy += wolfSelfEnergy(charges, nAtoms, wc);
 
   // 4. Drag force (spring to target position)
   if (dragAtomId >= 0 && dragAtomId < nAtoms) {
@@ -516,6 +530,7 @@ function initSimulation(
   cfg: SimulationConfig,
 ): void {
   config = { ...config, ...cfg };
+  wolfConst = computeWolfConstants(config.cutoff);
   nAtoms = atoms.length;
 
   atomicNumbers = new Int32Array(nAtoms);
@@ -872,6 +887,7 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         (msg.config.thermostatTau !== undefined &&
           msg.config.thermostatTau !== config.thermostatTau);
       Object.assign(config, msg.config);
+      wolfConst = computeWolfConstants(config.cutoff);
       if (needsNHReset && nAtoms > 0) {
         nhChainState = createNoseHooverChainState(
           nAtoms,
