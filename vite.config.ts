@@ -4,6 +4,7 @@ import glsl from 'vite-plugin-glsl';
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/chem_sim/',
   plugins: [react(), glsl()],
   worker: {
     format: 'es',

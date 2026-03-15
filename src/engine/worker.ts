@@ -78,6 +78,7 @@ let bondParams: Array<{
 }> = [];
 const ljCache: Map<string, { sigma: number; epsilon: number }> = new Map();
 let cellList: CellList | null = null;
+
 // Cached angle parameters (precomputed once per topology rebuild)
 let angleParams: Array<{
   i: number;
@@ -811,6 +812,18 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
     case 'minimize':
       stopLoop();
       minimize(msg.maxSteps, msg.tolerance);
+      break;
+
+    case 'set-velocities':
+      for (const entry of msg.entries) {
+        const idx = entry.atomIndex;
+        if (idx >= 0 && idx < nAtoms) {
+          velocities[idx * 3] = entry.velocity[0];
+          velocities[idx * 3 + 1] = entry.velocity[1];
+          velocities[idx * 3 + 2] = entry.velocity[2];
+        }
+      }
+      sendState();
       break;
   }
 };

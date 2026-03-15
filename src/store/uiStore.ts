@@ -34,10 +34,12 @@ interface UIStore {
   showPropertyPanel: boolean;
   showEnergyPlot: boolean;
   showChallengePanel: boolean;
+  showEncounterPanel: boolean;
   togglePeriodicTable: () => void;
   togglePropertyPanel: () => void;
   toggleEnergyPlot: () => void;
   toggleChallengePanel: () => void;
+  toggleEncounterPanel: () => void;
 
   // ---- Hover ----
   hoveredAtomId: number | null;
@@ -63,6 +65,20 @@ interface UIStore {
   toggleLabels: () => void;
   colorMode: ColorMode;
   setColorMode: (mode: ColorMode) => void;
+
+  // ---- Encounter setup ----
+  /** Molecule template name for placement (key of exampleMolecules) */
+  selectedMoleculeTemplate: string | null;
+  setSelectedMoleculeTemplate: (name: string | null) => void;
+  /** Initial center-of-mass separation in Å */
+  encounterSeparation: number;
+  setEncounterSeparation: (d: number) => void;
+  /** Relative approach speed in Å/fs */
+  encounterSpeed: number;
+  setEncounterSpeed: (v: number) => void;
+  /** Impact parameter (perpendicular offset) in Å */
+  encounterImpactParam: number;
+  setEncounterImpactParam: (b: number) => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
@@ -74,6 +90,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   showPropertyPanel: true,
   showEnergyPlot: false,
   showChallengePanel: false,
+  showEncounterPanel: false,
   hoveredAtomId: null,
   renderMode: 'ball-and-stick',
   showLabels: true,
@@ -82,6 +99,12 @@ export const useUIStore = create<UIStore>((set, get) => ({
   hoveredElement: null,
   comparedElements: null,
   showTrendAnnotations: false,
+
+  // Encounter defaults
+  selectedMoleculeTemplate: null,
+  encounterSeparation: 8, // Å
+  encounterSpeed: 0.01, // Å/fs (~1000 m/s)
+  encounterImpactParam: 0, // Å (head-on)
 
   setActiveTool: (tool) => set({ activeTool: tool }),
   setSelectedElement: (z) => set({ selectedElement: z }),
@@ -112,6 +135,8 @@ export const useUIStore = create<UIStore>((set, get) => ({
   toggleEnergyPlot: () => set({ showEnergyPlot: !get().showEnergyPlot }),
   toggleChallengePanel: () =>
     set({ showChallengePanel: !get().showChallengePanel }),
+  toggleEncounterPanel: () =>
+    set({ showEncounterPanel: !get().showEncounterPanel }),
 
   setHoveredAtom: (id) => set({ hoveredAtomId: id }),
 
@@ -125,4 +150,11 @@ export const useUIStore = create<UIStore>((set, get) => ({
   setRenderMode: (mode) => set({ renderMode: mode }),
   toggleLabels: () => set({ showLabels: !get().showLabels }),
   setColorMode: (mode) => set({ colorMode: mode }),
+
+  // Encounter setters
+  setSelectedMoleculeTemplate: (name) =>
+    set({ selectedMoleculeTemplate: name }),
+  setEncounterSeparation: (d) => set({ encounterSeparation: d }),
+  setEncounterSpeed: (v) => set({ encounterSpeed: v }),
+  setEncounterImpactParam: (b) => set({ encounterImpactParam: b }),
 }));
