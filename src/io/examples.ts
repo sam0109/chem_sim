@@ -9,6 +9,7 @@
 
 import type { Atom } from '../data/types';
 import { parseSMILES } from './smiles';
+import { generateCrystalAtoms } from '../data/crystalBuilder';
 
 /**
  * Create a water molecule (H2O).
@@ -783,6 +784,60 @@ export function caffeineSMILES(): Atom[] {
   return parseSMILES('Cn1c(=O)c2c(ncn2C)n(C)c1=O');
 }
 
+// ==============================================================
+// Crystal lattice examples — generated from the crystal builder.
+// These demonstrate periodic crystal structures.
+// ==============================================================
+
+/**
+ * Create a 3×3×3 NaCl (rock salt) crystal.
+ * 216 atoms (108 Na⁺ + 108 Cl⁻) with formal ionic charges.
+ * Lattice constant: 5.640 Å (CRC Handbook 97th Ed.)
+ */
+export function naclCrystal(): Atom[] {
+  return generateCrystalAtoms({
+    structureType: 'rocksalt',
+    elementA: 11,
+    elementB: 17,
+    latticeConstant: 5.64,
+    nx: 3,
+    ny: 3,
+    nz: 3,
+    chargeA: 1.0,
+    chargeB: -1.0,
+  });
+}
+
+/**
+ * Create a 2×2×2 copper FCC crystal.
+ * 32 atoms. Lattice constant: 3.615 Å (CRC Handbook 97th Ed.)
+ */
+export function cuFccCrystal(): Atom[] {
+  return generateCrystalAtoms({
+    structureType: 'fcc',
+    elementA: 29,
+    latticeConstant: 3.615,
+    nx: 2,
+    ny: 2,
+    nz: 2,
+  });
+}
+
+/**
+ * Create a 2×2×2 diamond crystal.
+ * 64 atoms. Lattice constant: 3.567 Å (CRC Handbook 97th Ed.)
+ */
+export function diamondCrystal(): Atom[] {
+  return generateCrystalAtoms({
+    structureType: 'diamond',
+    elementA: 6,
+    latticeConstant: 3.567,
+    nx: 2,
+    ny: 2,
+    nz: 2,
+  });
+}
+
 export const exampleMolecules = {
   // Single molecules
   'Water (H₂O)': waterMolecule,
@@ -805,4 +860,8 @@ export const exampleMolecules = {
   'Cyclohexane (SMILES)': cyclohexaneSMILES,
   'Aspirin (SMILES)': aspirinSMILES,
   'Caffeine (SMILES)': caffeineSMILES,
+  // Crystal lattices
+  'NaCl Crystal (3×3×3)': naclCrystal,
+  'Cu FCC (2×2×2)': cuFccCrystal,
+  'Diamond (2×2×2)': diamondCrystal,
 };
