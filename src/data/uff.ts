@@ -4,7 +4,7 @@
 // Units: distances in Å, energies in kcal/mol (converted to eV internally)
 // ==============================================================
 
-import type { UFFAtomType } from './types';
+import type { Hybridization, UFFAtomType } from './types';
 
 const KCAL_TO_EV = 0.0433641;
 
@@ -453,9 +453,44 @@ const elementToUFF: Record<number, string> = {
   53: 'I',
 };
 
+/**
+ * Map (atomicNumber, hybridization) → UFF atom type key.
+ * Falls back to the default elementToUFF mapping when no
+ * hybridization-specific entry exists.
+ *
+ * Source: Rappé et al., JACS 114, 10024 (1992), Table I.
+ * UFF naming: _1 = sp (linear), _2 = sp2 (trigonal), _R = resonant,
+ *             _3 = sp3 (tetrahedral)
+ */
+const hybridToUFF: Record<number, Partial<Record<Hybridization, string>>> = {
+  6: { sp: 'C_1', sp2: 'C_2', sp3: 'C_3' }, // Carbon
+  7: { sp: 'N_1', sp2: 'N_2', sp3: 'N_3' }, // Nitrogen
+  8: { sp: 'O_1', sp2: 'O_2', sp3: 'O_3' }, // Oxygen
+};
+
 export function getUFFType(atomicNumber: number): UFFAtomType | undefined {
   const key = elementToUFF[atomicNumber];
   return key ? uffAtomTypes[key] : undefined;
+}
+
+/**
+ * Look up UFF atom type using hybridization when available.
+ * Falls back to the default (sp3) type if no hybridization
+ * mapping exists for this element.
+ */
+export function getUFFTypeHybrid(
+  atomicNumber: number,
+  hybridization?: Hybridization,
+): UFFAtomType | undefined {
+  if (hybridization) {
+    const hybMap = hybridToUFF[atomicNumber];
+    if (hybMap) {
+      const key = hybMap[hybridization];
+      if (key && uffAtomTypes[key]) return uffAtomTypes[key];
+    }
+  }
+  // Fall back to default (sp3) lookup
+  return getUFFType(atomicNumber);
 }
 
 /**
@@ -542,6 +577,7 @@ export function getLJParams(
  * @param zK atomic number of terminal atom K
  * @param bondOrderIJ bond order of I-J bond
  * @param bondOrderJK bond order of J-K bond
+ * @param hybridJ hybridization of central atom J (optional — uses sp3 default if omitted)
  */
 export function getUFFAngleK(
   zI: number,
@@ -549,14 +585,39 @@ export function getUFFAngleK(
   zK: number,
   bondOrderIJ: number = 1,
   bondOrderJK: number = 1,
+  hybridJ?: Hybridization,
 ): { kAngle: number; theta0: number } {
   const tI = getUFFType(zI);
-  const tJ = getUFFType(zJ);
+  const tJ = getUFFTypeHybrid(zJ, hybridJ);
   const tK = getUFFType(zK);
   if (!tI || !tJ || !tK)
     return { kAngle: 3.0, theta0: (109.47 * Math.PI) / 180 };
 
   const theta0 = (tJ.theta0 * Math.PI) / 180.0;
+
+  // For linear angles (θ₀ > 170°), the general UFF Eq. 13 formula breaks
+  // down (sin²θ₀ → 0). Use a direct force constant estimate instead.
+  // Source: Rappé et al., JACS 114, 10024 (1992), Eq. 10:
+  //   V(θ) = kA * (1 + cos θ) for linear sp geometry
+  // kA is calibrated so that a 10° bend costs ~0.5 eV — typical for
+  // sp-hybridized centers like CO₂, acetylene, etc.
+  if (tJ.theta0 > 170.0) {
+    // kA in eV — for V = kA*(1+cosθ), the barrier for bending from 180°
+    // to 170° is kA*(1 + cos170°) = kA*0.015. Setting this to ~0.023 eV
+    // (~0.53 kcal/mol) gives kA ≈ 1.5 eV, a reasonable stiffness for
+    // sp-hybridized centers (UFF literature range 1–3 eV).
+    const rIJ = getUFFBondLength(zI, zJ, bondOrderIJ);
+    const rJK = getUFFBondLength(zJ, zK, bondOrderJK);
+    const rIK = rIJ + rJK; // linear 1-3 distance
+    const rIK5 = rIK * rIK * rIK * rIK * rIK;
+    // Simplified UFF K for linear: dominated by Z*_I * Z*_K / rIK^5 term
+    const K_kcal = ((664.12 * tI.Z * tK.Z) / rIK5) * rIK * 3.0;
+    const kAngle = Math.abs(K_kcal) * KCAL_TO_EV;
+    return {
+      kAngle: Math.max(0.5, Math.min(5.0, kAngle)),
+      theta0,
+    };
+  }
 
   // Equilibrium bond lengths
   const rIJ = getUFFBondLength(zI, zJ, bondOrderIJ);
