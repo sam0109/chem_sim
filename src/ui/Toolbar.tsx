@@ -81,6 +81,8 @@ export const Toolbar: React.FC = () => {
   const toggleBondColorMode = useUIStore((s) => s.toggleBondColorMode);
   const showExperimentPanel = useUIStore((s) => s.showExperimentPanel);
   const toggleExperimentPanel = useUIStore((s) => s.toggleExperimentPanel);
+  const showCrystalBuilder = useUIStore((s) => s.showCrystalBuilder);
+  const toggleCrystalBuilder = useUIStore((s) => s.toggleCrystalBuilder);
 
   // When selecting the place-molecule tool, show the encounter panel
   const handleToolSelect = useCallback(
@@ -489,6 +491,30 @@ export const Toolbar: React.FC = () => {
         }}
       >
         📋
+      </button>
+
+      {/* Crystal builder */}
+      <button
+        data-testid="toggle-crystal-builder"
+        onClick={toggleCrystalBuilder}
+        title="Crystal Lattice Builder"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showCrystalBuilder
+            ? '2px solid #8b5cf6'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showCrystalBuilder
+            ? 'rgba(139,92,246,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        Xtal
       </button>
 
       {/* Guided experiments */}

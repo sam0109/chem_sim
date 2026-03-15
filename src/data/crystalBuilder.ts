@@ -2,13 +2,13 @@
 // Crystal lattice builder — generates atom arrays from crystal
 // structure definitions.
 //
-// This module lives in src/engine/ and must NOT import from
-// renderer, store, or UI layers.
+// This module lives in src/data/ as a pure data generation
+// utility. It must NOT import from renderer, store, or UI layers.
 // ==============================================================
 
-import type { Atom } from '../data/types';
+import type { Atom } from './types';
 import type { Vector3Tuple } from 'three';
-import { crystalStructures, type CrystalStructureType } from '../data/crystals';
+import { crystalStructures, type CrystalStructureType } from './crystals';
 
 /** Options for crystal generation */
 export interface CrystalBuildOptions {
