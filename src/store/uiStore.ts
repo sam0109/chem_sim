@@ -3,7 +3,11 @@
 // ==============================================================
 
 import { create } from 'zustand';
-import type { InteractionTool, MeasurementResult } from '../data/types';
+import type {
+  InteractionTool,
+  MeasurementResult,
+  ColorMode,
+} from '../data/types';
 
 interface UIStore {
   // ---- Tool state ----
@@ -43,6 +47,8 @@ interface UIStore {
   ) => void;
   showLabels: boolean;
   toggleLabels: () => void;
+  colorMode: ColorMode;
+  setColorMode: (mode: ColorMode) => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
@@ -56,6 +62,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   hoveredAtomId: null,
   renderMode: 'ball-and-stick',
   showLabels: true,
+  colorMode: 'element' as ColorMode,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
   setSelectedElement: (z) => set({ selectedElement: z }),
@@ -89,4 +96,5 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   setRenderMode: (mode) => set({ renderMode: mode }),
   toggleLabels: () => set({ showLabels: !get().showLabels }),
+  setColorMode: (mode) => set({ colorMode: mode }),
 }));

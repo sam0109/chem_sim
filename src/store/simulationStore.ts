@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import type {
   Atom,
   Bond,
+  MoleculeInfo,
   SimulationConfig,
   SimulationBox,
   WorkerStateUpdate,
@@ -23,6 +24,10 @@ interface SimulationStore {
   positions: Float64Array;
   forces: Float64Array;
   charges: Float64Array;
+
+  // ---- Molecule tracking (from worker updates) ----
+  moleculeIds: Int32Array;
+  molecules: MoleculeInfo[];
 
   // ---- Simulation state ----
   step: number;
@@ -75,6 +80,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
   positions: new Float64Array(0),
   forces: new Float64Array(0),
   charges: new Float64Array(0),
+  moleculeIds: new Int32Array(0),
+  molecules: [],
   step: 0,
   energy: { kinetic: 0, potential: 0, total: 0 },
   temperature: 0,
@@ -131,6 +138,8 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
       temperature: state.temperature,
       atoms: updatedAtoms,
       energyHistory: newHistory,
+      moleculeIds: state.moleculeIds ?? new Int32Array(0),
+      molecules: state.molecules ?? [],
     });
   },
 
