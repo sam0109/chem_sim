@@ -123,6 +123,36 @@ export interface MoleculeInfo {
   dipoleMagnitude: number;
 }
 
+// --------------- Reaction Detection ---------------
+
+/** A single bond change detected between consecutive topology rebuilds */
+export interface BondChangeEvent {
+  /** Index of first atom in the changed bond */
+  atomA: number;
+  /** Index of second atom in the changed bond */
+  atomB: number;
+  /** Bond order (1, 2, 3) */
+  order: number;
+  /** Bond classification */
+  type: BondType;
+  /** Whether the bond was formed or broken */
+  change: 'formed' | 'broken';
+}
+
+/** A reaction event detected from topology changes between frames */
+export interface ReactionEvent {
+  /** Simulation step when the reaction was detected */
+  step: number;
+  /** Bond changes that constitute this reaction */
+  bondChanges: BondChangeEvent[];
+  /** Molecules before the reaction (reactants) */
+  reactants: MoleculeInfo[];
+  /** Molecules after the reaction (products) */
+  products: MoleculeInfo[];
+  /** Estimated reaction energy in eV (ΔE = E_products − E_reactants), or null if BDE data unavailable */
+  deltaE: number | null;
+}
+
 /** Color mode for atom rendering */
 export type ColorMode = 'element' | 'molecule';
 
@@ -266,6 +296,8 @@ export interface WorkerStateUpdate {
   moleculeIds: Int32Array;
   /** Per-molecule computed properties */
   molecules: MoleculeInfo[];
+  /** Reaction events detected since last state update (empty if none) */
+  reactionEvents: ReactionEvent[];
 }
 
 export interface WorkerReadyMessage {
