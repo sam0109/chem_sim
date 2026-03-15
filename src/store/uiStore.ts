@@ -44,6 +44,7 @@ interface UIStore {
   showEventLog: boolean;
   showExperimentPanel: boolean;
   showCrystalBuilder: boolean;
+  showNEBPanel: boolean;
   togglePeriodicTable: () => void;
   togglePropertyPanel: () => void;
   toggleEnergyPlot: () => void;
@@ -53,6 +54,7 @@ interface UIStore {
   toggleEventLog: () => void;
   toggleExperimentPanel: () => void;
   toggleCrystalBuilder: () => void;
+  toggleNEBPanel: () => void;
 
   // ---- Quantity dashboard ----
   showDashboard: boolean;
@@ -164,6 +166,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   showEventLog: false,
   showExperimentPanel: false,
   showCrystalBuilder: false,
+  showNEBPanel: false,
   hoveredAtomId: null,
 
   // Quantity dashboard
@@ -223,6 +226,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
     set({ showExperimentPanel: !get().showExperimentPanel }),
   toggleCrystalBuilder: () =>
     set({ showCrystalBuilder: !get().showCrystalBuilder }),
+  toggleNEBPanel: () => set({ showNEBPanel: !get().showNEBPanel }),
 
   toggleDashboard: () => set({ showDashboard: !get().showDashboard }),
   toggleDashboardCard: (cardId: string) => {
