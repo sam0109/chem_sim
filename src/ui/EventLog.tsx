@@ -9,7 +9,11 @@
 import React, { useRef, useEffect } from 'react';
 import { useSimContextStore } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
-import type { SimulationEvent, SimulationEventSeverity } from '../data/types';
+import type {
+  SimulationEvent,
+  SimulationEventSeverity,
+  SimulationEventType,
+} from '../data/types';
 
 /** Maximum events to display (matches store cap) */
 const MAX_DISPLAY = 200;
@@ -22,7 +26,10 @@ const SEVERITY_COLORS: Record<SimulationEventSeverity, string> = {
 };
 
 /** Icon/label for each event type */
-const EVENT_TYPE_LABELS: Record<string, { icon: string; label: string }> = {
+const EVENT_TYPE_LABELS: Record<
+  SimulationEventType,
+  { icon: string; label: string }
+> = {
   'bond-broken': { icon: '💔', label: 'Bond Broken' },
   'bond-formed': { icon: '🔗', label: 'Bond Formed' },
   'temperature-spike': { icon: '🌡', label: 'Temp Spike' },
@@ -46,8 +53,10 @@ export const EventLog: React.FC = () => {
 
   if (!showEventLog) return null;
 
-  // Offset position if reaction log is also visible to avoid overlap
-  const bottomOffset = showReactionLog ? 300 : 30;
+  // Offset position if reaction log is also visible to avoid overlap.
+  // ReactionLog sits at bottom:30 with maxHeight:260 + padding(20) + header(~20) ≈ 330px.
+  const REACTION_LOG_CLEARANCE = 300;
+  const bottomOffset = showReactionLog ? REACTION_LOG_CLEARANCE : 30;
 
   const displayEvents = eventLog.slice(-MAX_DISPLAY);
 
@@ -124,10 +133,7 @@ const EventRow: React.FC<{
   isLast: boolean;
   onAtomClick: (id: number, multi?: boolean) => void;
 }> = ({ event, isLast, onAtomClick }) => {
-  const typeInfo = EVENT_TYPE_LABELS[event.type] ?? {
-    icon: '?',
-    label: event.type,
-  };
+  const typeInfo = EVENT_TYPE_LABELS[event.type];
   const severityColor = SEVERITY_COLORS[event.severity];
 
   const handleClick = () => {
