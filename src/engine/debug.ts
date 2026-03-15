@@ -33,7 +33,7 @@ function debugWater(): void {
   // Topology state
   let bonds: ReturnType<typeof detectBonds> = [];
   let angs: Array<[number, number, number]> = [];
-  let excl = new Set<string>();
+  const excl = new Set<string>();
   let bp: Array<{ i: number; j: number; De: number; alpha: number; re: number }> = [];
   let ap: Array<{ i: number; j: number; k: number; kA: number; t0: number }> = [];
 
