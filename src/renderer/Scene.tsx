@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { AtomRenderer } from './AtomRenderer';
 import { BondRenderer } from './BondRenderer';
 import { AtomLabels } from './AtomLabels';
+import { BoxWireframe } from './BoxWireframe';
 import { useSimulationStore } from '../store/simulationStore';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
@@ -234,6 +235,7 @@ export const Scene: React.FC = () => {
       <AtomRenderer />
       <BondRenderer />
       <AtomLabels />
+      <BoxWireframe />
 
       {/* Controls */}
       <OrbitControls
