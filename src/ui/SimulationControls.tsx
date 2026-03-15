@@ -163,6 +163,7 @@ export const SimulationControls: React.FC = () => {
         >
           <option value="none">None (NVE)</option>
           <option value="berendsen">Berendsen</option>
+          <option value="nose-hoover">Nos&eacute;-Hoover</option>
         </select>
       </div>
 
