@@ -14,6 +14,8 @@
 // (GROMACS Reference Manual, §4.2.13).
 // ==============================================================
 
+import type { Vector3Tuple } from '../../data/types';
+
 /**
  * Compute torsion force and energy for a dihedral i-j-k-l.
  *
@@ -26,6 +28,7 @@
  * @param V          barrier height in eV
  * @param n          periodicity (1, 2, 3, or 6)
  * @param phi0       equilibrium dihedral angle in radians
+ * @param boxSize    box dimensions for PBC minimum image (undefined = no PBC)
  * @returns potential energy in eV
  */
 export function torsionForce(
@@ -38,6 +41,7 @@ export function torsionForce(
   V: number,
   n: number,
   phi0: number,
+  boxSize?: Vector3Tuple,
 ): number {
   if (V === 0) return 0;
 
@@ -48,17 +52,33 @@ export function torsionForce(
 
   // GROMACS convention vectors:
   // r_ij = r_i - r_j, r_kj = r_k - r_j, r_kl = r_k - r_l
-  const rij_x = positions[i3] - positions[j3];
-  const rij_y = positions[i3 + 1] - positions[j3 + 1];
-  const rij_z = positions[i3 + 2] - positions[j3 + 2];
+  let rij_x = positions[i3] - positions[j3];
+  let rij_y = positions[i3 + 1] - positions[j3 + 1];
+  let rij_z = positions[i3 + 2] - positions[j3 + 2];
 
-  const rkj_x = positions[k3] - positions[j3];
-  const rkj_y = positions[k3 + 1] - positions[j3 + 1];
-  const rkj_z = positions[k3 + 2] - positions[j3 + 2];
+  let rkj_x = positions[k3] - positions[j3];
+  let rkj_y = positions[k3 + 1] - positions[j3 + 1];
+  let rkj_z = positions[k3 + 2] - positions[j3 + 2];
 
-  const rkl_x = positions[k3] - positions[l3];
-  const rkl_y = positions[k3 + 1] - positions[l3 + 1];
-  const rkl_z = positions[k3 + 2] - positions[l3 + 2];
+  let rkl_x = positions[k3] - positions[l3];
+  let rkl_y = positions[k3 + 1] - positions[l3 + 1];
+  let rkl_z = positions[k3 + 2] - positions[l3 + 2];
+
+  // Apply minimum image convention for periodic boundaries
+  // Reference: Allen & Tildesley, "Computer Simulation of Liquids", Ch. 1.5.2
+  if (boxSize) {
+    rij_x -= boxSize[0] * Math.round(rij_x / boxSize[0]);
+    rij_y -= boxSize[1] * Math.round(rij_y / boxSize[1]);
+    rij_z -= boxSize[2] * Math.round(rij_z / boxSize[2]);
+
+    rkj_x -= boxSize[0] * Math.round(rkj_x / boxSize[0]);
+    rkj_y -= boxSize[1] * Math.round(rkj_y / boxSize[1]);
+    rkj_z -= boxSize[2] * Math.round(rkj_z / boxSize[2]);
+
+    rkl_x -= boxSize[0] * Math.round(rkl_x / boxSize[0]);
+    rkl_y -= boxSize[1] * Math.round(rkl_y / boxSize[1]);
+    rkl_z -= boxSize[2] * Math.round(rkl_z / boxSize[2]);
+  }
 
   // Normal vectors: m = r_ij × r_kj, n_vec = r_kj × r_kl
   const mx = rij_y * rkj_z - rij_z * rkj_y;

@@ -41,6 +41,7 @@ interface UIStore {
   showChallengePanel: boolean;
   showEncounterPanel: boolean;
   showReactionLog: boolean;
+  showEventLog: boolean;
   showExperimentPanel: boolean;
   togglePeriodicTable: () => void;
   togglePropertyPanel: () => void;
@@ -48,6 +49,7 @@ interface UIStore {
   toggleChallengePanel: () => void;
   toggleEncounterPanel: () => void;
   toggleReactionLog: () => void;
+  toggleEventLog: () => void;
   toggleExperimentPanel: () => void;
 
   // ---- Quantity dashboard ----
@@ -115,6 +117,17 @@ interface UIStore {
   /** Isosurface threshold for orbital rendering (default 0.02) */
   orbitalIsovalue: number;
   setOrbitalIsovalue: (v: number) => void;
+
+  // ---- Electron density visualization ----
+  /** Whether the electron density isosurface is displayed */
+  showElectronDensity: boolean;
+  toggleElectronDensity: () => void;
+  /** Isosurface threshold for electron density rendering (default 0.05) */
+  electronDensityIsovalue: number;
+  setElectronDensityIsovalue: (v: number) => void;
+  /** Opacity of the electron density surface (default 0.35) */
+  electronDensityOpacity: number;
+  setElectronDensityOpacity: (v: number) => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
@@ -129,6 +142,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   showChallengePanel: false,
   showEncounterPanel: false,
   showReactionLog: false,
+  showEventLog: false,
   showExperimentPanel: false,
   hoveredAtomId: null,
 
@@ -184,6 +198,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   toggleEncounterPanel: () =>
     set({ showEncounterPanel: !get().showEncounterPanel }),
   toggleReactionLog: () => set({ showReactionLog: !get().showReactionLog }),
+  toggleEventLog: () => set({ showEventLog: !get().showEventLog }),
   toggleExperimentPanel: () =>
     set({ showExperimentPanel: !get().showExperimentPanel }),
 
@@ -231,4 +246,13 @@ export const useUIStore = create<UIStore>((set, get) => ({
   toggleOrbitals: () => set({ showOrbitals: !get().showOrbitals }),
   setSelectedOrbital: (orbital) => set({ selectedOrbital: orbital }),
   setOrbitalIsovalue: (v) => set({ orbitalIsovalue: v }),
+
+  // Electron density visualization
+  showElectronDensity: false,
+  electronDensityIsovalue: 0.05,
+  electronDensityOpacity: 0.35,
+  toggleElectronDensity: () =>
+    set({ showElectronDensity: !get().showElectronDensity }),
+  setElectronDensityIsovalue: (v) => set({ electronDensityIsovalue: v }),
+  setElectronDensityOpacity: (v) => set({ electronDensityOpacity: v }),
 }));

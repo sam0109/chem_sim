@@ -73,6 +73,8 @@ export const Toolbar: React.FC = () => {
   const toggleEncounterPanel = useUIStore((s) => s.toggleEncounterPanel);
   const showReactionLog = useUIStore((s) => s.showReactionLog);
   const toggleReactionLog = useUIStore((s) => s.toggleReactionLog);
+  const showEventLog = useUIStore((s) => s.showEventLog);
+  const toggleEventLog = useUIStore((s) => s.toggleEventLog);
   const showDashboard = useUIStore((s) => s.showDashboard);
   const toggleDashboard = useUIStore((s) => s.toggleDashboard);
   const bondColorMode = useUIStore((s) => s.bondColorMode);
@@ -464,6 +466,29 @@ export const Toolbar: React.FC = () => {
         }}
       >
         ⚗
+      </button>
+
+      {/* Event log toggle */}
+      <button
+        data-testid="toggle-event-log"
+        onClick={toggleEventLog}
+        title="Event Log (Why Did That Happen?)"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showEventLog
+            ? '2px solid #ffcc44'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showEventLog
+            ? 'rgba(255,204,68,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 14,
+        }}
+      >
+        📋
       </button>
 
       {/* Guided experiments */}

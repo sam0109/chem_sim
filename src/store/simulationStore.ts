@@ -13,10 +13,17 @@ import type {
   ReactionEvent,
   SimulationConfig,
   SimulationBox,
+  SimulationEvent,
   WorkerStateUpdate,
 } from '../data/types';
 import elements from '../data/elements';
 import { SimulationWorker } from '../worker-comms';
+import {
+  detectBondEvents,
+  detectTemperatureSpike,
+  detectEnergyDrift,
+  detectBondStrain,
+} from '../eventDetector';
 
 /** Full simulation store state + actions (exported for context typing) */
 export interface SimulationStoreState {
@@ -37,6 +44,9 @@ export interface SimulationStoreState {
 
   // ---- Reaction detection (from worker updates) ----
   reactionLog: ReactionEvent[];
+
+  // ---- Event logger (detected on main thread from worker state) ----
+  eventLog: SimulationEvent[];
 
   // ---- Simulation state ----
   step: number;
@@ -103,6 +113,7 @@ const DEFAULT_BOX: SimulationBox = {
 
 const MAX_HISTORY = 500;
 const MAX_REACTION_LOG = 200;
+const MAX_EVENT_LOG = 200;
 
 /**
  * Factory: creates a vanilla Zustand store with its own SimulationWorker.
@@ -119,6 +130,11 @@ function buildStoreSlice(
   set: StoreApi<SimulationStoreState>['setState'],
   get: StoreApi<SimulationStoreState>['getState'],
 ): SimulationStoreState {
+  // Per-instance mutable state for event detection (not in Zustand store).
+  // These track previous frame values for delta-based event detection.
+  let prevTemperature = 0;
+  const eventCooldownMap = new Map<string, number>();
+
   return {
     worker: null,
     atoms: [],
@@ -129,6 +145,7 @@ function buildStoreSlice(
     moleculeIds: new Int32Array(0),
     molecules: [],
     reactionLog: [],
+    eventLog: [],
     step: 0,
     energy: { kinetic: 0, potential: 0, total: 0, thermostat: 0 },
     energyBreakdown: {
@@ -155,7 +172,7 @@ function buildStoreSlice(
     },
 
     handleWorkerState(state: WorkerStateUpdate) {
-      const { energyHistory } = get();
+      const { energyHistory, atoms, config } = get();
       const newEntry = {
         step: state.step,
         kinetic: state.energy.kinetic,
@@ -170,6 +187,56 @@ function buildStoreSlice(
       if (newHistory.length > MAX_HISTORY) {
         newHistory.splice(0, newHistory.length - MAX_HISTORY);
       }
+
+      // --- Event detection ---
+      // Extract atomic numbers from atom objects (avoid per-atom allocation)
+      const atomicNumbers = atoms.map((a) => a.elementNumber);
+      const newEvents: SimulationEvent[] = [];
+
+      // 1. Bond events from reaction detection (enriched with physical context)
+      if (state.reactionEvents && state.reactionEvents.length > 0) {
+        newEvents.push(
+          ...detectBondEvents(
+            state.reactionEvents,
+            state.positions,
+            atomicNumbers,
+            eventCooldownMap,
+          ),
+        );
+      }
+
+      // 2. Temperature spike detection
+      const tempEvent = detectTemperatureSpike(
+        state.step,
+        prevTemperature,
+        state.temperature,
+        eventCooldownMap,
+      );
+      if (tempEvent) newEvents.push(tempEvent);
+
+      // 3. Energy drift detection (NVE only)
+      const driftEvent = detectEnergyDrift(
+        state.step,
+        newHistory,
+        config.timestep,
+        config.thermostat,
+        eventCooldownMap,
+      );
+      if (driftEvent) newEvents.push(driftEvent);
+
+      // 4. Bond strain detection
+      newEvents.push(
+        ...detectBondStrain(
+          state.step,
+          state.bonds,
+          state.positions,
+          atomicNumbers,
+          eventCooldownMap,
+        ),
+      );
+
+      // Update previous temperature for next frame
+      prevTemperature = state.temperature;
 
       // Update atom positions from flat arrays
       const nAtoms = state.positions.length / 3;
@@ -209,6 +276,11 @@ function buildStoreSlice(
             }
           : {}),
         gpuAccelerated: state.gpuAccelerated ?? false,
+        ...(newEvents.length > 0
+          ? {
+              eventLog: [...get().eventLog, ...newEvents].slice(-MAX_EVENT_LOG),
+            }
+          : {}),
       });
     },
 
@@ -242,11 +314,14 @@ function buildStoreSlice(
       }));
       const allAtoms = [...existingAtoms, ...reindexed];
       // Re-init preserves config but resets with new atom set
+      prevTemperature = 0;
+      eventCooldownMap.clear();
       set({
         atoms: allAtoms,
         bonds: [],
         energyHistory: [],
         reactionLog: [],
+        eventLog: [],
         step: 0,
       });
       const { worker, config, box } = get();
@@ -269,7 +344,16 @@ function buildStoreSlice(
     },
 
     initSimulation(atoms: Atom[], bonds: Bond[] = []) {
-      set({ atoms, bonds, energyHistory: [], reactionLog: [], step: 0 });
+      prevTemperature = 0;
+      eventCooldownMap.clear();
+      set({
+        atoms,
+        bonds,
+        energyHistory: [],
+        reactionLog: [],
+        eventLog: [],
+        step: 0,
+      });
       const { worker, config, box } = get();
       worker?.init(atoms, bonds, box, config);
     },
