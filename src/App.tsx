@@ -11,6 +11,7 @@ import { Toolbar } from './ui/Toolbar';
 import { EnergyPlot } from './ui/EnergyPlot';
 import { ChallengePanel } from './ui/ChallengePanel';
 import { useSimulationStore } from './store/simulationStore';
+import { SimulationContext } from './store/SimulationContext';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
 import { parseXYZ } from './io/xyz';
@@ -227,141 +228,143 @@ const App: React.FC = () => {
   }
 
   return (
-    <div
-      data-testid="app-container"
-      style={{
-        width: '100vw',
-        height: '100vh',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
-      <Scene />
-
-      {/* Header bar */}
+    <SimulationContext.Provider value={useSimulationStore}>
       <div
+        data-testid="app-container"
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 60,
-          right: 240,
-          height: 40,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 12,
-          zIndex: 100,
-          pointerEvents: 'none',
+          width: '100vw',
+          height: '100vh',
+          overflow: 'hidden',
+          position: 'relative',
         }}
       >
-        <div style={{ display: 'flex', gap: 6, pointerEvents: 'auto' }}>
-          {/* Examples dropdown */}
-          <div style={{ position: 'relative' }}>
+        <Scene />
+
+        {/* Header bar */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 60,
+            right: 240,
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            zIndex: 100,
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 6, pointerEvents: 'auto' }}>
+            {/* Examples dropdown */}
+            <div style={{ position: 'relative' }}>
+              <button
+                data-testid="examples-button"
+                onClick={() => setShowExamples(!showExamples)}
+                style={headerButtonStyle}
+              >
+                Examples
+              </button>
+              {showExamples && (
+                <div
+                  data-testid="examples-dropdown"
+                  style={{ ...dropdownContainerStyle, left: 0, minWidth: 180 }}
+                >
+                  {Object.keys(exampleMolecules).map((name) => (
+                    <button
+                      key={name}
+                      data-testid={`example-${name}`}
+                      onClick={() => handleLoadExample(name)}
+                      style={dropdownItemStyle}
+                      onMouseEnter={onItemHover}
+                      onMouseLeave={onItemLeave}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Import button (supports .xyz and .chemsim) */}
             <button
-              data-testid="examples-button"
-              onClick={() => setShowExamples(!showExamples)}
+              data-testid="import-button"
+              onClick={handleFileImport}
               style={headerButtonStyle}
             >
-              Examples
+              Import
             </button>
-            {showExamples && (
-              <div
-                data-testid="examples-dropdown"
-                style={{ ...dropdownContainerStyle, left: 0, minWidth: 180 }}
+
+            {/* Share dropdown */}
+            <div style={{ position: 'relative' }}>
+              <button
+                data-testid="share-button"
+                onClick={() => setShowShareMenu(!showShareMenu)}
+                style={headerButtonStyle}
               >
-                {Object.keys(exampleMolecules).map((name) => (
+                {copyFeedback ? 'Copied!' : 'Share'}
+              </button>
+              {showShareMenu && (
+                <div
+                  data-testid="share-dropdown"
+                  style={{ ...dropdownContainerStyle, right: 0, minWidth: 160 }}
+                >
                   <button
-                    key={name}
-                    data-testid={`example-${name}`}
-                    onClick={() => handleLoadExample(name)}
+                    data-testid="copy-link-button"
+                    onClick={handleCopyLink}
                     style={dropdownItemStyle}
                     onMouseEnter={onItemHover}
                     onMouseLeave={onItemLeave}
                   >
-                    {name}
+                    Copy Link
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Import button (supports .xyz and .chemsim) */}
-          <button
-            data-testid="import-button"
-            onClick={handleFileImport}
-            style={headerButtonStyle}
-          >
-            Import
-          </button>
-
-          {/* Share dropdown */}
-          <div style={{ position: 'relative' }}>
-            <button
-              data-testid="share-button"
-              onClick={() => setShowShareMenu(!showShareMenu)}
-              style={headerButtonStyle}
-            >
-              {copyFeedback ? 'Copied!' : 'Share'}
-            </button>
-            {showShareMenu && (
-              <div
-                data-testid="share-dropdown"
-                style={{ ...dropdownContainerStyle, right: 0, minWidth: 160 }}
-              >
-                <button
-                  data-testid="copy-link-button"
-                  onClick={handleCopyLink}
-                  style={dropdownItemStyle}
-                  onMouseEnter={onItemHover}
-                  onMouseLeave={onItemLeave}
-                >
-                  Copy Link
-                </button>
-                <button
-                  data-testid="save-chemsim-button"
-                  onClick={handleSaveFile}
-                  style={dropdownItemStyle}
-                  onMouseEnter={onItemHover}
-                  onMouseLeave={onItemLeave}
-                >
-                  Save .chemsim
-                </button>
-              </div>
-            )}
+                  <button
+                    data-testid="save-chemsim-button"
+                    onClick={handleSaveFile}
+                    style={dropdownItemStyle}
+                    onMouseEnter={onItemHover}
+                    onMouseLeave={onItemLeave}
+                  >
+                    Save .chemsim
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <Toolbar />
-      <SimulationControls />
-      <PropertyPanel />
-      <PeriodicTable />
-      <EnergyPlot />
-      <ChallengePanel />
+        <Toolbar />
+        <SimulationControls />
+        <PropertyPanel />
+        <PeriodicTable />
+        <EnergyPlot />
+        <ChallengePanel />
 
-      <div
-        data-testid="status-bar"
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 22,
-          background: 'rgba(10, 10, 25, 0.9)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 12px',
-          color: '#666',
-          fontFamily: 'monospace',
-          fontSize: 10,
-          zIndex: 50,
-        }}
-      >
-        <span>ChemSim — Interactive Chemistry Bonding Simulator</span>
-        <span>Press S/A/D/G/M for tools | L toggle labels</span>
+        <div
+          data-testid="status-bar"
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 22,
+            background: 'rgba(10, 10, 25, 0.9)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 12px',
+            color: '#666',
+            fontFamily: 'monospace',
+            fontSize: 10,
+            zIndex: 50,
+          }}
+        >
+          <span>ChemSim — Interactive Chemistry Bonding Simulator</span>
+          <span>Press S/A/D/G/M for tools | L toggle labels</span>
+        </div>
       </div>
-    </div>
+    </SimulationContext.Provider>
   );
 };
 

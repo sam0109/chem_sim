@@ -6,7 +6,7 @@
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimContextStoreApi } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
 
@@ -36,6 +36,7 @@ const MOLECULE_PALETTE = [
 export const AtomRenderer: React.FC = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const colorArrayRef = useRef(new Float32Array(MAX_ATOMS * 3));
+  const simStore = useSimContextStoreApi();
   const renderMode = useUIStore((s) => s.renderMode);
   const selectedAtomIds = useUIStore((s) => s.selectedAtomIds);
   const hoveredAtomId = useUIStore((s) => s.hoveredAtomId);
@@ -51,7 +52,7 @@ export const AtomRenderer: React.FC = () => {
     const mesh = meshRef.current;
     if (!mesh) return;
 
-    const { atoms, positions, moleculeIds } = useSimulationStore.getState();
+    const { atoms, positions, moleculeIds } = simStore.getState();
     const nAtoms = atoms.length;
 
     if (nAtoms === 0) {
