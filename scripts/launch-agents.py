@@ -98,15 +98,35 @@ class AgentRunner:
             pass  # container gone — expected on shutdown
 
     def _wait_and_report(self, result_queue: "Queue[AgentResult]") -> None:
-        """Block on docker wait, then push result to the shared queue."""
-        try:
-            proc = subprocess.run(
-                ["docker", "wait", self.container_id],
-                capture_output=True, text=True,
-            )
-            exit_code = int(proc.stdout.strip()) if proc.returncode == 0 else None
-        except Exception:
-            exit_code = None
+        """Block on docker wait, then push result to the shared queue.
+
+        If the docker-wait subprocess is interrupted (e.g. by SIGINT during
+        drain), retry until the container actually exits.  This prevents
+        reporting running containers as "FAILED (exit None)".
+        """
+        exit_code: Optional[int] = None
+        while True:
+            try:
+                proc = subprocess.run(
+                    ["docker", "wait", self.container_id],
+                    capture_output=True, text=True,
+                )
+                if proc.returncode == 0 and proc.stdout.strip():
+                    exit_code = int(proc.stdout.strip())
+                    break
+                # docker wait returned but with no useful output (signal
+                # interrupted it) — check if container is still running
+                if not self._is_running():
+                    exit_code = self._inspect_exit_code()
+                    break
+                # Container still running, retry docker wait
+                time.sleep(0.5)
+            except Exception:
+                if not self._is_running():
+                    exit_code = self._inspect_exit_code()
+                    break
+                time.sleep(0.5)
+
         result_queue.put(AgentResult(
             agent_id=self.agent_id,
             container_id=self.container_id,
@@ -114,6 +134,30 @@ class AgentRunner:
             start_time=self.start_time,
             end_time=time.time(),
         ))
+
+    def _is_running(self) -> bool:
+        """Check if the container is still running."""
+        try:
+            proc = subprocess.run(
+                ["docker", "inspect", "-f", "{{.State.Running}}", self.container_id],
+                capture_output=True, text=True, timeout=5,
+            )
+            return proc.returncode == 0 and proc.stdout.strip() == "true"
+        except Exception:
+            return False
+
+    def _inspect_exit_code(self) -> Optional[int]:
+        """Retrieve exit code from a stopped container."""
+        try:
+            proc = subprocess.run(
+                ["docker", "inspect", "-f", "{{.State.ExitCode}}", self.container_id],
+                capture_output=True, text=True, timeout=5,
+            )
+            if proc.returncode == 0 and proc.stdout.strip():
+                return int(proc.stdout.strip())
+        except Exception:
+            pass
+        return None
 
     def stop(self) -> None:
         """Send docker stop to this container."""
