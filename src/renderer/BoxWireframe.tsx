@@ -4,7 +4,7 @@
 
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimContextStore } from '../store/SimulationContext';
 
 /**
  * Renders a wireframe cube representing the simulation box boundaries.
@@ -13,7 +13,7 @@ import { useSimulationStore } from '../store/simulationStore';
  * and extends to [Lx, Ly, Lz], matching the position wrapping domain.
  */
 export const BoxWireframe: React.FC = () => {
-  const box = useSimulationStore((s) => s.box);
+  const box = useSimContextStore((s) => s.box);
 
   const edgesGeometry = useMemo(() => {
     const [lx, ly, lz] = box.size;

@@ -9,7 +9,7 @@
 
 import React from 'react';
 import { useUIStore } from '../store/uiStore';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimContextStore } from '../store/SimulationContext';
 import {
   getMoleculeTemplateNames,
   getMoleculeFactory,
@@ -26,11 +26,11 @@ export const EncounterPanel: React.FC = () => {
   const impactParam = useUIStore((s) => s.encounterImpactParam);
   const setImpactParam = useUIStore((s) => s.setEncounterImpactParam);
 
-  const molecules = useSimulationStore((s) => s.molecules);
-  const atoms = useSimulationStore((s) => s.atoms);
-  const addMolecule = useSimulationStore((s) => s.addMolecule);
-  const launchEncounter = useSimulationStore((s) => s.launchEncounter);
-  const positions = useSimulationStore((s) => s.positions);
+  const molecules = useSimContextStore((s) => s.molecules);
+  const atoms = useSimContextStore((s) => s.atoms);
+  const addMolecule = useSimContextStore((s) => s.addMolecule);
+  const launchEncounter = useSimContextStore((s) => s.launchEncounter);
+  const positions = useSimContextStore((s) => s.positions);
 
   if (!showEncounterPanel) return null;
 

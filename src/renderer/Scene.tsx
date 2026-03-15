@@ -11,7 +11,7 @@ import { AtomRenderer } from './AtomRenderer';
 import { BondRenderer } from './BondRenderer';
 import { AtomLabels } from './AtomLabels';
 import { BoxWireframe } from './BoxWireframe';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimContextStoreApi } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
 import type { Atom } from '../data/types';
@@ -19,6 +19,7 @@ import type { Atom } from '../data/types';
 // ---- Interaction handler (inside Canvas) ----
 const Interaction: React.FC = () => {
   const { camera, raycaster, gl } = useThree();
+  const simStore = useSimContextStoreApi();
   const planeRef = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
   const mouseRef = useRef(new THREE.Vector2());
   const intersectPoint = useRef(new THREE.Vector3());
@@ -52,11 +53,11 @@ const Interaction: React.FC = () => {
             hybridization: 'sp3',
             fixed: false,
           };
-          useSimulationStore.getState().addAtom(newAtom);
+          simStore.getState().addAtom(newAtom);
         }
       } else if (activeTool === 'select') {
         // Try to pick an atom — simple proximity check
-        const { atoms, positions } = useSimulationStore.getState();
+        const { atoms, positions } = simStore.getState();
         let closest = -1;
         let closestDist = Infinity;
 
@@ -99,7 +100,7 @@ const Interaction: React.FC = () => {
         }
       } else if (activeTool === 'delete') {
         // Pick nearest atom and delete
-        const { atoms, positions } = useSimulationStore.getState();
+        const { atoms, positions } = simStore.getState();
         let closest = -1;
         let closestDist = Infinity;
 
@@ -134,11 +135,11 @@ const Interaction: React.FC = () => {
         }
 
         if (closest >= 0) {
-          useSimulationStore.getState().removeAtom(closest);
+          simStore.getState().removeAtom(closest);
         }
       }
     },
-    [camera, raycaster, gl],
+    [camera, raycaster, gl, simStore],
   );
 
   useEffect(() => {
@@ -156,12 +157,13 @@ const CameraTracker: React.FC<{
   controlsRef: React.RefObject<OrbitControlsImpl | null>;
 }> = ({ controlsRef }) => {
   const targetRef = useRef(new THREE.Vector3());
+  const simStore = useSimContextStoreApi();
 
   useFrame(() => {
     const controls = controlsRef.current;
     if (!controls) return;
 
-    const { molecules, config } = useSimulationStore.getState();
+    const { molecules, config } = simStore.getState();
     const showEncounter = useUIStore.getState().showEncounterPanel;
 
     // Only auto-track when encounter panel is active, 2+ molecules, and running

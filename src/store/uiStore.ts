@@ -68,6 +68,10 @@ interface UIStore {
   colorMode: ColorMode;
   setColorMode: (mode: ColorMode) => void;
 
+  // ---- Comparison mode ----
+  comparisonMode: boolean;
+  toggleComparisonMode: () => void;
+
   // ---- Encounter setup ----
   /** Molecule template name for placement (key of exampleMolecules) */
   selectedMoleculeTemplate: string | null;
@@ -102,6 +106,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   hoveredElement: null,
   comparedElements: null,
   showTrendAnnotations: false,
+  comparisonMode: false,
 
   // Encounter defaults
   selectedMoleculeTemplate: null,
@@ -154,6 +159,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   setRenderMode: (mode) => set({ renderMode: mode }),
   toggleLabels: () => set({ showLabels: !get().showLabels }),
   setColorMode: (mode) => set({ colorMode: mode }),
+  toggleComparisonMode: () => set({ comparisonMode: !get().comparisonMode }),
 
   // Encounter setters
   setSelectedMoleculeTemplate: (name) =>
