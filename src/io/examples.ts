@@ -731,6 +731,15 @@ export function h2F2Pair(): Atom[] {
   return combineMolecules(h2Molecule(), f2Molecule(), 5);
 }
 
+/**
+ * Create an HF + H₂O pair separated by ~5 Å.
+ * Demonstrates strong hydrogen bonding: HF is the strongest
+ * simple hydrogen bond donor, and water is a classic acceptor.
+ */
+export function hfH2oPair(): Atom[] {
+  return combineMolecules(hfMolecule(), waterMolecule(), 5);
+}
+
 export const exampleMolecules = {
   'Water (H₂O)': waterMolecule,
   'Methane (CH₄)': methaneMolecule,
