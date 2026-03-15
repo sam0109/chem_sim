@@ -655,20 +655,17 @@ export function getUFFAngleK(
   const rIK = Math.sqrt(Math.max(rIK2, 0.01));
   const rIK5 = rIK * rIK * rIK * rIK * rIK;
 
-  // UFF angle constant: K_IJK from Eq. 13
-  // K = (664.12 / (rIJ * rJK)) * (Z*_I * Z*_K / rIK^5) *
-  //     [rIJ*rJK*(1-cos²θ₀)*3 - rIK²*cosθ₀]
+  // UFF angle force constant K_IJK from Rappé et al. JACS 114, 10024 (1992), Eq. 13:
+  //   K = (664.12 / (r_IJ · r_JK)) · (Z*_I · Z*_K / r_IK^5) ·
+  //       [3·r_IJ·r_JK·(1 − cos²θ₀) − r_IK²·cosθ₀]
+  // This gives K in kcal/(mol·rad²). The cosine-harmonic conversion
+  // (dividing by sin²θ₀) is handled downstream in harmonicAngleForce().
   const sinTheta0_2 = 1 - cosTheta0 * cosTheta0;
   const bracket = 3 * rIJ * rJK * sinTheta0_2 - rIK2 * cosTheta0;
-  const K_kcal =
-    (664.12 / (rIJ * rJK)) * ((tI.Z * tK.Z) / rIK5) * rIJ * rJK * bracket;
+  const K_kcal = (664.12 / (rIJ * rJK)) * ((tI.Z * tK.Z) / rIK5) * bracket;
 
-  // Convert to harmonic k: K_harmonic = K / sin²(θ₀) for the general nonlinear case
-  const sinTheta0 = Math.sin(theta0);
-  const kHarmonic = Math.abs(K_kcal) / Math.max(sinTheta0 * sinTheta0, 0.01);
-
-  // Convert to eV/rad²
-  const kAngle = kHarmonic * KCAL_TO_EV;
+  // Convert to eV/rad² (no sin²θ₀ division here — harmonicAngleForce does that)
+  const kAngle = Math.abs(K_kcal) * KCAL_TO_EV;
 
   // Clamp to reasonable range: 0.5 - 5.0 eV/rad²
   // (5 eV/rad² \u2248 115 kcal/(mol\u00b7rad²), typical maximum for angle bending)
