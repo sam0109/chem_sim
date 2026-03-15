@@ -18,7 +18,12 @@ import {
 } from '../data/uff';
 import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
-import { coulombForce } from './forces/coulomb';
+import {
+  coulombForce,
+  computeWolfConstants,
+  wolfSelfEnergy,
+} from './forces/coulomb';
+import type { WolfConstants } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
 import { torsionForce } from './forces/torsion';
 import { inversionForce } from './forces/inversion';
@@ -343,6 +348,10 @@ function rebuildTopo(s: SimState): void {
   }
 }
 
+// Precomputed Wolf constants for the test cutoff (10 Å)
+const TEST_CUTOFF = 10;
+const testWolfConst: WolfConstants = computeWolfConstants(TEST_CUTOFF);
+
 function calcForces(s: SimState, p: Float64Array, f: Float64Array): number {
   let pe = 0;
   for (const b of s.bondParams)
@@ -367,16 +376,19 @@ function calcForces(s: SimState, p: Float64Array, f: Float64Array): number {
   // Non-bonded: 1-2/1-3 excluded, 1-4 scaled by 0.5, 1-5+ full.
   // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
   const SCALE_14 = 0.5;
+  const wc = testWolfConst;
   for (let i = 0; i < s.N; i++) {
     for (let j = i + 1; j < s.N; j++) {
       const key = i + '-' + j;
       if (s.exclusionSet.has(key)) continue;
       const scale = s.scale14Set.has(key) ? SCALE_14 : 1.0;
       const lj = getLJParams(s.Z[i], s.Z[j]);
-      pe += ljForce(p, f, i, j, lj.sigma, lj.epsilon * scale, 10);
-      pe += coulombForce(p, f, i, j, s.charges[i] * scale, s.charges[j], 10);
+      pe += ljForce(p, f, i, j, lj.sigma, lj.epsilon * scale, TEST_CUTOFF);
+      pe += coulombForce(p, f, i, j, s.charges[i] * scale, s.charges[j], wc);
     }
   }
+  // Wolf self-energy correction (uses actual unscaled charges)
+  pe += wolfSelfEnergy(s.charges, s.N, wc);
   return pe;
 }
 
@@ -462,12 +474,16 @@ function runGradientTests(): void {
     2,
   );
 
-  // GRAD-03: Coulomb
+  // GRAD-03: Coulomb (Wolf DSF)
   const coulPos = new Float64Array([0, 0, 0, 2.0, 0, 0]);
   testGradient(
     'GRAD-03',
-    'Coulomb gradient',
-    (p, f) => coulombForce(p, f, 0, 1, 0.5, -0.5, 10),
+    'Coulomb Wolf DSF gradient',
+    (p, f) => {
+      const pe = coulombForce(p, f, 0, 1, 0.5, -0.5, testWolfConst);
+      // Self-energy is position-independent, doesn't affect gradient
+      return pe + wolfSelfEnergy([0.5, -0.5], 2, testWolfConst);
+    },
     coulPos,
     2,
   );
