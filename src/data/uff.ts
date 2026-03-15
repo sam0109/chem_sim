@@ -621,23 +621,20 @@ export function getUFFAngleK(
 
   const theta0 = (tJ.theta0 * Math.PI) / 180.0;
 
-  // For linear angles (θ₀ > 170°), the general UFF Eq. 13 formula breaks
-  // down (sin²θ₀ → 0). Use a direct force constant estimate instead.
-  // Source: Rappé et al., JACS 114, 10024 (1992), Eq. 10:
-  //   V(θ) = kA * (1 + cos θ) for linear sp geometry
-  // kA is calibrated so that a 10° bend costs ~0.5 eV — typical for
-  // sp-hybridized centers like CO₂, acetylene, etc.
+  // For linear angles (θ₀ > 170°), harmonicAngleForce uses Eq. 10:
+  //   V(θ) = kA * (1 + cosθ)
+  // so kA has units of eV (not eV/rad²).
+  //
+  // We derive kA from the θ₀→180° limit of Eq. 13. As cosθ₀→−1 and
+  // sin²θ₀→0, the bracket reduces to rIK², giving:
+  //   K = (664.12 / (rIJ·rJK)) · (Z*I·Z*K / rIK³)   [kcal/mol]
+  // Source: Rappé et al., JACS 114, 10024 (1992), Eqs. 10 & 13.
   if (tJ.theta0 > 170.0) {
-    // kA in eV — for V = kA*(1+cosθ), the barrier for bending from 180°
-    // to 170° is kA*(1 + cos170°) = kA*0.015. Setting this to ~0.023 eV
-    // (~0.53 kcal/mol) gives kA ≈ 1.5 eV, a reasonable stiffness for
-    // sp-hybridized centers (UFF literature range 1–3 eV).
     const rIJ = getUFFBondLength(zI, zJ, bondOrderIJ);
     const rJK = getUFFBondLength(zJ, zK, bondOrderJK);
-    const rIK = rIJ + rJK; // linear 1-3 distance
-    const rIK5 = rIK * rIK * rIK * rIK * rIK;
-    // Simplified UFF K for linear: dominated by Z*_I * Z*_K / rIK^5 term
-    const K_kcal = ((664.12 * tI.Z * tK.Z) / rIK5) * rIK * 3.0;
+    const rIK = rIJ + rJK; // linear 1-3 distance (θ₀ ≈ 180°)
+    const rIK3 = rIK * rIK * rIK;
+    const K_kcal = (664.12 / (rIJ * rJK)) * ((tI.Z * tK.Z) / rIK3);
     const kAngle = Math.abs(K_kcal) * KCAL_TO_EV;
     return {
       kAngle: Math.max(0.5, Math.min(5.0, kAngle)),
