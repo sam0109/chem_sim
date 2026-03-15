@@ -156,6 +156,9 @@ export interface ReactionEvent {
 /** Color mode for atom rendering */
 export type ColorMode = 'element' | 'molecule';
 
+/** Color mode for bond rendering */
+export type BondColorMode = 'element' | 'bondType';
+
 // --------------- Simulation State ---------------
 
 export interface SimulationBox {
