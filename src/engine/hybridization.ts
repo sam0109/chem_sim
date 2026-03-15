@@ -82,8 +82,9 @@ export function detectHybridization(
       continue;
     }
 
-    // sp2: any double bond present, or exactly 3 bonds
-    if (maxOrder >= 2 || nBonds === 3) {
+    // sp2: double bond present with ≤ 3 bonds (e.g., ethylene C, carbonyl C/O).
+    // Note: 3 single bonds without a double bond → sp3 (e.g., NH₃).
+    if (maxOrder >= 2) {
       result[i] = 'sp2';
       continue;
     }

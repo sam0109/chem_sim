@@ -12,8 +12,10 @@ import type { Bond, Hybridization } from '../data/types';
 import { getGasteigerParams } from '../data/gasteiger';
 import type { GasteigerParams } from '../data/gasteiger';
 
-/** Number of Gasteiger iterations. 6 is standard; convergence is
- *  guaranteed by the geometric damping.
+/** Number of Gasteiger iterations. 6 is the value recommended in the
+ *  original paper; RDKit defaults to 12, but for our use case (small
+ *  molecules, charges recomputed every topology rebuild) 6 is sufficient
+ *  and faster. Convergence is guaranteed by the geometric damping.
  *  Source: Gasteiger & Marsili (1980), Section 3. */
 const N_ITERATIONS = 6;
 
@@ -126,4 +128,23 @@ export function computeGasteigerCharges(
   }
 
   return charges;
+}
+
+/**
+ * Build a set of atom indices that participate in at least one covalent bond.
+ * Used to decide which atoms should receive Gasteiger-computed charges
+ * (ionic atoms like NaCl should keep their existing charges).
+ */
+export function buildCovalentAtomSet(
+  bonds: Bond[],
+  nAtoms: number,
+): Uint8Array {
+  const hasCovalent = new Uint8Array(nAtoms);
+  for (const b of bonds) {
+    if (b.type === 'covalent') {
+      hasCovalent[b.atomA] = 1;
+      hasCovalent[b.atomB] = 1;
+    }
+  }
+  return hasCovalent;
 }

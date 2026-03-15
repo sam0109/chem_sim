@@ -22,7 +22,7 @@ import {
   computeTemperature,
 } from './integrator';
 import { berendsenThermostat } from './thermostat';
-import { computeGasteigerCharges } from './gasteiger';
+import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
 import { detectHybridization } from './hybridization';
 import {
   waterMolecule,
@@ -203,14 +203,11 @@ function rebuildTopo(s: SimState): void {
     s.N,
     hyb,
   );
+  const covalentAtoms = buildCovalentAtomSet(s.bonds, s.N);
   for (let i = 0; i < s.N; i++) {
-    // Only overwrite with Gasteiger if the atom has supported parameters
-    // (non-zero computed charge or atom has covalent bonds).
+    // Only overwrite with Gasteiger if the atom has covalent bonds.
     // Keep original charges for ionic species (e.g. NaCl).
-    const hasCovalentBond = s.bonds.some(
-      (b) => b.type === 'covalent' && (b.atomA === i || b.atomB === i),
-    );
-    if (hasCovalentBond) {
+    if (covalentAtoms[i]) {
       s.charges[i] = gasteigerQ[i];
     }
   }

@@ -30,7 +30,7 @@ import {
   buildAngleList,
 } from './bondDetector';
 import { CellList } from './neighborList';
-import { computeGasteigerCharges } from './gasteiger';
+import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
 import { detectHybridization } from './hybridization';
 
 // ---- Simulation state ----
@@ -136,11 +136,9 @@ function rebuildTopology(): void {
   // Atoms with only ionic bonds keep their existing charges.
   const hyb = detectHybridization(atomicNumbers, bonds, nAtoms);
   const gasteigerQ = computeGasteigerCharges(atomicNumbers, bonds, nAtoms, hyb);
+  const covalentAtoms = buildCovalentAtomSet(bonds, nAtoms);
   for (let i = 0; i < nAtoms; i++) {
-    const hasCovalentBond = bonds.some(
-      (b) => b.type === 'covalent' && (b.atomA === i || b.atomB === i),
-    );
-    if (hasCovalentBond) {
+    if (covalentAtoms[i]) {
       charges[i] = gasteigerQ[i];
     }
   }
