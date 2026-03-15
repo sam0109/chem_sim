@@ -2,7 +2,8 @@
 // App — main application shell
 // ==============================================================
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import type { StoreApi } from 'zustand';
 import { Scene } from './renderer/Scene';
 import { PeriodicTable } from './ui/PeriodicTable';
 import { SimulationControls } from './ui/SimulationControls';
@@ -10,8 +11,17 @@ import { PropertyPanel } from './ui/PropertyPanel';
 import { Toolbar } from './ui/Toolbar';
 import { EnergyPlot } from './ui/EnergyPlot';
 import { ChallengePanel } from './ui/ChallengePanel';
+import { SimulationPanel } from './SimulationPanel';
+import { ComparisonTable } from './ui/ComparisonTable';
 import { EncounterPanel } from './ui/EncounterPanel';
-import { useSimulationStore } from './store/simulationStore';
+import {
+  useSimulationStore,
+  createSimulationStoreInstance,
+  getGlobalSimulationStore,
+} from './store/simulationStore';
+import type { SimulationStoreState } from './store/simulationStore';
+import { SimulationContext } from './store/SimulationContext';
+import { ReactionLog } from './ui/ReactionLog';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
 import { parseXYZ } from './io/xyz';
@@ -91,16 +101,175 @@ const onItemHover = (e: React.MouseEvent<HTMLButtonElement>) =>
 const onItemLeave = (e: React.MouseEvent<HTMLButtonElement>) =>
   (e.currentTarget.style.background = 'transparent');
 
+/**
+ * Shared controls bar for comparison mode — dispatches config changes
+ * to both the primary store (via context) and the secondary store (via prop).
+ */
+const SharedControlsBar: React.FC<{
+  secondaryStore: StoreApi<SimulationStoreState> | null;
+}> = ({ secondaryStore }) => {
+  const config = useSimulationStore((s) => s.config);
+
+  const setConfigBoth = (
+    partial: Partial<import('./data/types').SimulationConfig>,
+  ) => {
+    useSimulationStore.getState().setConfig(partial);
+    secondaryStore?.getState().setConfig(partial);
+  };
+
+  const toggleBothRunning = () => {
+    const running = !config.running;
+    setConfigBoth({ running });
+  };
+
+  const minimizeBoth = () => {
+    useSimulationStore.getState().minimize();
+    secondaryStore?.getState().minimize();
+  };
+
+  return (
+    <div
+      data-testid="shared-controls"
+      style={{
+        flexShrink: 0,
+        background: 'rgba(10,10,25,0.95)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        zIndex: 100,
+        gap: 16,
+        padding: '6px 60px',
+        fontFamily: 'monospace',
+        fontSize: 11,
+        color: '#ddd',
+      }}
+    >
+      {/* Play/Pause */}
+      <button
+        data-testid="play-pause-button"
+        onClick={toggleBothRunning}
+        style={{
+          padding: '4px 14px',
+          borderRadius: 4,
+          border: 'none',
+          background: config.running ? '#c44e52' : '#4a9c47',
+          color: '#fff',
+          cursor: 'pointer',
+          fontFamily: 'monospace',
+          fontSize: 11,
+          fontWeight: 'bold',
+        }}
+      >
+        {config.running ? '⏸ Pause' : '▶ Play'}
+      </button>
+
+      {/* Minimize */}
+      <button
+        onClick={minimizeBoth}
+        style={{
+          padding: '4px 14px',
+          borderRadius: 4,
+          border: 'none',
+          background: '#4e7dc4',
+          color: '#fff',
+          cursor: 'pointer',
+          fontFamily: 'monospace',
+          fontSize: 11,
+        }}
+      >
+        Minimize
+      </button>
+
+      {/* Temperature */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: '#888' }}>Temp</span>
+        <input
+          data-testid="temperature-slider"
+          type="range"
+          min={0}
+          max={1000}
+          step={10}
+          value={config.temperature}
+          onChange={(e) =>
+            setConfigBoth({ temperature: Number(e.target.value) })
+          }
+          style={{ width: 100, accentColor: '#ffaa44' }}
+        />
+        <span style={{ color: '#ffaa44', minWidth: 48 }}>
+          {config.temperature} K
+        </span>
+      </div>
+
+      {/* Timestep */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: '#888' }}>dt</span>
+        <input
+          type="range"
+          min={0.1}
+          max={5.0}
+          step={0.1}
+          value={config.timestep}
+          onChange={(e) => setConfigBoth({ timestep: Number(e.target.value) })}
+          style={{ width: 80, accentColor: '#88ccff' }}
+        />
+        <span style={{ color: '#88ccff', minWidth: 40 }}>
+          {config.timestep.toFixed(1)} fs
+        </span>
+      </div>
+
+      {/* Thermostat */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: '#888' }}>Thermo</span>
+        <select
+          data-testid="thermostat-select"
+          value={config.thermostat}
+          onChange={(e) =>
+            setConfigBoth({
+              thermostat: e.target.value as
+                | 'none'
+                | 'berendsen'
+                | 'nose-hoover',
+            })
+          }
+          style={{
+            padding: '2px 6px',
+            borderRadius: 4,
+            border: '1px solid rgba(255,255,255,0.2)',
+            background: 'rgba(30,30,50,0.9)',
+            color: '#ddd',
+            fontFamily: 'monospace',
+            fontSize: 10,
+          }}
+        >
+          <option value="none">NVE</option>
+          <option value="berendsen">Berendsen</option>
+        </select>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   const initWorker = useSimulationStore((s) => s.initWorker);
   const initSimulation = useSimulationStore((s) => s.initSimulation);
   const setConfig = useSimulationStore((s) => s.setConfig);
   const setRenderMode = useUIStore((s) => s.setRenderMode);
   const setColorMode = useUIStore((s) => s.setColorMode);
+  const comparisonMode = useUIStore((s) => s.comparisonMode);
   const [loading, setLoading] = useState(true);
   const [showExamples, setShowExamples] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+
+  // Secondary simulation store for comparison mode.
+  // Created once when comparison mode is first activated, then persists.
+  // useMemo ensures the store instance is stable across re-renders.
+  const activeSecondaryStore = useMemo(
+    () => (comparisonMode ? createSimulationStoreInstance() : null),
+
+    [comparisonMode],
+  );
 
   /** Apply a deserialized .chemsim state to both stores */
   const applyChemSimState = useCallback(
@@ -232,143 +401,214 @@ const App: React.FC = () => {
     );
   }
 
-  return (
-    <div
-      data-testid="app-container"
-      style={{
-        width: '100vw',
-        height: '100vh',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
-      <Scene />
+  // ---- Comparison mode: two panels side-by-side ----
+  if (comparisonMode) {
+    const primaryStore = getGlobalSimulationStore();
 
-      {/* Header bar */}
+    return (
       <div
+        data-testid="app-container"
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 60,
-          right: 240,
-          height: 40,
+          width: '100vw',
+          height: '100vh',
+          overflow: 'hidden',
+          position: 'relative',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 12,
-          zIndex: 100,
-          pointerEvents: 'none',
+          flexDirection: 'column',
         }}
       >
-        <div style={{ display: 'flex', gap: 6, pointerEvents: 'auto' }}>
-          {/* Examples dropdown */}
-          <div style={{ position: 'relative' }}>
+        {/* Shared controls bar — uses primary store via context */}
+        <SimulationContext.Provider value={primaryStore}>
+          <SharedControlsBar secondaryStore={activeSecondaryStore} />
+        </SimulationContext.Provider>
+
+        {/* Two simulation panels side-by-side */}
+        <div style={{ flex: 1, display: 'flex', position: 'relative' }}>
+          <SimulationPanel role="primary" label="Panel A" />
+          <SimulationPanel
+            role="secondary"
+            label="Panel B"
+            externalStore={activeSecondaryStore ?? undefined}
+          />
+
+          {/* Comparison table at bottom center */}
+          {activeSecondaryStore && (
+            <ComparisonTable
+              leftStore={primaryStore}
+              rightStore={activeSecondaryStore}
+            />
+          )}
+        </div>
+
+        {/* Shared UI overlays */}
+        <Toolbar />
+        <PeriodicTable />
+
+        {/* Status bar */}
+        <div
+          data-testid="status-bar"
+          style={{
+            height: 22,
+            flexShrink: 0,
+            background: 'rgba(10, 10, 25, 0.9)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 12px',
+            color: '#666',
+            fontFamily: 'monospace',
+            fontSize: 10,
+            zIndex: 50,
+          }}
+        >
+          <span>ChemSim — Side-by-Side Comparison Mode</span>
+          <span>Press S/A/D/G/M for tools | L toggle labels</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Single-panel mode (default) ----
+  return (
+    <SimulationContext.Provider value={getGlobalSimulationStore()}>
+      <div
+        data-testid="app-container"
+        style={{
+          width: '100vw',
+          height: '100vh',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        <Scene />
+
+        {/* Header bar */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 60,
+            right: 240,
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            zIndex: 100,
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 6, pointerEvents: 'auto' }}>
+            {/* Examples dropdown */}
+            <div style={{ position: 'relative' }}>
+              <button
+                data-testid="examples-button"
+                onClick={() => setShowExamples(!showExamples)}
+                style={headerButtonStyle}
+              >
+                Examples
+              </button>
+              {showExamples && (
+                <div
+                  data-testid="examples-dropdown"
+                  style={{ ...dropdownContainerStyle, left: 0, minWidth: 180 }}
+                >
+                  {Object.keys(exampleMolecules).map((name) => (
+                    <button
+                      key={name}
+                      data-testid={`example-${name}`}
+                      onClick={() => handleLoadExample(name)}
+                      style={dropdownItemStyle}
+                      onMouseEnter={onItemHover}
+                      onMouseLeave={onItemLeave}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Import button (supports .xyz and .chemsim) */}
             <button
-              data-testid="examples-button"
-              onClick={() => setShowExamples(!showExamples)}
+              data-testid="import-button"
+              onClick={handleFileImport}
               style={headerButtonStyle}
             >
-              Examples
+              Import
             </button>
-            {showExamples && (
-              <div
-                data-testid="examples-dropdown"
-                style={{ ...dropdownContainerStyle, left: 0, minWidth: 180 }}
+
+            {/* Share dropdown */}
+            <div style={{ position: 'relative' }}>
+              <button
+                data-testid="share-button"
+                onClick={() => setShowShareMenu(!showShareMenu)}
+                style={headerButtonStyle}
               >
-                {Object.keys(exampleMolecules).map((name) => (
+                {copyFeedback ? 'Copied!' : 'Share'}
+              </button>
+              {showShareMenu && (
+                <div
+                  data-testid="share-dropdown"
+                  style={{ ...dropdownContainerStyle, right: 0, minWidth: 160 }}
+                >
                   <button
-                    key={name}
-                    data-testid={`example-${name}`}
-                    onClick={() => handleLoadExample(name)}
+                    data-testid="copy-link-button"
+                    onClick={handleCopyLink}
                     style={dropdownItemStyle}
                     onMouseEnter={onItemHover}
                     onMouseLeave={onItemLeave}
                   >
-                    {name}
+                    Copy Link
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Import button (supports .xyz and .chemsim) */}
-          <button
-            data-testid="import-button"
-            onClick={handleFileImport}
-            style={headerButtonStyle}
-          >
-            Import
-          </button>
-
-          {/* Share dropdown */}
-          <div style={{ position: 'relative' }}>
-            <button
-              data-testid="share-button"
-              onClick={() => setShowShareMenu(!showShareMenu)}
-              style={headerButtonStyle}
-            >
-              {copyFeedback ? 'Copied!' : 'Share'}
-            </button>
-            {showShareMenu && (
-              <div
-                data-testid="share-dropdown"
-                style={{ ...dropdownContainerStyle, right: 0, minWidth: 160 }}
-              >
-                <button
-                  data-testid="copy-link-button"
-                  onClick={handleCopyLink}
-                  style={dropdownItemStyle}
-                  onMouseEnter={onItemHover}
-                  onMouseLeave={onItemLeave}
-                >
-                  Copy Link
-                </button>
-                <button
-                  data-testid="save-chemsim-button"
-                  onClick={handleSaveFile}
-                  style={dropdownItemStyle}
-                  onMouseEnter={onItemHover}
-                  onMouseLeave={onItemLeave}
-                >
-                  Save .chemsim
-                </button>
-              </div>
-            )}
+                  <button
+                    data-testid="save-chemsim-button"
+                    onClick={handleSaveFile}
+                    style={dropdownItemStyle}
+                    onMouseEnter={onItemHover}
+                    onMouseLeave={onItemLeave}
+                  >
+                    Save .chemsim
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <Toolbar />
-      <SimulationControls />
-      <PropertyPanel />
-      <PeriodicTable />
-      <EnergyPlot />
-      <ChallengePanel />
-      <EncounterPanel />
+        <Toolbar />
+        <SimulationControls />
+        <PropertyPanel />
+        <PeriodicTable />
+        <EnergyPlot />
+        <ChallengePanel />
+        <EncounterPanel />
+        <ReactionLog />
 
-      <div
-        data-testid="status-bar"
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 22,
-          background: 'rgba(10, 10, 25, 0.9)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 12px',
-          color: '#666',
-          fontFamily: 'monospace',
-          fontSize: 10,
-          zIndex: 50,
-        }}
-      >
-        <span>ChemSim — Interactive Chemistry Bonding Simulator</span>
-        <span>Press S/A/D/G/M for tools | L toggle labels</span>
+        <div
+          data-testid="status-bar"
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 22,
+            background: 'rgba(10, 10, 25, 0.9)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 12px',
+            color: '#666',
+            fontFamily: 'monospace',
+            fontSize: 10,
+            zIndex: 50,
+          }}
+        >
+          <span>ChemSim — Interactive Chemistry Bonding Simulator</span>
+          <span>Press S/A/D/G/M for tools | L toggle labels</span>
+        </div>
       </div>
-    </div>
+    </SimulationContext.Provider>
   );
 };
 

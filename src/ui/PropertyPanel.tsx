@@ -3,18 +3,18 @@
 // ==============================================================
 
 import React from 'react';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimContextStore } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
 
 export const PropertyPanel: React.FC = () => {
   const showPropertyPanel = useUIStore((s) => s.showPropertyPanel);
   const selectedAtomIds = useUIStore((s) => s.selectedAtomIds);
-  const atoms = useSimulationStore((s) => s.atoms);
-  const bonds = useSimulationStore((s) => s.bonds);
-  const positions = useSimulationStore((s) => s.positions);
-  const moleculeIds = useSimulationStore((s) => s.moleculeIds);
-  const molecules = useSimulationStore((s) => s.molecules);
+  const atoms = useSimContextStore((s) => s.atoms);
+  const bonds = useSimContextStore((s) => s.bonds);
+  const positions = useSimContextStore((s) => s.positions);
+  const moleculeIds = useSimContextStore((s) => s.moleculeIds);
+  const molecules = useSimContextStore((s) => s.molecules);
 
   if (!showPropertyPanel || selectedAtomIds.length === 0) return null;
 

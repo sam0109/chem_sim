@@ -7,6 +7,7 @@ import type {
   Bond,
   Hybridization,
   MoleculeInfo,
+  ReactionEvent,
   SimulationBox,
   SimulationConfig,
   WorkerInMessage,
@@ -36,7 +37,12 @@ import {
   computeTemperature,
   initializeVelocities,
 } from './integrator';
-import { berendsenThermostat } from './thermostat';
+import {
+  berendsenThermostat,
+  noseHooverChainStep,
+  createNoseHooverChainState,
+} from './thermostat';
+import type { NoseHooverChainState } from './thermostat';
 import { steepestDescent } from './minimizer';
 import {
   detectBonds,
@@ -49,6 +55,7 @@ import { CellList } from './neighborList';
 import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
 import { detectHybridization } from './hybridization';
 import { findMolecules, computeMoleculeInfo } from './moleculeTracker';
+import { diffBonds, detectReactions } from './reactionDetector';
 
 // ---- Simulation state ----
 let nAtoms = 0;
@@ -63,6 +70,9 @@ let hybridizations: Hybridization[] = [];
 let bonds: Bond[] = [];
 let angles: Array<[number, number, number]> = [];
 let dihedrals: Array<[number, number, number, number]> = [];
+
+// Nosé-Hoover chain thermostat state (initialized on simulation start)
+let nhChainState: NoseHooverChainState | null = null;
 let config: SimulationConfig = {
   timestep: 0.5,
   temperature: 300,
@@ -135,8 +145,21 @@ const DRAG_SPRING_K = 5.0; // eV/ų
 let moleculeIds: Int32Array = new Int32Array(0);
 let moleculeInfo: MoleculeInfo[] = [];
 
+// Reaction detection state — snapshots from the previous topology rebuild
+let prevMoleculeIds: Int32Array = new Int32Array(0);
+let prevMoleculeInfo: MoleculeInfo[] = [];
+/** Whether we have a valid previous state to diff against */
+let hasPrevTopology = false;
+/** Reaction events detected in the most recent topology rebuild */
+let pendingReactionEvents: ReactionEvent[] = [];
+
 // ---- Force field parameter setup ----
 function rebuildTopology(): void {
+  // Snapshot previous topology for reaction detection
+  const savedPrevBonds = hasPrevTopology ? [...bonds] : [];
+  const savedPrevMolIds = prevMoleculeIds;
+  const savedPrevMolInfo = prevMoleculeInfo;
+
   // Detect bonds with hysteresis (existing bonds get wider break tolerance)
   bonds = detectBonds(positions, Array.from(atomicNumbers), 1.2, bonds, 1.5);
 
@@ -219,6 +242,29 @@ function rebuildTopology(): void {
   if (!cellList) {
     cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
   }
+
+  // Detect reactions by comparing current topology with previous snapshot.
+  // buildTorsionParams() has already computed moleculeIds and moleculeInfo,
+  // so both the previous and current molecule data are available.
+  if (hasPrevTopology) {
+    const bondChanges = diffBonds(savedPrevBonds, bonds);
+    if (bondChanges.length > 0) {
+      const events = detectReactions(
+        bondChanges,
+        savedPrevMolIds,
+        moleculeIds,
+        savedPrevMolInfo,
+        moleculeInfo,
+        atomicNumbers,
+        step,
+      );
+      pendingReactionEvents.push(...events);
+    }
+  }
+  // Save current state as "previous" for next topology rebuild
+  prevMoleculeIds = moleculeIds.slice();
+  prevMoleculeInfo = [...moleculeInfo];
+  hasPrevTopology = true;
 }
 
 /**
@@ -579,6 +625,19 @@ function initSimulation(
   step = 0;
   ljCache.clear();
 
+  // Reset reaction detection state for fresh simulation
+  hasPrevTopology = false;
+  prevMoleculeIds = new Int32Array(0);
+  prevMoleculeInfo = [];
+  pendingReactionEvents = [];
+
+  // Initialize Nosé-Hoover chain state for the new system
+  nhChainState = createNoseHooverChainState(
+    nAtoms,
+    config.temperature,
+    config.thermostatTau,
+  );
+
   sendState();
 }
 
@@ -605,6 +664,16 @@ function runSteps(nSteps: number): void {
         config.temperature,
         config.timestep,
         config.thermostatTau,
+      );
+    } else if (config.thermostat === 'nose-hoover' && nhChainState) {
+      noseHooverChainStep(
+        velocities,
+        masses,
+        fixed,
+        kineticEnergy,
+        config.temperature,
+        config.timestep,
+        nhChainState,
       );
     }
 
@@ -756,7 +825,11 @@ function sendState(): void {
     temperature,
     moleculeIds: moleculeIds.slice(),
     molecules: [...moleculeInfo],
+    reactionEvents: [...pendingReactionEvents],
   };
+
+  // Clear pending reaction events after sending
+  pendingReactionEvents = [];
 
   self.postMessage(msg);
 }
@@ -805,8 +878,23 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
 
     case 'config': {
       const wasRunning = config.running;
+      // Only reset NH chain state when thermostat parameters actually change value
+      const needsNHReset =
+        (msg.config.thermostat !== undefined &&
+          msg.config.thermostat !== config.thermostat) ||
+        (msg.config.temperature !== undefined &&
+          msg.config.temperature !== config.temperature) ||
+        (msg.config.thermostatTau !== undefined &&
+          msg.config.thermostatTau !== config.thermostatTau);
       Object.assign(config, msg.config);
       wolfConst = computeWolfConstants(config.cutoff);
+      if (needsNHReset && nAtoms > 0) {
+        nhChainState = createNoseHooverChainState(
+          nAtoms,
+          config.temperature,
+          config.thermostatTau,
+        );
+      }
       if (config.running && !wasRunning) startLoop();
       if (!config.running && wasRunning) stopLoop();
       break;

@@ -65,8 +65,12 @@ export const Toolbar: React.FC = () => {
   const setColorMode = useUIStore((s) => s.setColorMode);
   const toggleChallengePanel = useUIStore((s) => s.toggleChallengePanel);
   const showChallengePanel = useUIStore((s) => s.showChallengePanel);
+  const comparisonMode = useUIStore((s) => s.comparisonMode);
+  const toggleComparisonMode = useUIStore((s) => s.toggleComparisonMode);
   const showEncounterPanel = useUIStore((s) => s.showEncounterPanel);
   const toggleEncounterPanel = useUIStore((s) => s.toggleEncounterPanel);
+  const showReactionLog = useUIStore((s) => s.showReactionLog);
+  const toggleReactionLog = useUIStore((s) => s.toggleReactionLog);
 
   // When selecting the place-molecule tool, show the encounter panel
   const handleToolSelect = useCallback(
@@ -305,6 +309,53 @@ export const Toolbar: React.FC = () => {
         }}
       >
         🏆
+      </button>
+
+      {/* Comparison mode */}
+      <button
+        data-testid="toggle-comparison-mode"
+        onClick={toggleComparisonMode}
+        title="Side-by-Side Comparison"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: comparisonMode
+            ? '2px solid #60a5fa'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: comparisonMode
+            ? 'rgba(96,165,250,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        A|B
+      </button>
+
+      {/* Reaction log toggle */}
+      <button
+        data-testid="toggle-reaction-log"
+        onClick={toggleReactionLog}
+        title="Reaction Log"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showReactionLog
+            ? '2px solid #7ce87c'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showReactionLog
+            ? 'rgba(124,232,124,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 14,
+        }}
+      >
+        ⚗
       </button>
     </div>
   );

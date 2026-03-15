@@ -5,14 +5,14 @@
 import React from 'react';
 import { Html } from '@react-three/drei';
 
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimContextStore } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
 
 export const AtomLabels: React.FC = () => {
   const showLabels = useUIStore((s) => s.showLabels);
-  const atoms = useSimulationStore((s) => s.atoms);
-  const positions = useSimulationStore((s) => s.positions);
+  const atoms = useSimContextStore((s) => s.atoms);
+  const positions = useSimContextStore((s) => s.positions);
 
   if (!showLabels || atoms.length === 0) return null;
 
