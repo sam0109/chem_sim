@@ -1,29 +1,129 @@
 // ==============================================================
-// Coulomb potential for electrostatic interactions
-// V(r) = k_e * q_i * q_j / r
-// Uses Wolf summation (damped shifted) for finite cutoff
+// Wolf summation for electrostatic interactions
+// Damped shifted-force (DSF) variant for finite cutoff
+//
+// Reference: Wolf et al., J. Chem. Phys. 110, 8254 (1999)
+//            Fennell & Gezelter, J. Chem. Phys. 124, 234104 (2006)
+//
+// The DSF potential ensures both energy and force go continuously
+// to zero at the cutoff, eliminating the force discontinuity of
+// the simple shifted Coulomb potential.
 // ==============================================================
 
 import type { Vector3Tuple } from '../../data/types';
+import { erfc } from '../math';
 
 // Coulomb constant in eV·Å/e² (e = elementary charge)
+// Source: NIST CODATA 2018 — k_e = 14.3996 eV·Å/e²
 const KE = 14.3996; // eV·Å per e²
 
+// 2/√π, precomputed for the Gaussian damping term
+const TWO_OVER_SQRT_PI = 2.0 / Math.sqrt(Math.PI);
+
 /**
- * Compute Coulomb force between two atoms using damped shifted potential.
- * Wolf summation: V(r) = k_e * qi * qj * [erfc(α*r)/r - erfc(α*rc)/rc]
+ * Compute the Wolf damping parameter α from the cutoff distance.
  *
- * For simplicity, we use a simple shifted Coulomb (α=0):
- * V(r) = k_e * qi * qj * [1/r - 1/rc]
+ * Uses α = 2/rc, giving erfc(α·rc) = erfc(2) ≈ 0.0047, which
+ * balances accuracy vs. minimal damping for molecular simulations.
  *
- * @param positions flat position array
- * @param forces    flat force array (accumulated)
- * @param i         atom index A
- * @param j         atom index B
- * @param qi        charge of atom i (elementary charges)
- * @param qj        charge of atom j (elementary charges)
- * @param cutoff    interaction cutoff (Å)
- * @param boxSize   box dimensions for PBC minimum image (undefined = no PBC)
+ * Reference: Fennell & Gezelter, J. Chem. Phys. 124, 234104 (2006),
+ *            recommend α such that erfc(α·rc) ~ 10⁻² to 10⁻⁵
+ */
+export function wolfAlpha(cutoff: number): number {
+  // α·rc = 2.0 gives erfc(2.0) ≈ 0.0047, a good balance of
+  // accuracy vs. minimal damping for molecular simulations.
+  // Source: Fennell & Gezelter (2006), §III.A
+  return 2.0 / cutoff;
+}
+
+/**
+ * Precomputed constants for a given (alpha, cutoff) pair.
+ * Avoids redundant computation per pair interaction.
+ */
+export interface WolfConstants {
+  /** Damping parameter α (Å⁻¹) */
+  alpha: number;
+  /** Cutoff distance rc (Å) */
+  cutoff: number;
+  /** erfc(α·rc) / rc — shifted energy constant */
+  erfcAlphaRc_over_rc: number;
+  /** Force-shift constant: erfc(α·rc)/rc² + (2α/√π)·exp(-α²·rc²)/rc */
+  forceShift: number;
+}
+
+/**
+ * Precompute Wolf summation constants for a given cutoff.
+ * Call once when cutoff changes, reuse for all pair interactions.
+ */
+export function computeWolfConstants(cutoff: number): WolfConstants {
+  const alpha = wolfAlpha(cutoff);
+  const alphaRc = alpha * cutoff;
+  const erfcVal = erfc(alphaRc);
+  const expVal = Math.exp(-alphaRc * alphaRc);
+
+  return {
+    alpha,
+    cutoff,
+    erfcAlphaRc_over_rc: erfcVal / cutoff,
+    forceShift:
+      erfcVal / (cutoff * cutoff) +
+      (TWO_OVER_SQRT_PI * alpha * expVal) / cutoff,
+  };
+}
+
+/**
+ * Compute the Wolf self-energy correction for the system.
+ *
+ * V_self = -KE * [erfc(α·rc)/(2·rc) + α/√π] * Σᵢ qᵢ²
+ *
+ * This is a constant offset that depends only on the charges and
+ * Wolf parameters, not on positions. It must be included for
+ * correct absolute energies but does not affect forces.
+ *
+ * @param charges  Array of atomic charges (elementary charges)
+ * @param nAtoms   Number of atoms
+ * @param wc       Precomputed Wolf constants
+ * @returns Self-energy correction (eV) — always negative for nonzero charges
+ */
+export function wolfSelfEnergy(
+  charges: Float64Array | number[],
+  nAtoms: number,
+  wc: WolfConstants,
+): number {
+  let sumQ2 = 0;
+  for (let i = 0; i < nAtoms; i++) {
+    sumQ2 += charges[i] * charges[i];
+  }
+  if (sumQ2 < 1e-20) return 0;
+
+  // Self-energy coefficient: erfc(α·rc)/(2·rc) + α/√π
+  const selfCoeff =
+    wc.erfcAlphaRc_over_rc / 2.0 + wc.alpha / Math.sqrt(Math.PI);
+
+  return -KE * selfCoeff * sumQ2;
+}
+
+/**
+ * Compute Wolf damped shifted-force Coulomb interaction between two atoms.
+ *
+ * Energy:
+ *   V(r) = KE·qi·qj·[erfc(α·r)/r - erfc(α·rc)/rc
+ *          + (erfc(α·rc)/rc² + 2α/√π·exp(-α²rc²)/rc)·(r - rc)]
+ *
+ * Force (on atom i, toward j):
+ *   F(r) = KE·qi·qj·[erfc(α·r)/r² + 2α/√π·exp(-α²r²)/r - forceShift] / r
+ *
+ * Both V(rc) = 0 and F(rc) = 0 by construction.
+ *
+ * @param positions  Flat position array [x0,y0,z0,x1,y1,z1,...]
+ * @param forces     Flat force array (accumulated)
+ * @param i          Atom index A
+ * @param j          Atom index B
+ * @param qi         Charge of atom i (elementary charges)
+ * @param qj         Charge of atom j (elementary charges)
+ * @param wc         Precomputed Wolf constants
+ * @param boxSize    Box dimensions for PBC minimum image (undefined = no PBC)
+ * @returns Pair potential energy contribution (eV)
  */
 export function coulombForce(
   positions: Float64Array,
@@ -32,7 +132,7 @@ export function coulombForce(
   j: number,
   qi: number,
   qj: number,
-  cutoff: number,
+  wc: WolfConstants,
   boxSize?: Vector3Tuple,
 ): number {
   if (Math.abs(qi) < 1e-10 || Math.abs(qj) < 1e-10) return 0;
@@ -53,22 +153,43 @@ export function coulombForce(
   }
 
   const r2 = dx * dx + dy * dy + dz * dz;
-  const rc2 = cutoff * cutoff;
+  const rc2 = wc.cutoff * wc.cutoff;
 
   if (r2 > rc2 || r2 < 1e-10) return 0;
 
   const r = Math.sqrt(r2);
   const invR = 1.0 / r;
+  const alphaR = wc.alpha * r;
 
-  // Shifted Coulomb: V(r) = k_e * qi * qj * (1/r - 1/rc)
-  const energy = KE * qi * qj * (invR - 1.0 / cutoff);
+  // Damped Coulomb terms at distance r
+  const erfcAlphaR = erfc(alphaR);
+  const expAlphaR2 = Math.exp(-alphaR * alphaR);
 
-  // Force: F = k_e * qi * qj / r² * (r_vec/r)
-  const fMag = KE * qi * qj * invR * invR * invR;
+  // Shifted-force energy: V(r) = KE·qi·qj·[A(r) - A(rc) + A'(rc)·(r - rc)]
+  // where A(r) = erfc(α·r)/r
+  const qiqj = qi * qj;
+  const energy =
+    KE *
+    qiqj *
+    (erfcAlphaR * invR -
+      wc.erfcAlphaRc_over_rc +
+      wc.forceShift * (r - wc.cutoff));
 
-  const fx = fMag * dx;
-  const fy = fMag * dy;
-  const fz = fMag * dz;
+  // Force magnitude: F_r = -dV/dr
+  // dV/dr = KE·qi·qj·[-erfc(α·r)/r² - 2α/√π·exp(-α²r²)/r + forceShift]
+  // F_r = KE·qi·qj·[erfc(α·r)/r² + 2α/√π·exp(-α²r²)/r - forceShift]
+  const fScalar =
+    KE *
+    qiqj *
+    (erfcAlphaR * invR * invR +
+      TWO_OVER_SQRT_PI * wc.alpha * expAlphaR2 * invR -
+      wc.forceShift);
+
+  // Project force along r_ij direction: F_vec = fScalar * r_hat = fScalar * (r_vec / r)
+  const fOverR = fScalar * invR;
+  const fx = fOverR * dx;
+  const fy = fOverR * dy;
+  const fz = fOverR * dz;
 
   forces[i3] -= fx;
   forces[i3 + 1] -= fy;

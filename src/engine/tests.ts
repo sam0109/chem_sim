@@ -18,7 +18,13 @@ import {
 } from '../data/uff';
 import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
-import { coulombForce } from './forces/coulomb';
+import {
+  coulombForce,
+  computeWolfConstants,
+  wolfSelfEnergy,
+} from './forces/coulomb';
+import type { WolfConstants } from './forces/coulomb';
+import { erfc } from './math';
 import { harmonicAngleForce } from './forces/harmonic';
 import { torsionForce } from './forces/torsion';
 import { inversionForce } from './forces/inversion';
@@ -351,6 +357,10 @@ function rebuildTopo(s: SimState): void {
   }
 }
 
+// Precomputed Wolf constants for the test cutoff (10 Å)
+const TEST_CUTOFF = 10;
+const testWolfConst: WolfConstants = computeWolfConstants(TEST_CUTOFF);
+
 function calcForces(s: SimState, p: Float64Array, f: Float64Array): number {
   let pe = 0;
   for (const b of s.bondParams)
@@ -375,16 +385,19 @@ function calcForces(s: SimState, p: Float64Array, f: Float64Array): number {
   // Non-bonded: 1-2/1-3 excluded, 1-4 scaled by 0.5, 1-5+ full.
   // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
   const SCALE_14 = 0.5;
+  const wc = testWolfConst;
   for (let i = 0; i < s.N; i++) {
     for (let j = i + 1; j < s.N; j++) {
       const key = i + '-' + j;
       if (s.exclusionSet.has(key)) continue;
       const scale = s.scale14Set.has(key) ? SCALE_14 : 1.0;
       const lj = getLJParams(s.Z[i], s.Z[j]);
-      pe += ljForce(p, f, i, j, lj.sigma, lj.epsilon * scale, 10);
-      pe += coulombForce(p, f, i, j, s.charges[i] * scale, s.charges[j], 10);
+      pe += ljForce(p, f, i, j, lj.sigma, lj.epsilon * scale, TEST_CUTOFF);
+      pe += coulombForce(p, f, i, j, s.charges[i] * scale, s.charges[j], wc);
     }
   }
+  // Wolf self-energy correction (uses actual unscaled charges)
+  pe += wolfSelfEnergy(s.charges, s.N, wc);
   return pe;
 }
 
@@ -470,12 +483,16 @@ function runGradientTests(): void {
     2,
   );
 
-  // GRAD-03: Coulomb
+  // GRAD-03: Coulomb (Wolf DSF)
   const coulPos = new Float64Array([0, 0, 0, 2.0, 0, 0]);
   testGradient(
     'GRAD-03',
-    'Coulomb gradient',
-    (p, f) => coulombForce(p, f, 0, 1, 0.5, -0.5, 10),
+    'Coulomb Wolf DSF gradient',
+    (p, f) => {
+      const pe = coulombForce(p, f, 0, 1, 0.5, -0.5, testWolfConst);
+      // Self-energy is position-independent, doesn't affect gradient
+      return pe + wolfSelfEnergy([0.5, -0.5], 2, testWolfConst);
+    },
     coulPos,
     2,
   );
@@ -1586,6 +1603,7 @@ function runPBCTests(): void {
   {
     if (!isSkipped('PBC-05')) {
       const boxSize: Vector3Tuple = [10, 10, 10];
+      const pbcWc = computeWolfConstants(10);
       // Two atoms: O at (1, 5, 5), O at (8, 5, 5) → across boundary, distance = 3 Å
       const pos = new Float64Array([1, 5, 5, 8, 5, 5]);
       const frc = new Float64Array(6);
@@ -1595,7 +1613,7 @@ function runPBCTests(): void {
 
       // Compute analytical forces
       ljForce(pos, frc, 0, 1, ljParams.sigma, ljParams.epsilon, 10, boxSize);
-      coulombForce(pos, frc, 0, 1, qi, qj, 10, boxSize);
+      coulombForce(pos, frc, 0, 1, qi, qj, pbcWc, boxSize);
 
       // Compute numerical gradient
       const h = 1e-5;
@@ -1619,7 +1637,7 @@ function runPBCTests(): void {
             10,
             boxSize,
           );
-          ep += coulombForce(pos, frcP, 0, 1, qi, qj, 10, boxSize);
+          ep += coulombForce(pos, frcP, 0, 1, qi, qj, pbcWc, boxSize);
 
           // -h
           pos[idx] = orig - h;
@@ -1634,7 +1652,7 @@ function runPBCTests(): void {
             10,
             boxSize,
           );
-          em += coulombForce(pos, frcM, 0, 1, qi, qj, 10, boxSize);
+          em += coulombForce(pos, frcM, 0, 1, qi, qj, pbcWc, boxSize);
 
           pos[idx] = orig;
 
@@ -1654,6 +1672,121 @@ function runPBCTests(): void {
         '< 1e-6 eV/A',
       );
     }
+  }
+}
+
+// ---- Wolf summation tests ----
+
+function runWolfTests(): void {
+  console.log('\n=== WOLF SUMMATION TESTS ===\n');
+
+  // WOLF-01: erfc accuracy against known values
+  // Reference values: Python math.erfc (IEEE 754 double precision)
+  {
+    const knownValues: Array<[number, number]> = [
+      [0.0, 1.0],
+      [0.5, 4.795001221869535e-1],
+      [1.0, 1.572992070502851e-1],
+      [2.0, 4.677734981047265e-3],
+      [3.0, 2.209049699858544e-5],
+    ];
+    let maxAbsErr = 0;
+    const details: string[] = [];
+    for (const [x, expected] of knownValues) {
+      const computed = erfc(x);
+      const absErr = Math.abs(computed - expected);
+      maxAbsErr = Math.max(maxAbsErr, absErr);
+      details.push(
+        `erfc(${x})=${computed.toExponential(8)} (expected ${expected.toExponential(8)})`,
+      );
+    }
+    // Numerical Recipes approximation guarantees |ε| < 1.2 × 10⁻⁷
+    const passed = maxAbsErr < 2e-7;
+    report(
+      'WOLF-01',
+      'erfc accuracy vs known values',
+      passed,
+      `max abs error: ${maxAbsErr.toExponential(3)}`,
+      '< 2e-7',
+      details.join('; '),
+    );
+  }
+
+  // WOLF-02: Wolf energy goes to zero at cutoff
+  // V(rc) should be exactly zero by construction of the shifted-force potential
+  {
+    const rc = 10.0;
+    const wc = computeWolfConstants(rc);
+    // Place two unit charges at r = rc - epsilon (just inside cutoff)
+    const eps = 1e-6;
+    const pos = new Float64Array([0, 0, 0, rc - eps, 0, 0]);
+    const frc = new Float64Array(6);
+    const energy = coulombForce(pos, frc, 0, 1, 1.0, 1.0, wc);
+    // Energy should be very close to zero near the cutoff
+    const passed = Math.abs(energy) < 1e-4;
+    report(
+      'WOLF-02',
+      'Wolf energy → 0 at cutoff',
+      passed,
+      `V(rc-ε) = ${energy.toExponential(3)} eV`,
+      '|V| < 1e-4 eV',
+      `rc=${rc}, ε=${eps}`,
+    );
+  }
+
+  // WOLF-03: Wolf force goes to zero at cutoff
+  // F(rc) should be exactly zero by construction
+  {
+    const rc = 10.0;
+    const wc = computeWolfConstants(rc);
+    const eps = 1e-6;
+    const pos = new Float64Array([0, 0, 0, rc - eps, 0, 0]);
+    const frc = new Float64Array(6);
+    coulombForce(pos, frc, 0, 1, 1.0, -1.0, wc);
+    // Force on atom 0 (x component)
+    const fMag = Math.sqrt(frc[0] * frc[0] + frc[1] * frc[1] + frc[2] * frc[2]);
+    const passed = fMag < 1e-3;
+    report(
+      'WOLF-03',
+      'Wolf force → 0 at cutoff',
+      passed,
+      `|F(rc-ε)| = ${fMag.toExponential(3)} eV/Å`,
+      '|F| < 1e-3 eV/Å',
+      `rc=${rc}, ε=${eps}`,
+    );
+  }
+
+  // WOLF-04: Wolf gradient consistency for NaCl pair
+  // Verify that analytical force matches numerical gradient for an ionic pair
+  {
+    const rc = 10.0;
+    const wc = computeWolfConstants(rc);
+    const naclPos = new Float64Array([0, 0, 0, 2.36, 0, 0]); // NaCl equilibrium ~2.36 Å
+    testGradient(
+      'WOLF-04',
+      'Wolf NaCl (q=±1) gradient',
+      (p, f) => {
+        const pe = coulombForce(p, f, 0, 1, 1.0, -1.0, wc);
+        return pe + wolfSelfEnergy([1.0, -1.0], 2, wc);
+      },
+      naclPos,
+      2,
+    );
+  }
+
+  // WOLF-05: Wolf self-energy is negative for nonzero charges
+  {
+    const wc = computeWolfConstants(10.0);
+    const selfE = wolfSelfEnergy([1.0, -1.0], 2, wc);
+    const selfE_water = wolfSelfEnergy([0.5, -0.25, -0.25], 3, wc);
+    const passed = selfE < 0 && selfE_water < 0;
+    report(
+      'WOLF-05',
+      'Wolf self-energy is negative',
+      passed,
+      `NaCl: ${selfE.toFixed(4)} eV, H2O-like: ${selfE_water.toFixed(4)} eV`,
+      'both < 0',
+    );
   }
 }
 
@@ -1968,6 +2101,7 @@ runThermodynamicTests();
 runChargeTests();
 runMoleculeTests();
 runPBCTests();
+runWolfTests();
 runReactionTests();
 
 // Summary
