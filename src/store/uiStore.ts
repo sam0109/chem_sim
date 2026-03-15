@@ -117,6 +117,17 @@ interface UIStore {
   /** Isosurface threshold for orbital rendering (default 0.02) */
   orbitalIsovalue: number;
   setOrbitalIsovalue: (v: number) => void;
+
+  // ---- Electron density visualization ----
+  /** Whether the electron density isosurface is displayed */
+  showElectronDensity: boolean;
+  toggleElectronDensity: () => void;
+  /** Isosurface threshold for electron density rendering (default 0.05) */
+  electronDensityIsovalue: number;
+  setElectronDensityIsovalue: (v: number) => void;
+  /** Opacity of the electron density surface (default 0.35) */
+  electronDensityOpacity: number;
+  setElectronDensityOpacity: (v: number) => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
@@ -235,4 +246,13 @@ export const useUIStore = create<UIStore>((set, get) => ({
   toggleOrbitals: () => set({ showOrbitals: !get().showOrbitals }),
   setSelectedOrbital: (orbital) => set({ selectedOrbital: orbital }),
   setOrbitalIsovalue: (v) => set({ orbitalIsovalue: v }),
+
+  // Electron density visualization
+  showElectronDensity: false,
+  electronDensityIsovalue: 0.05,
+  electronDensityOpacity: 0.35,
+  toggleElectronDensity: () =>
+    set({ showElectronDensity: !get().showElectronDensity }),
+  setElectronDensityIsovalue: (v) => set({ electronDensityIsovalue: v }),
+  setElectronDensityOpacity: (v) => set({ electronDensityOpacity: v }),
 }));
