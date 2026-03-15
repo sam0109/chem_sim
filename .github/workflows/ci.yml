@@ -14,8 +14,6 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    # Allow failure until pre-existing lint errors are fixed.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
