@@ -13,12 +13,23 @@ import type {
 } from '../data/types';
 
 // Periodic table grid layout: [row][col] = atomic number (0 = empty)
+// Rows 0–6: periods 1–7; Row 7: lanthanides (displayed below main grid)
 const GRID: number[][] = [
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-  [3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 6, 7, 8, 9, 10],
-  [11, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 14, 15, 16, 17, 18],
-  [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36],
+  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2], // Period 1
+  [3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 6, 7, 8, 9, 10], // Period 2
+  [11, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13, 14, 15, 16, 17, 18], // Period 3
+  [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36], // Period 4
+  [37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54], // Period 5
+  [55, 56, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86], // Period 6
 ];
+
+/** Lanthanide row displayed separately below the main grid (La–Yb, Z=57–70) */
+const LANTHANIDE_ROW: number[] = [
+  57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70,
+];
+
+/** Total number of main grid rows (used for layout calculations) */
+const MAIN_GRID_ROWS = GRID.length;
 
 /** Cell width in px — used for grid layout and tooltip positioning */
 const CELL_W = 38;
@@ -100,21 +111,20 @@ function computePropertyRange(mode: PeriodicTableColorMode): {
 } {
   let min = Infinity;
   let max = -Infinity;
-  for (const row of GRID) {
-    for (const z of row) {
-      if (z === 0) continue;
-      const el = elements[z];
-      if (!el) continue;
-      const val = getPropertyValue(el, mode);
-      // Skip zero/unknown values for EN and IE (they indicate missing data)
-      if (
-        val === 0 &&
-        (mode === 'electronegativity' || mode === 'ionizationEnergy')
-      )
-        continue;
-      if (val < min) min = val;
-      if (val > max) max = val;
-    }
+  const allZValues = [...GRID.flat(), ...LANTHANIDE_ROW];
+  for (const z of allZValues) {
+    if (z === 0) continue;
+    const el = elements[z];
+    if (!el) continue;
+    const val = getPropertyValue(el, mode);
+    // Skip zero/unknown values for EN and IE (they indicate missing data)
+    if (
+      val === 0 &&
+      (mode === 'electronegativity' || mode === 'ionizationEnergy')
+    )
+      continue;
+    if (val < min) min = val;
+    if (val > max) max = val;
   }
   return { min, max };
 }
@@ -315,8 +325,8 @@ const ColorLegend: React.FC<{
 const TrendAnnotations: React.FC = () => {
   /** Total grid width: 18 cells + 17 gaps */
   const gridW = 18 * CELL_W + 17 * CELL_GAP;
-  /** Total grid height: 4 rows + 3 gaps */
-  const gridH = 4 * CELL_H + 3 * CELL_GAP;
+  /** Total grid height: dynamic based on number of main grid rows */
+  const gridH = MAIN_GRID_ROWS * CELL_H + (MAIN_GRID_ROWS - 1) * CELL_GAP;
 
   return (
     <>
@@ -1020,14 +1030,27 @@ export const PeriodicTable: React.FC = () => {
   let tooltipCol = 0;
   let tooltipEl: ChemicalElement | null = null;
   if (hoveredElement !== null) {
+    let found = false;
     outer: for (let r = 0; r < GRID.length; r++) {
       for (let c = 0; c < GRID[r].length; c++) {
         if (GRID[r][c] === hoveredElement) {
           tooltipRow = r;
           tooltipCol = c;
           tooltipEl = elements[hoveredElement] ?? null;
+          found = true;
           break outer;
         }
+      }
+    }
+    // Check lanthanide row if not found in main grid
+    if (!found) {
+      const lIdx = LANTHANIDE_ROW.indexOf(hoveredElement);
+      if (lIdx !== -1) {
+        // Place tooltip relative to lanthanide row position
+        // Lanthanide row is offset by 2 cells (label + gap), so col = lIdx + 2
+        tooltipRow = GRID.length; // one row below the main grid
+        tooltipCol = lIdx + 2;
+        tooltipEl = elements[hoveredElement] ?? null;
       }
     }
   }
@@ -1123,6 +1146,52 @@ export const PeriodicTable: React.FC = () => {
               })}
             </div>
           ))}
+        </div>
+
+        {/* Lanthanide row — separate from main grid with label */}
+        <div
+          style={{
+            marginTop: CELL_GAP * 3,
+            display: 'flex',
+            alignItems: 'center',
+            gap: CELL_GAP,
+          }}
+        >
+          <div
+            style={{
+              width: CELL_W * 2 + CELL_GAP,
+              height: CELL_H,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 8,
+              color: '#9e6fa0',
+              fontFamily: 'sans-serif',
+            }}
+          >
+            Lanthanides
+          </div>
+          {LANTHANIDE_ROW.map((z) => {
+            const el = elements[z];
+            if (!el)
+              return <div key={z} style={{ width: CELL_W, height: CELL_H }} />;
+            const cellBg = getCellColor(el, ptColorMode, propertyRange);
+            const isCompared =
+              comparedElements !== null &&
+              (comparedElements[0] === z || comparedElements[1] === z);
+            return (
+              <ElementCell
+                key={z}
+                el={el}
+                selected={selectedElement === z}
+                compared={isCompared}
+                bgColor={cellBg}
+                onClick={(shiftKey) => handleCellClick(z, shiftKey)}
+                onHoverStart={() => setHoveredElement(z)}
+                onHoverEnd={() => setHoveredElement(null)}
+              />
+            );
+          })}
         </div>
 
         {/* Rich tooltip */}
