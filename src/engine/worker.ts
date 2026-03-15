@@ -916,30 +916,20 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
         coulombE += eCoul;
         potentialEnergy += eCoul;
 
-        // ∂V_coul/∂λ: compute Coulomb at state A and state B params
-        // and take the difference for the derivative
-        const frcDummy = new Float64Array(frc.length);
-        const eCoulA = coulombForce(
-          pos,
-          frcDummy,
-          i,
-          j,
-          qiA,
-          qjA,
-          wc,
-          pbcBoxSize,
-        );
-        const eCoulB = coulombForce(
-          pos,
-          frcDummy,
-          i,
-          j,
-          qiB,
-          qjB,
-          wc,
-          pbcBoxSize,
-        );
-        dVdLambdaTotal += eCoulB - eCoulA;
+        // ∂V_coul/∂λ for Coulomb with bilinear charge interpolation:
+        // V = f(r) · qi(λ) · qj(λ) where qi = (1-λ)qiA + λqiB
+        // ∂V/∂λ = f(r) · [(qiB-qiA)·qj(λ) + qi(λ)·(qjB-qjA)]
+        // Since V = f(r)·qi·qj, we have f(r) = V/(qi·qj) when qi·qj ≠ 0.
+        // Alternatively, compute two Coulomb evaluations for the derivative
+        // terms directly using the charge derivatives.
+        const dqiDl = qiB - qiA;
+        const dqjDl = qjB - qjA;
+        if (Math.abs(qi * qj) > 1e-30 && Math.abs(eCoul) > 1e-30) {
+          // f(r) = eCoul / (qi * qj), so:
+          // ∂V/∂λ = (eCoul / (qi*qj)) * (dqi*qj + qi*dqj)
+          const fr = eCoul / (qi * qj);
+          dVdLambdaTotal += fr * (dqiDl * qj + qi * dqjDl);
+        }
       } else {
         // Standard (non-alchemical) pair
         const { sigma, epsilon } = getLJCached(
@@ -1719,7 +1709,7 @@ function runFEPScan(): void {
               windowSamples.push({
                 lambda: currentLambda,
                 dVdLambda: cachedDVDLambda,
-                deltaV: cachedDVDLambda, // For single-topology, ΔV ≈ ∂V/∂λ
+                deltaV: cachedDVDLambda, // Single-topology approximation: ΔV ≈ ∂V/∂λ · Δλ (first-order Taylor; the Zwanzig estimator applies Δλ scaling per window)
                 step,
               });
             }

@@ -96,6 +96,40 @@ export function blockAverage(values: number[]): [number, number] {
 }
 
 /**
+ * Compute per-window mean ⟨∂V/∂λ⟩ and standard errors from FEP samples.
+ * Shared between computeTI and computeZwanzig.
+ *
+ * @param samples All FEP samples
+ * @param lambdaSchedule Ordered λ values
+ * @returns [means, errors] arrays of length lambdaSchedule.length
+ */
+function computeWindowMeans(
+  samples: FEPSample[],
+  lambdaSchedule: number[],
+): [number[], number[]] {
+  const means: number[] = [];
+  const errors: number[] = [];
+
+  for (let w = 0; w < lambdaSchedule.length; w++) {
+    const lambda = lambdaSchedule[w];
+    const windowSamples = samples
+      .filter((s) => Math.abs(s.lambda - lambda) < 1e-10)
+      .map((s) => s.dVdLambda);
+
+    if (windowSamples.length === 0) {
+      means.push(0);
+      errors.push(0);
+    } else {
+      const [mean, error] = blockAverage(windowSamples);
+      means.push(mean);
+      errors.push(error);
+    }
+  }
+
+  return [means, errors];
+}
+
+/**
  * Compute the free energy difference using Thermodynamic Integration (TI).
  *
  * ΔG = ∫₀¹ ⟨∂V/∂λ⟩_λ dλ ≈ Σᵢ ½(⟨∂V/∂λ⟩ᵢ + ⟨∂V/∂λ⟩ᵢ₊₁) · (λᵢ₊₁ − λᵢ)
@@ -111,25 +145,12 @@ export function computeTI(
   lambdaSchedule: number[],
 ): FEPResult {
   const nWindows = lambdaSchedule.length;
-  const dVdLambdaMeans: number[] = [];
-  const dVdLambdaErrors: number[] = [];
 
   // Group samples by λ window and compute mean ⟨∂V/∂λ⟩ at each λ
-  for (let w = 0; w < nWindows; w++) {
-    const lambda = lambdaSchedule[w];
-    const windowSamples = samples
-      .filter((s) => Math.abs(s.lambda - lambda) < 1e-10)
-      .map((s) => s.dVdLambda);
-
-    if (windowSamples.length === 0) {
-      dVdLambdaMeans.push(0);
-      dVdLambdaErrors.push(0);
-    } else {
-      const [mean, error] = blockAverage(windowSamples);
-      dVdLambdaMeans.push(mean);
-      dVdLambdaErrors.push(error);
-    }
-  }
+  const [dVdLambdaMeans, dVdLambdaErrors] = computeWindowMeans(
+    samples,
+    lambdaSchedule,
+  );
 
   // Trapezoidal integration: ΔG = Σ ½(f(λᵢ) + f(λᵢ₊₁)) · Δλ
   let deltaG = 0;
@@ -181,25 +202,12 @@ export function computeZwanzig(
 ): FEPResult {
   const kT = KB * temperature;
   const nWindows = lambdaSchedule.length;
-  const dVdLambdaMeans: number[] = [];
-  const dVdLambdaErrors: number[] = [];
 
-  // We still compute ⟨∂V/∂λ⟩ for the TI curve display
-  for (let w = 0; w < nWindows; w++) {
-    const lambda = lambdaSchedule[w];
-    const windowSamples = samples
-      .filter((s) => Math.abs(s.lambda - lambda) < 1e-10)
-      .map((s) => s.dVdLambda);
-
-    if (windowSamples.length === 0) {
-      dVdLambdaMeans.push(0);
-      dVdLambdaErrors.push(0);
-    } else {
-      const [mean, error] = blockAverage(windowSamples);
-      dVdLambdaMeans.push(mean);
-      dVdLambdaErrors.push(error);
-    }
-  }
+  // Compute ⟨∂V/∂λ⟩ for the TI curve display
+  const [dVdLambdaMeans, dVdLambdaErrors] = computeWindowMeans(
+    samples,
+    lambdaSchedule,
+  );
 
   // Compute ΔG window-by-window using the exponential average of ΔV
   // For each window at λᵢ, we use the deltaV (= V_B − V_A) samples.

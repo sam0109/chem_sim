@@ -4028,7 +4028,7 @@ function runFEPTests(): void {
   {
     const id = 'FEP-02';
     if (!isSkipped(id)) {
-      const r = 4.0; // Å — well beyond the singularity region
+      const r = 5.0; // Å — well beyond σ so soft-core α term is small
       const positions = new Float64Array([0, 0, 0, r, 0, 0]);
       const forcesSC = new Float64Array(6);
       const forcesStd = new Float64Array(6);
@@ -4058,24 +4058,22 @@ function runFEPTests(): void {
       );
 
       // At λ=1, soft-core has r_eff⁶ = α·σ⁶ + r⁶
-      // For r ≈ σ, this is NOT exactly standard LJ (the α term adds).
-      // But for r >> σ, the α·σ⁶ term becomes negligible.
-      // At r = 4.0 Å and σ = 3.4 Å: r⁶ = 4096, α·σ⁶ ≈ 0.5·1544 ≈ 772
-      // So r_eff⁶ ≈ 4868 vs r⁶ = 4096 → ~19% difference at r/σ ≈ 1.18
-      // Use a looser tolerance that accounts for the soft-core correction
+      // For r >> σ, the α·σ⁶ term becomes negligible.
+      // At r = 5.0 Å and σ = 3.4 Å: r⁶ = 15625, α·σ⁶ ≈ 0.5·1544 ≈ 772
+      // So r_eff⁶ ≈ 16397 vs r⁶ = 15625 → ~5% difference
       const relErr =
         Math.abs(energyStd) > 1e-15
           ? Math.abs(energySC - energyStd) / Math.abs(energyStd)
           : Math.abs(energySC - energyStd);
 
-      // At this r/σ ratio, allow up to 50% relative error due to soft-core
-      const passed = relErr < 0.5;
+      // At r/σ ≈ 1.47, soft-core correction is small; allow 15%
+      const passed = relErr < 0.15;
       report(
         id,
-        'Soft-core approximates standard LJ at λ=1, r=4.0 Å',
+        'Soft-core approximates standard LJ at λ=1, r=5.0 Å',
         passed,
         `E_sc=${energySC.toExponential(4)}, E_std=${energyStd.toExponential(4)}, relErr=${relErr.toExponential(3)}`,
-        'Relative error < 50% (soft-core α correction expected)',
+        'Relative error < 15% (soft-core α correction small at r/σ ≈ 1.47)',
       );
     }
   }
