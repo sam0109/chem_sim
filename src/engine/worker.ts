@@ -112,6 +112,8 @@ function rebuildTopology(): void {
       atomicNumbers[bond.atomA],
       atomicNumbers[bond.atomB],
       bond.order,
+      hybridizations[bond.atomA],
+      hybridizations[bond.atomB],
     );
     bondParams.push({ i: bond.atomA, j: bond.atomB, ...params });
   }
@@ -316,6 +318,8 @@ function initSimulation(
         atomicNumbers[bond.atomA],
         atomicNumbers[bond.atomB],
         bond.order,
+        hybridizations[bond.atomA],
+        hybridizations[bond.atomB],
       );
       bondParams.push({ i: bond.atomA, j: bond.atomB, ...params });
     }

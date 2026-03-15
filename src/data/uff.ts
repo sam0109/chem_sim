@@ -5,6 +5,7 @@
 // ==============================================================
 
 import type { Hybridization, UFFAtomType } from './types';
+import { getBDE } from './bondEnergies';
 
 const KCAL_TO_EV = 0.0433641;
 
@@ -497,14 +498,21 @@ export function getUFFTypeHybrid(
  * Compute UFF bond equilibrium distance between two atom types.
  * r_ij = r_i + r_j + r_BO + r_EN
  * r_BO = bond-order correction, r_EN = electronegativity correction
+ *
+ * When hybridization is provided, uses the hybridization-specific UFF
+ * atom type (e.g. C_1 for sp carbon) which has a shorter natural bond
+ * radius than the default sp3 type.
+ * Source: Rappé et al., JACS 114, 10024 (1992), Eq. 3.
  */
 export function getUFFBondLength(
   z1: number,
   z2: number,
   bondOrder: number = 1,
+  hyb1?: Hybridization,
+  hyb2?: Hybridization,
 ): number {
-  const t1 = getUFFType(z1);
-  const t2 = getUFFType(z2);
+  const t1 = hyb1 ? getUFFTypeHybrid(z1, hyb1) : getUFFType(z1);
+  const t2 = hyb2 ? getUFFTypeHybrid(z2, hyb2) : getUFFType(z2);
   if (!t1 || !t2) return 1.5; // fallback
 
   const r_BO = -0.1332 * (t1.r1 + t2.r1) * Math.log(bondOrder);
@@ -516,32 +524,50 @@ export function getUFFBondLength(
 
 /**
  * Compute Morse potential parameters for a bond.
- * Returns { De, alpha, re } in eV and Å
+ * Returns { De, alpha, re } in eV and Å.
+ *
+ * De is determined by cascading lookup:
+ * 1. Experimental BDE table (element pair + bond order)
+ * 2. Geometric-mean approximation from homonuclear BDEs
+ * 3. Fallback: 70 × bondOrder kcal/mol (crude universal estimate)
+ *
+ * When hybridization is provided, re uses hybridization-specific UFF
+ * atom types for more accurate equilibrium distances.
+ *
+ * @param z1 atomic number of first atom
+ * @param z2 atomic number of second atom
+ * @param bondOrder bond order (1, 2, or 3)
+ * @param hyb1 optional hybridization of first atom
+ * @param hyb2 optional hybridization of second atom
  */
 export function getMorseBondParams(
   z1: number,
   z2: number,
   bondOrder: number = 1,
+  hyb1?: Hybridization,
+  hyb2?: Hybridization,
 ): {
   De: number;
   alpha: number;
   re: number;
 } {
-  const re = getUFFBondLength(z1, z2, bondOrder);
+  const re = getUFFBondLength(z1, z2, bondOrder, hyb1, hyb2);
 
-  // Approximate De from UFF: use geometric mean of non-bonded well depths
-  // scaled by bond order — this is a simplification
-  const t1 = getUFFType(z1);
-  const t2 = getUFFType(z2);
+  // Look up UFF types (hybridization-aware if available) for force constant
+  const t1 = hyb1 ? getUFFTypeHybrid(z1, hyb1) : getUFFType(z1);
+  const t2 = hyb2 ? getUFFTypeHybrid(z2, hyb2) : getUFFType(z2);
   if (!t1 || !t2) return { De: 3.0, alpha: 2.0, re };
 
-  // Better estimate: use bond dissociation energies from covalent radii
-  // De ≈ 70 * bondOrder kcal/mol for C-C like bonds (rough universal estimate)
-  const baseDe = 70.0 * bondOrder; // kcal/mol
+  // De from experimental BDE table, geometric-mean fallback, or crude estimate
+  // Source: CRC Handbook of Chemistry and Physics, 97th Ed.;
+  //         Pauling geometric-mean approximation (1960)
+  const bde = getBDE(z1, z2, bondOrder);
+  const baseDe = bde !== undefined ? bde : 70.0 * bondOrder; // kcal/mol
   const De = baseDe * KCAL_TO_EV; // convert to eV
 
   // alpha = sqrt(k_e / (2 * De)), k_e from UFF bond stretching
-  // k_e (UFF) = 664.12 * Z_i * Z_j / r_ij^3
+  // k_e (UFF) = 664.12 * Z*_i * Z*_j / r_ij^3
+  // Source: Rappé et al., JACS 114, 10024 (1992), Eq. 6.
   const ke = (664.12 * (t1.Z * t2.Z)) / (re * re * re); // kcal/(mol·Å²)
   const keEV = ke * KCAL_TO_EV; // eV/ų
   const alpha = Math.sqrt(keEV / (2.0 * De));
