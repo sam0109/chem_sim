@@ -20,6 +20,10 @@ interface UIStore {
   selectedElement: number; // atomic number
   setSelectedElement: (z: number) => void;
 
+  // ---- Bond order selection (for place-atom bond-aware construction) ----
+  selectedBondOrder: number; // 1 = single, 2 = double, 3 = triple
+  setSelectedBondOrder: (order: number) => void;
+
   // ---- Atom selection ----
   selectedAtomIds: number[];
   selectAtom: (id: number, multi?: boolean) => void;
@@ -107,6 +111,7 @@ interface UIStore {
 export const useUIStore = create<UIStore>((set, get) => ({
   activeTool: 'select',
   selectedElement: 6, // Carbon by default
+  selectedBondOrder: 1, // Single bond by default
   selectedAtomIds: [],
   measurements: [],
   showPeriodicTable: true,
@@ -134,6 +139,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   setActiveTool: (tool) => set({ activeTool: tool }),
   setSelectedElement: (z) => set({ selectedElement: z }),
+  setSelectedBondOrder: (order) => set({ selectedBondOrder: order }),
 
   selectAtom: (id, multi = false) => {
     if (multi) {
