@@ -2,8 +2,14 @@
 // Bond detection and dynamic bond formation/breaking
 // ==============================================================
 
-import type { Bond, BondType, Hybridization } from '../data/types';
+import type {
+  Bond,
+  BondType,
+  Hybridization,
+  Vector3Tuple,
+} from '../data/types';
 import elements from '../data/elements';
+import { minimumImage } from './pbc';
 
 /**
  * Detect bonds between atoms based on covalent radii with tolerance.
@@ -34,6 +40,7 @@ export function detectBonds(
   formTolerance: number = 1.2,
   existingBonds: Bond[] = [],
   breakTolerance: number = 1.5,
+  boxSize?: Vector3Tuple,
 ): Bond[] {
   const N = atomicNumbers.length;
 
@@ -62,9 +69,17 @@ export function detectBonds(
       const elJ = elements[atomicNumbers[j]];
       if (!elJ) continue;
 
-      const dx = positions[j * 3] - positions[i * 3];
-      const dy = positions[j * 3 + 1] - positions[i * 3 + 1];
-      const dz = positions[j * 3 + 2] - positions[i * 3 + 2];
+      let dx = positions[j * 3] - positions[i * 3];
+      let dy = positions[j * 3 + 1] - positions[i * 3 + 1];
+      let dz = positions[j * 3 + 2] - positions[i * 3 + 2];
+
+      // Apply minimum image convention for periodic boundary conditions.
+      // This ensures bonds crossing the box boundary are correctly detected.
+      // Reference: Allen & Tildesley, Ch. 1.5.2
+      if (boxSize) {
+        [dx, dy, dz] = minimumImage(dx, dy, dz, boxSize);
+      }
+
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
       // Hysteresis: existing bonds get a wider tolerance before breaking
