@@ -678,4 +678,98 @@ export function getUFFAngleK(
   };
 }
 
+/**
+ * UFF torsion barrier heights V_j for sp3 atoms (kcal/mol).
+ * Used for sp3-sp3 pairs: V_φ = √(V_j · V_k).
+ * Source: Rappé et al., JACS 114, 10024 (1992), Table I.
+ */
+const sp3TorsionBarrier: Record<number, number> = {
+  6: 2.119, // C_3 — V_1 = 2.119 kcal/mol
+  7: 0.45, // N_3 — V_1 = 0.450 kcal/mol (nitrogen lone pair reduces barrier)
+  8: 0.018, // O_3 — V_1 = 0.018 kcal/mol (oxygen — very low barrier)
+  15: 2.4, // P_3 — similar to C
+  16: 0.484, // S_3 — V_1 = 0.484 kcal/mol
+};
+
+/**
+ * UFF conjugation barrier U_j for sp2 atoms (kcal/mol).
+ * Used for sp2-sp2 pairs: V_φ = 5·√(U_j · U_k)·(1 + 4.18·ln(BO)).
+ * Source: Rappé et al., JACS 114, 10024 (1992), Table I.
+ */
+const sp2TorsionBarrier: Record<number, number> = {
+  6: 2.0, // C_2 / C_R — conjugation barrier
+  7: 2.0, // N_2 / N_R
+  8: 2.0, // O_2 / O_R
+};
+
+/**
+ * Compute UFF torsion parameters for a dihedral i-j-k-l.
+ * Returns the barrier height V in eV, periodicity n, and equilibrium
+ * dihedral φ₀ in radians.
+ *
+ * Rules from Rappé et al., JACS 114, 10024 (1992), Eq. 16:
+ *   V(φ) = (V/2) · [1 − cos(nφ₀) · cos(nφ)]
+ *
+ * - sp3-sp3: V = √(V_j · V_k), n=3, φ₀=π (staggered preferred)
+ * - sp2-sp2: V = 5·√(U_j · U_k)·(1 + 4.18·ln(BO)), n=2, φ₀=π
+ * - sp2-sp3 or sp3-sp2: V = 1 kcal/mol, n=6, φ₀=0
+ * - sp-anything or anything-sp: V = 0 (no barrier for linear)
+ *
+ * @param zJ atomic number of central atom j
+ * @param zK atomic number of central atom k
+ * @param hybJ hybridization of atom j
+ * @param hybK hybridization of atom k
+ * @param bondOrderJK bond order of the j-k bond
+ * @returns { V: number (eV), n: number, phi0: number (rad) }
+ */
+export function getUFFTorsionParams(
+  zJ: number,
+  zK: number,
+  hybJ: Hybridization,
+  hybK: Hybridization,
+  bondOrderJK: number = 1,
+): { V: number; n: number; phi0: number } {
+  // Linear atoms have no torsional barrier
+  if (hybJ === 'sp' || hybK === 'sp') {
+    return { V: 0, n: 1, phi0: 0 };
+  }
+
+  // Hydrogen (Z=1) has no hybridization and no torsion contribution
+  // Treat as sp3-like for parameter purposes
+  const effHybJ = zJ === 1 || hybJ === 'none' ? 'sp3' : hybJ;
+  const effHybK = zK === 1 || hybK === 'none' ? 'sp3' : hybK;
+
+  const jIsSp3 = effHybJ === 'sp3' || effHybJ === 'sp3d' || effHybJ === 'sp3d2';
+  const kIsSp3 = effHybK === 'sp3' || effHybK === 'sp3d' || effHybK === 'sp3d2';
+  const jIsSp2 = effHybJ === 'sp2';
+  const kIsSp2 = effHybK === 'sp2';
+
+  if (jIsSp3 && kIsSp3) {
+    // sp3-sp3: three-fold barrier, staggered minimum
+    const Vj = sp3TorsionBarrier[zJ] ?? 2.119; // default to carbon
+    const Vk = sp3TorsionBarrier[zK] ?? 2.119;
+    const V_kcal = Math.sqrt(Vj * Vk);
+    return { V: V_kcal * KCAL_TO_EV, n: 3, phi0: Math.PI };
+  }
+
+  if (jIsSp2 && kIsSp2) {
+    // sp2-sp2: two-fold barrier from conjugation
+    const Uj = sp2TorsionBarrier[zJ] ?? 2.0;
+    const Uk = sp2TorsionBarrier[zK] ?? 2.0;
+    // Bond-order-dependent: V = 5·√(Uj·Uk)·(1 + 4.18·ln(BO))
+    const boFactor = 1 + 4.18 * Math.log(Math.max(bondOrderJK, 1));
+    const V_kcal = 5.0 * Math.sqrt(Uj * Uk) * boFactor;
+    return { V: V_kcal * KCAL_TO_EV, n: 2, phi0: Math.PI };
+  }
+
+  // Mixed sp2-sp3 or sp3-sp2: six-fold barrier, low barrier
+  if ((jIsSp2 && kIsSp3) || (jIsSp3 && kIsSp2)) {
+    const V_kcal = 1.0; // 1 kcal/mol generic barrier
+    return { V: V_kcal * KCAL_TO_EV, n: 6, phi0: 0 };
+  }
+
+  // Fallback: no torsion barrier
+  return { V: 0, n: 1, phi0: 0 };
+}
+
 export { uffAtomTypes, KCAL_TO_EV };

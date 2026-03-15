@@ -3,7 +3,9 @@ import { test, expect } from '@playwright/test';
 test.describe('Play/pause controls', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByTestId('loading-screen')).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId('loading-screen')).toBeHidden({
+      timeout: 30_000,
+    });
   });
 
   test('starts in paused state with Play button', async ({ page }) => {

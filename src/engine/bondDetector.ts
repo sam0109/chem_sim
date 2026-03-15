@@ -263,3 +263,45 @@ export function buildAngleList(
 
   return angles;
 }
+
+/**
+ * Build dihedral (torsion) list from bond topology.
+ * For every bond j-k, enumerate all neighbors i of j (i≠k) and
+ * all neighbors l of k (l≠j) to form i-j-k-l quadruplets.
+ * Duplicates are avoided by requiring j < k (canonical ordering).
+ * Returns array of [i, j, k, l] index tuples.
+ */
+export function buildDihedralList(
+  bonds: Bond[],
+  nAtoms: number,
+): Array<[number, number, number, number]> {
+  // Build adjacency: for each atom, list of covalent neighbors
+  const neighbors: number[][] = Array.from({ length: nAtoms }, () => []);
+  for (const bond of bonds) {
+    if (bond.type === 'hydrogen' || bond.type === 'vanderwaals') continue;
+    neighbors[bond.atomA].push(bond.atomB);
+    neighbors[bond.atomB].push(bond.atomA);
+  }
+
+  const dihedrals: Array<[number, number, number, number]> = [];
+
+  for (const bond of bonds) {
+    if (bond.type === 'hydrogen' || bond.type === 'vanderwaals') continue;
+
+    // Canonical ordering: j < k to avoid generating each dihedral twice
+    const j = Math.min(bond.atomA, bond.atomB);
+    const k = Math.max(bond.atomA, bond.atomB);
+
+    // Enumerate all i bonded to j (i ≠ k)
+    for (const i of neighbors[j]) {
+      if (i === k) continue;
+      // Enumerate all l bonded to k (l ≠ j, l ≠ i to skip 3-membered rings)
+      for (const l of neighbors[k]) {
+        if (l === j || l === i) continue;
+        dihedrals.push([i, j, k, l]);
+      }
+    }
+  }
+
+  return dihedrals;
+}

@@ -15,7 +15,9 @@ test.describe('Smoke tests', () => {
 
   test('WebGL canvas is present', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByTestId('loading-screen')).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId('loading-screen')).toBeHidden({
+      timeout: 30_000,
+    });
 
     // Three.js renders into a <canvas> element
     const canvas = page.locator('canvas');
@@ -24,7 +26,9 @@ test.describe('Smoke tests', () => {
 
   test('status bar shows expected text', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByTestId('loading-screen')).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId('loading-screen')).toBeHidden({
+      timeout: 30_000,
+    });
 
     const statusBar = page.getByTestId('status-bar');
     await expect(statusBar).toBeVisible();
@@ -34,7 +38,9 @@ test.describe('Smoke tests', () => {
 
   test('all main panels are visible on load', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByTestId('loading-screen')).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId('loading-screen')).toBeHidden({
+      timeout: 30_000,
+    });
 
     await expect(page.getByTestId('simulation-controls')).toBeVisible();
     await expect(page.getByTestId('toolbar')).toBeVisible();
@@ -43,7 +49,9 @@ test.describe('Smoke tests', () => {
 
   test('property panel is hidden when no atoms selected', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByTestId('loading-screen')).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId('loading-screen')).toBeHidden({
+      timeout: 30_000,
+    });
 
     // Property panel should not be visible (no atoms selected on load)
     await expect(page.getByTestId('property-panel')).toBeHidden();
@@ -51,7 +59,9 @@ test.describe('Smoke tests', () => {
 
   test('energy plot is hidden by default', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByTestId('loading-screen')).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId('loading-screen')).toBeHidden({
+      timeout: 30_000,
+    });
 
     await expect(page.getByTestId('energy-plot')).toBeHidden();
   });

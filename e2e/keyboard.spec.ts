@@ -13,37 +13,57 @@ async function pressKey(page: Page, key: string): Promise<void> {
 test.describe('Keyboard shortcuts', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByTestId('loading-screen')).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId('loading-screen')).toBeHidden({
+      timeout: 30_000,
+    });
   });
 
   test('S key activates Select tool', async ({ page }) => {
     // First switch away from Select (default)
     await pressKey(page, 'a');
-    await expect(page.getByTestId('tool-place-atom')).toHaveCSS('border-width', '2px');
+    await expect(page.getByTestId('tool-place-atom')).toHaveCSS(
+      'border-width',
+      '2px',
+    );
 
     // Press S to go back to Select
     await pressKey(page, 's');
-    await expect(page.getByTestId('tool-select')).toHaveCSS('border-width', '2px');
+    await expect(page.getByTestId('tool-select')).toHaveCSS(
+      'border-width',
+      '2px',
+    );
   });
 
   test('A key activates Place Atom tool', async ({ page }) => {
     await pressKey(page, 'a');
-    await expect(page.getByTestId('tool-place-atom')).toHaveCSS('border-width', '2px');
+    await expect(page.getByTestId('tool-place-atom')).toHaveCSS(
+      'border-width',
+      '2px',
+    );
   });
 
   test('D key activates Delete tool', async ({ page }) => {
     await pressKey(page, 'd');
-    await expect(page.getByTestId('tool-delete')).toHaveCSS('border-width', '2px');
+    await expect(page.getByTestId('tool-delete')).toHaveCSS(
+      'border-width',
+      '2px',
+    );
   });
 
   test('G key activates Drag tool', async ({ page }) => {
     await pressKey(page, 'g');
-    await expect(page.getByTestId('tool-drag')).toHaveCSS('border-width', '2px');
+    await expect(page.getByTestId('tool-drag')).toHaveCSS(
+      'border-width',
+      '2px',
+    );
   });
 
   test('M key activates Measure tool', async ({ page }) => {
     await pressKey(page, 'm');
-    await expect(page.getByTestId('tool-measure-distance')).toHaveCSS('border-width', '2px');
+    await expect(page.getByTestId('tool-measure-distance')).toHaveCSS(
+      'border-width',
+      '2px',
+    );
   });
 
   test('L key toggles labels', async ({ page }) => {
@@ -66,7 +86,10 @@ test.describe('Keyboard shortcuts', () => {
     const placeAtom = page.getByTestId('tool-place-atom');
     await placeAtom.dispatchEvent('click');
     await expect(placeAtom).toHaveCSS('border-width', '2px');
-    await expect(page.getByTestId('tool-select')).toHaveCSS('border-width', '1px');
+    await expect(page.getByTestId('tool-select')).toHaveCSS(
+      'border-width',
+      '1px',
+    );
 
     // Click Delete button
     const del = page.getByTestId('tool-delete');
