@@ -67,6 +67,13 @@ import {
   computeBondedPosition,
   getIdealDirections,
 } from '../data/bondPlacement';
+import {
+  realSphericalHarmonic,
+  radialWavefunction,
+  getEffectiveZ,
+  computeOrbitalGrid,
+} from '../data/orbital';
+import { marchingCubes } from '../data/marchingCubes';
 
 // ---- Deterministic PRNG for reproducible tests ----
 // Mulberry32: a simple 32-bit seeded PRNG (public domain)
@@ -2326,6 +2333,270 @@ function runBondDetectionTests(): void {
   }
 }
 
+// ==============================================================
+// ORBITAL AND MARCHING CUBES TESTS
+// ==============================================================
+
+function runOrbitalTests(): void {
+  console.log('\n=== ORBITAL WAVEFUNCTION TESTS ===\n');
+
+  // ORB-01: Spherical harmonic Y_00 normalization
+  // Integral of |Y_00|^2 sin(theta) dtheta dphi over full sphere = 1
+  // Numerical integration using midpoint rule
+  {
+    if (!isSkipped('ORB-01')) {
+      const nTheta = 100;
+      const nPhi = 200;
+      const dTheta = Math.PI / nTheta;
+      const dPhi = (2 * Math.PI) / nPhi;
+      let integral = 0;
+      for (let it = 0; it < nTheta; it++) {
+        const theta = (it + 0.5) * dTheta;
+        const sinTheta = Math.sin(theta);
+        for (let ip = 0; ip < nPhi; ip++) {
+          const phi = (ip + 0.5) * dPhi;
+          const Y = realSphericalHarmonic(0, 0, theta, phi);
+          integral += Y * Y * sinTheta * dTheta * dPhi;
+        }
+      }
+      const passed = Math.abs(integral - 1.0) < 0.01;
+      report(
+        'ORB-01',
+        'Y_00 normalization: integral |Y_00|^2 dOmega = 1',
+        passed,
+        `integral = ${integral.toFixed(6)}`,
+        '1.0 +/- 0.01',
+      );
+    }
+  }
+
+  // ORB-02: Spherical harmonic Y_10 normalization
+  {
+    if (!isSkipped('ORB-02')) {
+      const nTheta = 100;
+      const nPhi = 200;
+      const dTheta = Math.PI / nTheta;
+      const dPhi = (2 * Math.PI) / nPhi;
+      let integral = 0;
+      for (let it = 0; it < nTheta; it++) {
+        const theta = (it + 0.5) * dTheta;
+        const sinTheta = Math.sin(theta);
+        for (let ip = 0; ip < nPhi; ip++) {
+          const phi = (ip + 0.5) * dPhi;
+          const Y = realSphericalHarmonic(1, 0, theta, phi);
+          integral += Y * Y * sinTheta * dTheta * dPhi;
+        }
+      }
+      const passed = Math.abs(integral - 1.0) < 0.01;
+      report(
+        'ORB-02',
+        'Y_10 normalization: integral |Y_10|^2 dOmega = 1',
+        passed,
+        `integral = ${integral.toFixed(6)}`,
+        '1.0 +/- 0.01',
+      );
+    }
+  }
+
+  // ORB-03: Spherical harmonic Y_21 normalization (d orbital)
+  {
+    if (!isSkipped('ORB-03')) {
+      const nTheta = 100;
+      const nPhi = 200;
+      const dTheta = Math.PI / nTheta;
+      const dPhi = (2 * Math.PI) / nPhi;
+      let integral = 0;
+      for (let it = 0; it < nTheta; it++) {
+        const theta = (it + 0.5) * dTheta;
+        const sinTheta = Math.sin(theta);
+        for (let ip = 0; ip < nPhi; ip++) {
+          const phi = (ip + 0.5) * dPhi;
+          const Y = realSphericalHarmonic(2, 1, theta, phi);
+          integral += Y * Y * sinTheta * dTheta * dPhi;
+        }
+      }
+      const passed = Math.abs(integral - 1.0) < 0.01;
+      report(
+        'ORB-03',
+        'Y_21 normalization: integral |Y_21|^2 dOmega = 1',
+        passed,
+        `integral = ${integral.toFixed(6)}`,
+        '1.0 +/- 0.01',
+      );
+    }
+  }
+
+  // ORB-04: Radial wavefunction R_10 (1s) normalization
+  // integral_0^inf |R_10|^2 r^2 dr = 1 for Z=1
+  {
+    if (!isSkipped('ORB-04')) {
+      const Zeff = 1.0;
+      const dr = 0.001; // Angstrom
+      const rMax = 10.0; // Angstrom
+      let integral = 0;
+      for (let ir = 0; ir < rMax / dr; ir++) {
+        const r = (ir + 0.5) * dr;
+        const R = radialWavefunction(1, 0, r, Zeff);
+        integral += R * R * r * r * dr;
+      }
+      const passed = Math.abs(integral - 1.0) < 0.02;
+      report(
+        'ORB-04',
+        'R_10 (1s) normalization: integral |R_10|^2 r^2 dr = 1',
+        passed,
+        `integral = ${integral.toFixed(6)}`,
+        '1.0 +/- 0.02',
+      );
+    }
+  }
+
+  // ORB-05: Radial wavefunction R_20 (2s) normalization for Z=1
+  {
+    if (!isSkipped('ORB-05')) {
+      const Zeff = 1.0;
+      const dr = 0.002;
+      const rMax = 30.0; // 2s extends further than 1s
+      let integral = 0;
+      for (let ir = 0; ir < rMax / dr; ir++) {
+        const r = (ir + 0.5) * dr;
+        const R = radialWavefunction(2, 0, r, Zeff);
+        integral += R * R * r * r * dr;
+      }
+      const passed = Math.abs(integral - 1.0) < 0.02;
+      report(
+        'ORB-05',
+        'R_20 (2s) normalization: integral |R_20|^2 r^2 dr = 1',
+        passed,
+        `integral = ${integral.toFixed(6)}`,
+        '1.0 +/- 0.02',
+      );
+    }
+  }
+
+  // ORB-06: 2s orbital has 1 radial node (R_20 changes sign)
+  {
+    if (!isSkipped('ORB-06')) {
+      const Zeff = 1.0;
+      const dr = 0.01;
+      const rMax = 15.0;
+      let signChanges = 0;
+      let prevSign = Math.sign(radialWavefunction(2, 0, dr, Zeff));
+      for (let ir = 1; ir < rMax / dr; ir++) {
+        const r = (ir + 0.5) * dr;
+        const R = radialWavefunction(2, 0, r, Zeff);
+        const s = Math.sign(R);
+        if (s !== 0 && s !== prevSign && prevSign !== 0) {
+          signChanges++;
+        }
+        if (s !== 0) prevSign = s;
+      }
+      const passed = signChanges === 1;
+      report(
+        'ORB-06',
+        '2s orbital: exactly 1 radial node (sign change)',
+        passed,
+        `sign changes = ${signChanges}`,
+        '1',
+      );
+    }
+  }
+
+  // ORB-07: Clementi-Raimondi Z* for He(1s) = 1.6875
+  {
+    if (!isSkipped('ORB-07')) {
+      const Zeff = getEffectiveZ(2, 1, 0);
+      const passed = Math.abs(Zeff - 1.6875) < 0.001;
+      report(
+        'ORB-07',
+        'Clementi-Raimondi Z* for He(1s) = 1.6875',
+        passed,
+        `Z* = ${Zeff.toFixed(4)}`,
+        '1.6875',
+      );
+    }
+  }
+
+  // ORB-08: Clementi-Raimondi Z* for C(2p) = 3.1358
+  {
+    if (!isSkipped('ORB-08')) {
+      const Zeff = getEffectiveZ(6, 2, 1);
+      const passed = Math.abs(Zeff - 3.1358) < 0.001;
+      report(
+        'ORB-08',
+        'Clementi-Raimondi Z* for C(2p) = 3.1358',
+        passed,
+        `Z* = ${Zeff.toFixed(4)}`,
+        '3.1358',
+      );
+    }
+  }
+
+  // ORB-09: Marching cubes on a sphere produces non-degenerate mesh
+  {
+    if (!isSkipped('ORB-09')) {
+      // Create a 3D field representing a sphere of radius 1.5 centered at origin
+      const gridRes = 20;
+      const halfWidth = 3.0;
+      const cs = (2 * halfWidth) / (gridRes - 1);
+      const field = new Float32Array(gridRes * gridRes * gridRes);
+      for (let iz = 0; iz < gridRes; iz++) {
+        for (let iy = 0; iy < gridRes; iy++) {
+          for (let ix = 0; ix < gridRes; ix++) {
+            const x = -halfWidth + ix * cs;
+            const y = -halfWidth + iy * cs;
+            const z = -halfWidth + iz * cs;
+            const r2 = x * x + y * y + z * z;
+            // Field value: 1.5^2 - r^2 (positive inside sphere, negative outside)
+            field[iz * gridRes * gridRes + iy * gridRes + ix] = 2.25 - r2;
+          }
+        }
+      }
+
+      const mesh = marchingCubes(
+        field,
+        [gridRes, gridRes, gridRes],
+        [-halfWidth, -halfWidth, -halfWidth],
+        cs,
+        0.0,
+      );
+
+      const hasTriangles = mesh.indices.length > 0;
+      const hasPositions = mesh.positions.length > 0;
+      const hasNormals = mesh.normals.length > 0;
+      const passed = hasTriangles && hasPositions && hasNormals;
+      report(
+        'ORB-09',
+        'Marching cubes: sphere produces non-degenerate mesh',
+        passed,
+        `triangles=${mesh.indices.length / 3}, vertices=${mesh.positions.length / 3}`,
+        'triangles > 0, vertices > 0, normals > 0',
+      );
+    }
+  }
+
+  // ORB-10: computeOrbitalGrid produces non-trivial field
+  {
+    if (!isSkipped('ORB-10')) {
+      const grid = computeOrbitalGrid(2, 1, 0, 3.1358, [0, 0, 0], 16);
+      let hasPositive = false;
+      let hasNegative = false;
+      for (let i = 0; i < grid.values.length; i++) {
+        if (grid.values[i] > 0.001) hasPositive = true;
+        if (grid.values[i] < -0.001) hasNegative = true;
+      }
+      // A 2p orbital should have both positive and negative lobes
+      const passed = hasPositive && hasNegative;
+      report(
+        'ORB-10',
+        '2p_z orbital grid has positive and negative lobes',
+        passed,
+        `hasPositive=${hasPositive}, hasNegative=${hasNegative}`,
+        'both true',
+      );
+    }
+  }
+}
+
 // ---- Bond placement tests ----
 
 function runBondPlacementTests(): void {
@@ -2658,6 +2929,7 @@ runPBCTests();
 runWolfTests();
 runReactionTests();
 runBondDetectionTests();
+runOrbitalTests();
 runBondPlacementTests();
 
 // Summary

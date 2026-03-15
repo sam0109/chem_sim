@@ -56,6 +56,8 @@ const ToolButton: React.FC<{
 export const Toolbar: React.FC = () => {
   const activeTool = useUIStore((s) => s.activeTool);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
+  const selectedBondOrder = useUIStore((s) => s.selectedBondOrder);
+  const setSelectedBondOrder = useUIStore((s) => s.setSelectedBondOrder);
   const renderMode = useUIStore((s) => s.renderMode);
   const setRenderMode = useUIStore((s) => s.setRenderMode);
   const toggleLabels = useUIStore((s) => s.toggleLabels);
@@ -115,11 +117,20 @@ export const Toolbar: React.FC = () => {
         case 'l':
           toggleLabels();
           break;
+        case '1':
+          setSelectedBondOrder(1);
+          break;
+        case '2':
+          setSelectedBondOrder(2);
+          break;
+        case '3':
+          setSelectedBondOrder(3);
+          break;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setActiveTool, toggleLabels, handleToolSelect]);
+  }, [setActiveTool, toggleLabels, handleToolSelect, setSelectedBondOrder]);
 
   return (
     <div
@@ -144,6 +155,51 @@ export const Toolbar: React.FC = () => {
           onClick={() => handleToolSelect(tool.id)}
         />
       ))}
+
+      {/* Bond order selector — visible only when place-atom is active */}
+      {activeTool === 'place-atom' && (
+        <div
+          data-testid="bond-order-selector"
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            gap: 2,
+            justifyContent: 'center',
+          }}
+        >
+          {([1, 2, 3] as const).map((order) => (
+            <button
+              key={order}
+              data-testid={`bond-order-${order}`}
+              onClick={() => setSelectedBondOrder(order)}
+              title={`${order === 1 ? 'Single' : order === 2 ? 'Double' : 'Triple'} bond (${order})`}
+              style={{
+                width: 12,
+                height: 24,
+                borderRadius: 3,
+                border:
+                  selectedBondOrder === order
+                    ? '2px solid #aaccff'
+                    : '1px solid rgba(255,255,255,0.15)',
+                background:
+                  selectedBondOrder === order
+                    ? 'rgba(100,150,255,0.3)'
+                    : 'rgba(40,40,60,0.8)',
+                color: '#fff',
+                cursor: 'pointer',
+                fontSize: 9,
+                fontFamily: 'monospace',
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {order}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Separator */}
       <div
