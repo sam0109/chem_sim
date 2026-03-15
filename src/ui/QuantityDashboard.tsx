@@ -202,7 +202,6 @@ const EnergyBreakdownView: React.FC<{ breakdown: EnergyBreakdown }> = ({
 // ---- Dashboard card wrapper ----
 
 const DashboardCard: React.FC<{
-  id: string;
   title: string;
   value: string;
   valueColor: string;
@@ -276,7 +275,6 @@ export const QuantityDashboard: React.FC = () => {
 
       {/* Temperature card */}
       <DashboardCard
-        id="temperature"
         title="Temperature"
         value={`${temperature.toFixed(1)} K`}
         valueColor="#ffaa44"
@@ -310,7 +308,6 @@ export const QuantityDashboard: React.FC = () => {
 
       {/* Kinetic Energy card */}
       <DashboardCard
-        id="ke"
         title="Kinetic Energy"
         value={`${energy.kinetic.toFixed(4)} eV`}
         valueColor="#ff6666"
@@ -328,7 +325,6 @@ export const QuantityDashboard: React.FC = () => {
 
       {/* Potential Energy card */}
       <DashboardCard
-        id="pe"
         title="Potential Energy"
         value={`${energy.potential.toFixed(4)} eV`}
         valueColor="#66aaff"
@@ -348,7 +344,6 @@ export const QuantityDashboard: React.FC = () => {
 
       {/* Total Energy card */}
       <DashboardCard
-        id="total"
         title="Total Energy"
         value={`${energy.total.toFixed(4)} eV`}
         valueColor="#66ff66"
