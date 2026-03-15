@@ -135,6 +135,18 @@ interface UIStore {
   /** Whether the trajectory timeline panel is visible */
   showTimeline: boolean;
   toggleTimeline: () => void;
+
+  // ---- Concept annotations on 3D scene ----
+  /** Master toggle for all concept annotations */
+  showAnnotations: boolean;
+  toggleAnnotations: () => void;
+  /** Per-type annotation toggles */
+  annotationCharges: boolean;
+  annotationBondEnergy: boolean;
+  annotationDipole: boolean;
+  toggleAnnotationCharges: () => void;
+  toggleAnnotationBondEnergy: () => void;
+  toggleAnnotationDipole: () => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
@@ -269,4 +281,17 @@ export const useUIStore = create<UIStore>((set, get) => ({
   // Trajectory timeline
   showTimeline: false,
   toggleTimeline: () => set({ showTimeline: !get().showTimeline }),
+
+  // Concept annotations
+  showAnnotations: false,
+  annotationCharges: true,
+  annotationBondEnergy: true,
+  annotationDipole: true,
+  toggleAnnotations: () => set({ showAnnotations: !get().showAnnotations }),
+  toggleAnnotationCharges: () =>
+    set({ annotationCharges: !get().annotationCharges }),
+  toggleAnnotationBondEnergy: () =>
+    set({ annotationBondEnergy: !get().annotationBondEnergy }),
+  toggleAnnotationDipole: () =>
+    set({ annotationDipole: !get().annotationDipole }),
 }));
