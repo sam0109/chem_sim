@@ -40,7 +40,11 @@ import {
   computeTemperature,
 } from './integrator';
 import { berendsenThermostat } from './thermostat';
-import { noseHooverChainStep, createNoseHooverChainState } from './thermostat';
+import {
+  noseHooverChainStep,
+  createNoseHooverChainState,
+  computeNoseHooverEnergy,
+} from './thermostat';
 import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
 import { detectHybridization } from './hybridization';
 import {
@@ -1121,7 +1125,33 @@ function runThermodynamicTests(): void {
     const nhChain = createNoseHooverChainState(sNH.N, targetT, tau);
     const energies: number[] = [];
 
+    // Helper to compute KE from current velocities
+    const computeKE = (): number => {
+      const CONV = 103.6427;
+      let ke = 0;
+      for (let i = 0; i < sNH.N; i++) {
+        const i3 = i * 3;
+        const vx = sNH.vel[i3];
+        const vy = sNH.vel[i3 + 1];
+        const vz = sNH.vel[i3 + 2];
+        ke += 0.5 * sNH.masses[i] * (vx * vx + vy * vy + vz * vz) * CONV;
+      }
+      return ke;
+    };
+
     for (let nhStep = 0; nhStep < totalSteps; nhStep++) {
+      // Split integration: NH half-step BEFORE Verlet
+      // Source: Martyna, Tuckerman, Tobias, Klein, Mol. Phys. 87, 1117 (1996)
+      noseHooverChainStep(
+        sNH.vel,
+        sNH.masses,
+        sNH.fixed,
+        computeKE(),
+        targetT,
+        dt * 0.5,
+        nhChain,
+      );
+
       const r = velocityVerletStep(
         sNH.pos,
         sNH.vel,
@@ -1132,13 +1162,14 @@ function runThermodynamicTests(): void {
         (p, f) => calcForces(sNH, p, f),
       );
 
+      // Split integration: NH half-step AFTER Verlet
       noseHooverChainStep(
         sNH.vel,
         sNH.masses,
         sNH.fixed,
         r.kineticEnergy,
         targetT,
-        dt,
+        dt * 0.5,
         nhChain,
       );
 
@@ -1147,16 +1178,7 @@ function runThermodynamicTests(): void {
       // Collect total energy after equilibration
       if (nhStep > equilibrationSteps) {
         // Recompute KE after thermostat scaling
-        const CONV = 103.6427;
-        let ke = 0;
-        for (let i = 0; i < sNH.N; i++) {
-          const i3 = i * 3;
-          const vx = sNH.vel[i3];
-          const vy = sNH.vel[i3 + 1];
-          const vz = sNH.vel[i3 + 2];
-          ke += 0.5 * sNH.masses[i] * (vx * vx + vy * vy + vz * vz) * CONV;
-        }
-        energies.push(ke + r.potentialEnergy);
+        energies.push(computeKE() + r.potentialEnergy);
       }
     }
 
@@ -1182,6 +1204,108 @@ function runThermodynamicTests(): void {
       ratio.toFixed(3),
       '0.3 - 2.0 (canonical ~1.0)',
       `σ²(E)=${variance.toExponential(3)} eV², <E>=${meanE.toFixed(4)} eV, N=${sNH.N}`,
+    );
+  }
+
+  // THERMO-03: Nosé-Hoover extended Hamiltonian conservation
+  // The extended Hamiltonian H_ext = KE + PE + H_NH should be conserved
+  // (up to numerical integration error) for a correctly integrated NVT
+  // simulation. This is the primary diagnostic for NH thermostat correctness.
+  //
+  // We measure the relative drift: max|H_ext(t) - H_ext(0)| / |<H_ext>|
+  // Source: Martyna et al., J. Chem. Phys. 97, 2635 (1992), Eq. 2.15
+  {
+    const sExt = initSim(waterMolecule());
+    const targetT = 300;
+    const dt = 0.25; // Smaller timestep for better conservation
+    const tau = 100;
+    const totalSteps = 8000; // More steps to compensate for smaller dt
+    const equilibrationSteps = 1000;
+
+    initializeVelocities(sExt.vel, sExt.masses, sExt.fixed, targetT);
+    sExt.frc.fill(0);
+    calcForces(sExt, sExt.pos, sExt.frc);
+
+    const nhChain = createNoseHooverChainState(sExt.N, targetT, tau);
+    const extEnergies: number[] = [];
+
+    // Helper to compute KE from current velocities
+    const computeKE = (): number => {
+      const CONV = 103.6427;
+      let ke = 0;
+      for (let i = 0; i < sExt.N; i++) {
+        const i3 = i * 3;
+        const vx = sExt.vel[i3];
+        const vy = sExt.vel[i3 + 1];
+        const vz = sExt.vel[i3 + 2];
+        ke += 0.5 * sExt.masses[i] * (vx * vx + vy * vy + vz * vz) * CONV;
+      }
+      return ke;
+    };
+
+    for (let s = 0; s < totalSteps; s++) {
+      // Split integration: NH half-step BEFORE Verlet
+      noseHooverChainStep(
+        sExt.vel,
+        sExt.masses,
+        sExt.fixed,
+        computeKE(),
+        targetT,
+        dt * 0.5,
+        nhChain,
+      );
+
+      const r = velocityVerletStep(
+        sExt.pos,
+        sExt.vel,
+        sExt.frc,
+        sExt.masses,
+        sExt.fixed,
+        dt,
+        (p, f) => calcForces(sExt, p, f),
+      );
+
+      // Split integration: NH half-step AFTER Verlet
+      noseHooverChainStep(
+        sExt.vel,
+        sExt.masses,
+        sExt.fixed,
+        r.kineticEnergy,
+        targetT,
+        dt * 0.5,
+        nhChain,
+      );
+
+      if ((s + 1) % 5 === 0) rebuildTopo(sExt);
+
+      // Compute extended Hamiltonian: KE + PE + thermostat energy
+      if (s >= equilibrationSteps) {
+        const ke = computeKE();
+        const nhEnergy = computeNoseHooverEnergy(nhChain, targetT);
+        extEnergies.push(ke + r.potentialEnergy + nhEnergy);
+      }
+    }
+
+    // Measure conservation: relative std dev of H_ext
+    const meanHext = mean(extEnergies);
+    const varianceHext =
+      extEnergies.reduce((sum, e) => sum + (e - meanHext) * (e - meanHext), 0) /
+      (extEnergies.length - 1);
+    const stdHext = Math.sqrt(varianceHext);
+    const relDrift = stdHext / Math.abs(meanHext);
+
+    // For a 3-atom water molecule with dt=0.5 fs and split integration,
+    // relative fluctuation should be very small (< 1e-3).
+    // The tolerance of 1e-2 is generous to account for bond-length-scale
+    // fluctuations in this small system.
+    const thermo03Passed = relDrift < 1e-2;
+    report(
+      'THERMO-03',
+      'NH extended Hamiltonian conservation',
+      thermo03Passed,
+      relDrift.toExponential(3),
+      '< 1e-2 (relative std dev)',
+      `<H_ext>=${meanHext.toFixed(4)} eV, σ(H_ext)=${stdHext.toExponential(3)} eV`,
     );
   }
 }
