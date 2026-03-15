@@ -165,6 +165,8 @@ export function computeElectronDensityGrid(
   }
 
   // ---- 4. Evaluate density on the grid ----
+  // Grid indexing convention: field[iz * ny * nx + iy * nx + ix]
+  // This matches the marchingCubes() expectation from marchingCubes.ts
   const totalPoints = nx * ny * nz;
   const values = new Float32Array(totalPoints);
 

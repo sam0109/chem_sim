@@ -3,11 +3,10 @@
 //
 // Computes a Gaussian superposition electron density for all atoms
 // in the simulation, extracts an isosurface via marching cubes, and
-// renders it as a translucent mesh. Updates only when atom positions
-// change significantly or when the user adjusts the isovalue/opacity.
+// renders it as a translucent mesh.
 // ==============================================================
 
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { useSimContextStoreApi } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
@@ -23,22 +22,50 @@ import { marchingCubes, type MarchingCubesMesh } from '../data/marchingCubes';
 const DENSITY_COLOR = 0x44aadd;
 
 /**
- * Squared distance threshold (in Angstrom^2) for triggering a
- * recomputation. If any atom moves more than sqrt(RECOMPUTE_THRESHOLD)
- * from its last-computed position, the density is recomputed.
- *
- * 0.25 Angstrom^2 = 0.5 Angstrom displacement — balances
- * responsiveness with performance.
+ * Compute the electron density mesh for a given set of atoms and isovalue.
+ * Pure function — no React refs or hooks.
  */
-const RECOMPUTE_THRESHOLD = 0.25;
+function computeDensityMesh(
+  atoms: ReadonlyArray<{
+    elementNumber: number;
+    position: [number, number, number];
+  }>,
+  positions: Float64Array,
+  isovalue: number,
+): MarchingCubesMesh | null {
+  if (atoms.length === 0) return null;
+
+  // Build input array from current positions
+  const densityAtoms: DensityAtomInput[] = atoms.map((atom, i) => ({
+    elementNumber: atom.elementNumber,
+    position:
+      positions.length > i * 3 + 2
+        ? [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]]
+        : [atom.position[0], atom.position[1], atom.position[2]],
+  }));
+
+  // Compute density grid
+  // Grid indexing convention: field[iz * ny * nx + iy * nx + ix]
+  // matching the marchingCubes() expectation from marchingCubes.ts
+  const grid = computeElectronDensityGrid(densityAtoms);
+  if (grid.values.length === 0) return null;
+
+  // Extract isosurface
+  return marchingCubes(
+    grid.values,
+    grid.dimensions,
+    grid.origin,
+    grid.cellSize,
+    isovalue,
+  );
+}
 
 /**
  * ElectronDensityRenderer — displays an electron density isosurface
  * for all atoms in the simulation.
  *
  * Reads atom positions from the simulation store and UI toggles
- * from the UI store. Only recomputes the density grid when atom
- * positions change beyond a threshold or when the isovalue changes.
+ * from the UI store. Recomputes whenever the toggle or isovalue changes.
  */
 export const ElectronDensityRenderer: React.FC = () => {
   const simStore = useSimContextStoreApi();
@@ -46,74 +73,12 @@ export const ElectronDensityRenderer: React.FC = () => {
   const electronDensityIsovalue = useUIStore((s) => s.electronDensityIsovalue);
   const electronDensityOpacity = useUIStore((s) => s.electronDensityOpacity);
 
-  // Track last-computed positions to avoid unnecessary recomputations
-  const lastPositionsRef = useRef<Float64Array>(new Float64Array(0));
-  const lastAtomCountRef = useRef<number>(0);
-  const lastIsovalueRef = useRef<number>(electronDensityIsovalue);
-
-  // Check whether positions have changed enough to warrant recomputation
-  const needsRecompute = (
-    positions: Float64Array,
-    atomCount: number,
-  ): boolean => {
-    if (atomCount !== lastAtomCountRef.current) return true;
-    if (electronDensityIsovalue !== lastIsovalueRef.current) return true;
-    if (lastPositionsRef.current.length !== positions.length) return true;
-
-    const prev = lastPositionsRef.current;
-    for (let i = 0; i < atomCount; i++) {
-      const dx = positions[i * 3] - prev[i * 3];
-      const dy = positions[i * 3 + 1] - prev[i * 3 + 1];
-      const dz = positions[i * 3 + 2] - prev[i * 3 + 2];
-      if (dx * dx + dy * dy + dz * dz > RECOMPUTE_THRESHOLD) {
-        return true;
-      }
-    }
-    return false;
-  };
-
   // Compute the isosurface mesh data
   const meshData: MarchingCubesMesh | null = useMemo(() => {
     if (!showElectronDensity) return null;
 
     const { atoms, positions } = simStore.getState();
-    if (atoms.length === 0) return null;
-
-    // Check if recomputation is needed
-    if (!needsRecompute(positions, atoms.length)) {
-      // Return a sentinel to keep the previous mesh
-      return undefined as unknown as MarchingCubesMesh | null;
-    }
-
-    // Build input array from current positions
-    const densityAtoms: DensityAtomInput[] = atoms.map((atom, i) => ({
-      elementNumber: atom.elementNumber,
-      position:
-        positions.length > i * 3 + 2
-          ? [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]]
-          : [atom.position[0], atom.position[1], atom.position[2]],
-    }));
-
-    // Compute density grid
-    const grid = computeElectronDensityGrid(densityAtoms);
-    if (grid.values.length === 0) return null;
-
-    // Extract isosurface
-    const mesh = marchingCubes(
-      grid.values,
-      grid.dimensions,
-      grid.origin,
-      grid.cellSize,
-      electronDensityIsovalue,
-    );
-
-    // Update tracking refs
-    lastPositionsRef.current = new Float64Array(positions);
-    lastAtomCountRef.current = atoms.length;
-    lastIsovalueRef.current = electronDensityIsovalue;
-
-    return mesh;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return computeDensityMesh(atoms, positions, electronDensityIsovalue);
   }, [showElectronDensity, electronDensityIsovalue, simStore]);
 
   // Build Three.js geometry from mesh data
@@ -130,16 +95,7 @@ export const ElectronDensityRenderer: React.FC = () => {
     return geo;
   }, [meshData]);
 
-  // Clean up geometry on unmount
-  const geoRef = useRef(geometry);
-  geoRef.current = geometry;
-  useEffect(() => {
-    return () => {
-      geoRef.current.dispose();
-    };
-  }, []);
-
-  // Dispose old geometry when it changes
+  // Dispose old geometry when it changes or on unmount
   useEffect(() => {
     return () => {
       geometry.dispose();
