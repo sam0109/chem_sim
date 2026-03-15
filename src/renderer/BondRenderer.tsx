@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { useSimContextStoreApi } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
+import { BOND_TYPE_COLORS } from '../data/bondColors';
 
 const _tempObject = new THREE.Object3D();
 const _tempColor = new THREE.Color();
@@ -26,6 +27,7 @@ export const BondRenderer: React.FC = () => {
   const colorArrayRef = useRef(new Float32Array(MAX_BONDS * 3));
   const simStore = useSimContextStoreApi();
   const renderMode = useUIStore((s) => s.renderMode);
+  const bondColorMode = useUIStore((s) => s.bondColorMode);
 
   const geometry = useMemo(() => {
     return new THREE.CylinderGeometry(1, 1, 1, 8, 1);
@@ -90,7 +92,7 @@ export const BondRenderer: React.FC = () => {
       // For now, scale radius by sqrt(order) as visual hint
       radius *= Math.sqrt(bond.order);
 
-      // First half: start → mid (colored by atom A)
+      // First half: start → mid (colored by atom A or bond type)
       const midA = new THREE.Vector3().lerpVectors(_start, _mid, 0.5);
       _tempObject.position.copy(midA);
       // Midpoint of first half
@@ -100,22 +102,30 @@ export const BondRenderer: React.FC = () => {
       _tempObject.updateMatrix();
       mesh.setMatrixAt(instanceIdx, _tempObject.matrix);
 
-      const elA = elements[atoms[bond.atomA].elementNumber];
-      _tempColor.set(elA?.color ?? '#cccccc');
+      if (bondColorMode === 'bondType') {
+        _tempColor.set(BOND_TYPE_COLORS[bond.type]);
+      } else {
+        const elA = elements[atoms[bond.atomA].elementNumber];
+        _tempColor.set(elA?.color ?? '#cccccc');
+      }
       colors[instanceIdx * 3] = _tempColor.r;
       colors[instanceIdx * 3 + 1] = _tempColor.g;
       colors[instanceIdx * 3 + 2] = _tempColor.b;
       instanceIdx++;
 
-      // Second half: mid → end (colored by atom B)
+      // Second half: mid → end (colored by atom B or bond type)
       _tempObject.position.lerpVectors(_mid, _end, 0.5);
       _tempObject.quaternion.copy(_quat);
       _tempObject.scale.set(radius, halfLength, radius);
       _tempObject.updateMatrix();
       mesh.setMatrixAt(instanceIdx, _tempObject.matrix);
 
-      const elB = elements[atoms[bond.atomB].elementNumber];
-      _tempColor.set(elB?.color ?? '#cccccc');
+      if (bondColorMode === 'bondType') {
+        _tempColor.set(BOND_TYPE_COLORS[bond.type]);
+      } else {
+        const elB = elements[atoms[bond.atomB].elementNumber];
+        _tempColor.set(elB?.color ?? '#cccccc');
+      }
       colors[instanceIdx * 3] = _tempColor.r;
       colors[instanceIdx * 3 + 1] = _tempColor.g;
       colors[instanceIdx * 3 + 2] = _tempColor.b;

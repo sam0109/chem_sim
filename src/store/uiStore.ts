@@ -7,6 +7,7 @@ import type {
   InteractionTool,
   MeasurementResult,
   ColorMode,
+  BondColorMode,
   PeriodicTableColorMode,
 } from '../data/types';
 
@@ -67,6 +68,9 @@ interface UIStore {
   toggleLabels: () => void;
   colorMode: ColorMode;
   setColorMode: (mode: ColorMode) => void;
+  bondColorMode: BondColorMode;
+  setBondColorMode: (mode: BondColorMode) => void;
+  toggleBondColorMode: () => void;
 
   // ---- Comparison mode ----
   comparisonMode: boolean;
@@ -115,6 +119,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   renderMode: 'ball-and-stick',
   showLabels: true,
   colorMode: 'element' as ColorMode,
+  bondColorMode: 'element' as BondColorMode,
   periodicTableColorMode: 'category' as PeriodicTableColorMode,
   hoveredElement: null,
   comparedElements: null,
@@ -172,6 +177,11 @@ export const useUIStore = create<UIStore>((set, get) => ({
   setRenderMode: (mode) => set({ renderMode: mode }),
   toggleLabels: () => set({ showLabels: !get().showLabels }),
   setColorMode: (mode) => set({ colorMode: mode }),
+  setBondColorMode: (mode) => set({ bondColorMode: mode }),
+  toggleBondColorMode: () =>
+    set({
+      bondColorMode: get().bondColorMode === 'element' ? 'bondType' : 'element',
+    }),
   toggleComparisonMode: () => set({ comparisonMode: !get().comparisonMode }),
 
   // Encounter setters
