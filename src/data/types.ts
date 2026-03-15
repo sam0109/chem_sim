@@ -233,6 +233,12 @@ export interface WorkerMinimizeMessage {
   tolerance: number;
 }
 
+export interface WorkerSetVelocitiesMessage {
+  type: 'set-velocities';
+  /** Entries specifying which atoms get new velocities */
+  entries: Array<{ atomIndex: number; velocity: Vector3Tuple }>;
+}
+
 export type WorkerInMessage =
   | WorkerInitMessage
   | WorkerStepMessage
@@ -240,7 +246,8 @@ export type WorkerInMessage =
   | WorkerAddAtomMessage
   | WorkerRemoveAtomMessage
   | WorkerDragMessage
-  | WorkerMinimizeMessage;
+  | WorkerMinimizeMessage
+  | WorkerSetVelocitiesMessage;
 
 export interface WorkerStateUpdate {
   type: 'state';
@@ -272,6 +279,7 @@ export type WorkerOutMessage = WorkerStateUpdate | WorkerReadyMessage;
 export type InteractionTool =
   | 'select'
   | 'place-atom'
+  | 'place-molecule'
   | 'draw-bond'
   | 'delete'
   | 'drag'
