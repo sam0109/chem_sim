@@ -63,6 +63,10 @@ interface UIStore {
   toggleLabels: () => void;
   colorMode: ColorMode;
   setColorMode: (mode: ColorMode) => void;
+
+  // ---- Comparison mode ----
+  comparisonMode: boolean;
+  toggleComparisonMode: () => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
@@ -82,6 +86,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
   hoveredElement: null,
   comparedElements: null,
   showTrendAnnotations: false,
+  comparisonMode: false,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
   setSelectedElement: (z) => set({ selectedElement: z }),
@@ -125,4 +130,5 @@ export const useUIStore = create<UIStore>((set, get) => ({
   setRenderMode: (mode) => set({ renderMode: mode }),
   toggleLabels: () => set({ showLabels: !get().showLabels }),
   setColorMode: (mode) => set({ colorMode: mode }),
+  toggleComparisonMode: () => set({ comparisonMode: !get().comparisonMode }),
 }));
