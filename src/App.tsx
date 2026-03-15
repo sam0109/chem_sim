@@ -25,6 +25,7 @@ import { SimulationContext } from './store/SimulationContext';
 import { ReactionLog } from './ui/ReactionLog';
 import { EventLog } from './ui/EventLog';
 import { QuantityDashboard } from './ui/QuantityDashboard';
+import { TimelineControls } from './ui/TimelineControls';
 import { CrystalBuilderPanel } from './ui/CrystalBuilderPanel';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
@@ -696,6 +697,7 @@ const App: React.FC = () => {
         <ReactionLog />
         <EventLog />
         <QuantityDashboard />
+        <TimelineControls />
         <CrystalBuilderPanel />
 
         <div

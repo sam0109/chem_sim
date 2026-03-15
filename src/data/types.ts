@@ -461,3 +461,48 @@ export interface MeasurementResult {
   atomIds: number[];
   value: number; // Å for distance, degrees for angle/dihedral
 }
+
+// --------------- Trajectory Recording ---------------
+
+/** A single snapshot of simulation state for trajectory replay */
+export interface TrajectoryFrame {
+  /** Simulation step when this frame was captured */
+  step: number;
+  /** Flat Float64Array: [x0,y0,z0,x1,y1,z1,...] */
+  positions: Float64Array;
+  /** Updated bonds array (topology may have changed due to reactions) */
+  bonds: Bond[];
+  /** Partial charges per atom */
+  charges: Float64Array;
+  /** System energies in eV */
+  energy: {
+    kinetic: number;
+    potential: number;
+    total: number;
+    thermostat: number;
+  };
+  /** Per-force-type potential energy decomposition */
+  energyBreakdown: EnergyBreakdown;
+  /** Instantaneous temperature in K */
+  temperature: number;
+  /** Molecule ID per atom (from union-find on bond graph) */
+  moleculeIds: Int32Array;
+  /** Per-molecule computed properties */
+  molecules: MoleculeInfo[];
+}
+
+/** State for the trajectory recording and replay system */
+export interface TrajectoryState {
+  /** Whether new frames are being recorded from the simulation */
+  recording: boolean;
+  /** Whether trajectory playback is active */
+  playing: boolean;
+  /** Current frame index during playback (-1 when not in playback) */
+  currentFrameIndex: number;
+  /** Playback speed multiplier (e.g., 0.25, 0.5, 1, 2, 4) */
+  playbackSpeed: number;
+  /** Recorded trajectory frames (ring buffer, oldest dropped when full) */
+  frames: TrajectoryFrame[];
+  /** Maximum number of frames to store before dropping oldest */
+  maxFrames: number;
+}

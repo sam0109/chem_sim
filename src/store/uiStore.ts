@@ -130,6 +130,11 @@ interface UIStore {
   /** Opacity of the electron density surface (default 0.35) */
   electronDensityOpacity: number;
   setElectronDensityOpacity: (v: number) => void;
+
+  // ---- Trajectory timeline ----
+  /** Whether the trajectory timeline panel is visible */
+  showTimeline: boolean;
+  toggleTimeline: () => void;
 }
 
 export const useUIStore = create<UIStore>((set, get) => ({
@@ -260,4 +265,8 @@ export const useUIStore = create<UIStore>((set, get) => ({
     set({ showElectronDensity: !get().showElectronDensity }),
   setElectronDensityIsovalue: (v) => set({ electronDensityIsovalue: v }),
   setElectronDensityOpacity: (v) => set({ electronDensityOpacity: v }),
+
+  // Trajectory timeline
+  showTimeline: false,
+  toggleTimeline: () => set({ showTimeline: !get().showTimeline }),
 }));
