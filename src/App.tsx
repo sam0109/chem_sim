@@ -10,7 +10,6 @@ import { PropertyPanel } from './ui/PropertyPanel';
 import { Toolbar } from './ui/Toolbar';
 import { EnergyPlot } from './ui/EnergyPlot';
 import { useSimulationStore } from './store/simulationStore';
-import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
 import { parseXYZ } from './io/xyz';
 
@@ -27,7 +26,7 @@ const App: React.FC = () => {
       initSimulation(atoms);
       setLoading(false);
     })();
-  }, []);
+  }, [initWorker, initSimulation]);
 
   const handleLoadExample = (name: string) => {
     const factory = exampleMolecules[name as keyof typeof exampleMolecules];
