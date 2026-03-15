@@ -10,9 +10,8 @@
 // j-k is the central bond. φ is the angle between the planes
 // i-j-k and j-k-l.
 //
-// Forces are derived via the chain rule:
-//   F_atom = -dV/dφ · dφ/dr_atom
-// using the standard cross-product formulation.
+// Forces derived following the GROMACS formulation
+// (GROMACS Reference Manual, §4.2.13).
 // ==============================================================
 
 /**
@@ -47,27 +46,28 @@ export function torsionForce(
   const k3 = k * 3;
   const l3 = l * 3;
 
-  // Vectors along the dihedral: b1 = j-i, b2 = k-j, b3 = l-k
-  const b1x = positions[j3] - positions[i3];
-  const b1y = positions[j3 + 1] - positions[i3 + 1];
-  const b1z = positions[j3 + 2] - positions[i3 + 2];
+  // GROMACS convention vectors:
+  // r_ij = r_i - r_j, r_kj = r_k - r_j, r_kl = r_k - r_l
+  const rij_x = positions[i3] - positions[j3];
+  const rij_y = positions[i3 + 1] - positions[j3 + 1];
+  const rij_z = positions[i3 + 2] - positions[j3 + 2];
 
-  const b2x = positions[k3] - positions[j3];
-  const b2y = positions[k3 + 1] - positions[j3 + 1];
-  const b2z = positions[k3 + 2] - positions[j3 + 2];
+  const rkj_x = positions[k3] - positions[j3];
+  const rkj_y = positions[k3 + 1] - positions[j3 + 1];
+  const rkj_z = positions[k3 + 2] - positions[j3 + 2];
 
-  const b3x = positions[l3] - positions[k3];
-  const b3y = positions[l3 + 1] - positions[k3 + 1];
-  const b3z = positions[l3 + 2] - positions[k3 + 2];
+  const rkl_x = positions[k3] - positions[l3];
+  const rkl_y = positions[k3 + 1] - positions[l3 + 1];
+  const rkl_z = positions[k3 + 2] - positions[l3 + 2];
 
-  // Cross products: m = b1 × b2, n_vec = b2 × b3
-  const mx = b1y * b2z - b1z * b2y;
-  const my = b1z * b2x - b1x * b2z;
-  const mz = b1x * b2y - b1y * b2x;
+  // Normal vectors: m = r_ij × r_kj, n_vec = r_kj × r_kl
+  const mx = rij_y * rkj_z - rij_z * rkj_y;
+  const my = rij_z * rkj_x - rij_x * rkj_z;
+  const mz = rij_x * rkj_y - rij_y * rkj_x;
 
-  const nx = b2y * b3z - b2z * b3y;
-  const ny = b2z * b3x - b2x * b3z;
-  const nz = b2x * b3y - b2y * b3x;
+  const nx = rkj_y * rkl_z - rkj_z * rkl_y;
+  const ny = rkj_z * rkl_x - rkj_x * rkl_z;
+  const nz = rkj_x * rkl_y - rkj_y * rkl_x;
 
   const mm = mx * mx + my * my + mz * mz;
   const nn = nx * nx + ny * ny + nz * nz;
@@ -82,12 +82,12 @@ export function torsionForce(
   const invMN = 1.0 / Math.sqrt(mm * nn);
   const cosPhi = Math.max(-1, Math.min(1, mn * invMN));
 
-  // sin(φ) via triple product: sin(φ) = (b1 · n) · |b2| / (|m| · |n|)
-  const b2len = Math.sqrt(b2x * b2x + b2y * b2y + b2z * b2z);
-  if (b2len < 1e-10) return 0;
+  // sin(φ) via triple product: (r_ij · n) · |r_kj| / (|m| · |n|)
+  const rkjLen = Math.sqrt(rkj_x * rkj_x + rkj_y * rkj_y + rkj_z * rkj_z);
+  if (rkjLen < 1e-10) return 0;
 
-  const b1_dot_n = b1x * nx + b1y * ny + b1z * nz;
-  const sinPhi = b1_dot_n * b2len * invMN;
+  const rij_dot_n = rij_x * nx + rij_y * ny + rij_z * nz;
+  const sinPhi = rij_dot_n * rkjLen * invMN;
 
   // Dihedral angle
   const phi = Math.atan2(sinPhi, cosPhi);
@@ -98,44 +98,50 @@ export function torsionForce(
   const energy = 0.5 * V * (1 - cosNPhi0 * cosNPhi);
 
   // dV/dφ = (V/2) · n · cos(nφ₀) · sin(nφ)
+  // The negative sign arises because d(cosθ)/dθ = -sinθ, applied to
+  // d/dφ[-cos(nφ₀)·cos(nφ)] = -cos(nφ₀)·n·sin(nφ).
   const sinNPhi = Math.sin(n * phi);
-  const dVdphi = 0.5 * V * n * cosNPhi0 * sinNPhi;
+  const dVdphi = -0.5 * V * n * cosNPhi0 * sinNPhi;
 
-  // Forces on each atom using the Blondel-Karplus formulation:
-  // F_i = -dV/dφ · dφ/dr_i = -dV/dφ · (-|b2| / mm) · m
-  // F_l = -dV/dφ · dφ/dr_l = -dV/dφ · ( |b2| / nn) · n
-  // F_j and F_k by Newton's third law and partitioning
+  // Forces using GROMACS formulation (Manual §4.2.13):
+  //   dφ/dr_i = -|r_kj| / (m·m) · m
+  //   dφ/dr_l =  |r_kj| / (n·n) · n
+  //   F = -dV/dφ · dφ/dr
   //
-  // Reference: Blondel & Karplus, J Comput Chem 17, 1132 (1996)
+  // For central atoms j and k, use the exact decomposition:
+  //   dφ/dr_j = (r_ij·r_kj/|r_kj|² - 1)·dφ/dr_i - (r_kl·r_kj/|r_kj|²)·dφ/dr_l
+  //   dφ/dr_k = -(r_ij·r_kj/|r_kj|²)·dφ/dr_i + (r_kl·r_kj/|r_kj|² - 1)·dφ/dr_l
+  //
+  // Note: F_i + F_j + F_k + F_l = 0 by construction.
 
-  const fac_i = -dVdphi * (-b2len * invMM);
-  const fac_l = -dVdphi * (b2len * invNN);
+  // dφ/dr_i · (-dVdphi) → force on i
+  const fac_i = dVdphi * rkjLen * invMM;
 
-  // Force on atom i
+  // dφ/dr_l · (-dVdphi) → force on l
+  const fac_l = -dVdphi * rkjLen * invNN;
+
   const fi_x = fac_i * mx;
   const fi_y = fac_i * my;
   const fi_z = fac_i * mz;
 
-  // Force on atom l
   const fl_x = fac_l * nx;
   const fl_y = fac_l * ny;
   const fl_z = fac_l * nz;
 
-  // For j and k, we need projections of b1 and b3 onto b2
-  // p = (b1 · b2) / (b2 · b2), q = (b3 · b2) / (b2 · b2)
-  const invB2sq = 1.0 / (b2x * b2x + b2y * b2y + b2z * b2z);
-  const p = (b1x * b2x + b1y * b2y + b1z * b2z) * invB2sq;
-  const q = (b3x * b2x + b3y * b2y + b3z * b2z) * invB2sq;
+  // Projections onto the central bond
+  const invRkjSq = 1.0 / (rkj_x * rkj_x + rkj_y * rkj_y + rkj_z * rkj_z);
+  const p = (rij_x * rkj_x + rij_y * rkj_y + rij_z * rkj_z) * invRkjSq;
+  const q = (rkl_x * rkj_x + rkl_y * rkj_y + rkl_z * rkj_z) * invRkjSq;
 
-  // Force on atom j: F_j = -(1-p)·F_i + q·F_l
-  // Force on atom k: F_k = p·F_i - (1+q)·F_l
-  const fj_x = -(1 - p) * fi_x + q * fl_x;
-  const fj_y = -(1 - p) * fi_y + q * fl_y;
-  const fj_z = -(1 - p) * fi_z + q * fl_z;
+  // Force on j
+  const fj_x = (p - 1) * fi_x - q * fl_x;
+  const fj_y = (p - 1) * fi_y - q * fl_y;
+  const fj_z = (p - 1) * fi_z - q * fl_z;
 
-  const fk_x = p * fi_x - (1 + q) * fl_x;
-  const fk_y = p * fi_y - (1 + q) * fl_y;
-  const fk_z = p * fi_z - (1 + q) * fl_z;
+  // Force on k = -(F_i + F_j + F_l) ensures momentum conservation
+  const fk_x = -(fi_x + fj_x + fl_x);
+  const fk_y = -(fi_y + fj_y + fl_y);
+  const fk_z = -(fi_z + fj_z + fl_z);
 
   // Accumulate forces
   forces[i3] += fi_x;

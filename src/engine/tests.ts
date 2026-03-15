@@ -9,12 +9,18 @@
 // ==============================================================
 
 import elements from '../data/elements';
-import { getMorseBondParams, getLJParams, getUFFAngleK } from '../data/uff';
+import {
+  getMorseBondParams,
+  getLJParams,
+  getUFFAngleK,
+  getUFFTorsionParams,
+} from '../data/uff';
 import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
 import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
 import { pauliRepulsion } from './forces/pauli';
+import { torsionForce } from './forces/torsion';
 import { detectBonds, buildAngleList } from './bondDetector';
 import {
   velocityVerletStep,
@@ -392,6 +398,33 @@ function runGradientTests(): void {
     (p, f) => harmonicAngleForce(p, f, 0, 1, 2, linearK.kAngle, linearK.theta0),
     linearAnglePos,
     3,
+  );
+
+  // GRAD-08: Torsion gradient
+  // H-C-C-H fragment from ethane at ~60° dihedral (gauche)
+  // Atom layout: H(0)-C(1)-C(2)-H(3) with C-C along x-axis
+  const torsionPos = new Float64Array([
+    -1.09,
+    0.63,
+    0.0, // H at 120° from x-axis in xy-plane
+    0,
+    0,
+    0, // C at origin
+    1.52,
+    0,
+    0, // C along x-axis
+    2.61,
+    0.315,
+    0.546, // H at 60° dihedral
+  ]);
+  const torsionP = getUFFTorsionParams(6, 6, 'sp3', 'sp3', 1);
+  testGradient(
+    'GRAD-08',
+    'Torsion H-C-C-H gradient',
+    (p, f) =>
+      torsionForce(p, f, 0, 1, 2, 3, torsionP.V, torsionP.n, torsionP.phi0),
+    torsionPos,
+    4,
   );
 }
 
