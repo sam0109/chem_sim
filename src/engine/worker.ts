@@ -13,12 +13,18 @@ import type {
   WorkerStateUpdate,
 } from '../data/types';
 import elements from '../data/elements';
-import { getMorseBondParams, getLJParams, getUFFAngleK } from '../data/uff';
+import {
+  getMorseBondParams,
+  getLJParams,
+  getUFFAngleK,
+  getUFFTorsionParams,
+} from '../data/uff';
 import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
 import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
 import { pauliRepulsion } from './forces/pauli';
+import { torsionForce } from './forces/torsion';
 import {
   velocityVerletStep,
   computeTemperature,
@@ -30,6 +36,7 @@ import {
   detectBonds,
   detectHydrogenBonds,
   buildAngleList,
+  buildDihedralList,
 } from './bondDetector';
 import { CellList } from './neighborList';
 import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
@@ -48,6 +55,7 @@ let fixed: Uint8Array = new Uint8Array(0);
 let hybridizations: Hybridization[] = [];
 let bonds: Bond[] = [];
 let angles: Array<[number, number, number]> = [];
+let dihedrals: Array<[number, number, number, number]> = [];
 let config: SimulationConfig = {
   timestep: 0.5,
   temperature: 300,
@@ -75,6 +83,16 @@ let angleParams: Array<{
   k: number;
   kAngle: number;
   theta0: number;
+}> = [];
+// Cached torsion parameters (precomputed once per topology rebuild)
+let torsionParams: Array<{
+  i: number;
+  j: number;
+  k: number;
+  l: number;
+  V: number;
+  n: number;
+  phi0: number;
 }> = [];
 
 // --- Exclusion set: skip 1-2 (bonded) AND 1-3 (angle) pairs from LJ/Coulomb ---
@@ -141,6 +159,28 @@ function rebuildTopology(): void {
       hybridizations[central],
     );
     angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
+  }
+
+  // Build dihedral list and precompute torsion parameters
+  dihedrals = buildDihedralList(bonds, nAtoms);
+  torsionParams = [];
+  for (const [di, dj, dk, dl] of dihedrals) {
+    const {
+      V,
+      n: nPeriod,
+      phi0,
+    } = getUFFTorsionParams(
+      atomicNumbers[dj],
+      atomicNumbers[dk],
+      hybridizations[dj],
+      hybridizations[dk],
+      1,
+    );
+    if (V > 0) {
+      torsionParams.push({ i: di, j: dj, k: dk, l: dl, V, n: nPeriod, phi0 });
+    }
+    // 1-4 exclusion: dihedral terminal pairs skip LJ/Coulomb
+    exclusionSet.add(`${Math.min(di, dl)}-${Math.max(di, dl)}`);
   }
 
   // Compute Gasteiger partial charges from bond topology.
@@ -214,6 +254,21 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       ap.k,
       ap.kAngle,
       ap.theta0,
+    );
+  }
+
+  // 2.5. Torsion forces — using precomputed params
+  for (const tp of torsionParams) {
+    potentialEnergy += torsionForce(
+      pos,
+      frc,
+      tp.i,
+      tp.j,
+      tp.k,
+      tp.l,
+      tp.V,
+      tp.n,
+      tp.phi0,
     );
   }
 
@@ -356,6 +411,26 @@ function initSimulation(
         hybridizations[central],
       );
       angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
+    }
+    // Precompute torsion params and 1-4 exclusions
+    dihedrals = buildDihedralList(bonds, nAtoms);
+    torsionParams = [];
+    for (const [di, dj, dk, dl] of dihedrals) {
+      const {
+        V,
+        n: nPeriod,
+        phi0,
+      } = getUFFTorsionParams(
+        atomicNumbers[dj],
+        atomicNumbers[dk],
+        hybridizations[dj],
+        hybridizations[dk],
+        1,
+      );
+      if (V > 0) {
+        torsionParams.push({ i: di, j: dj, k: dk, l: dl, V, n: nPeriod, phi0 });
+      }
+      exclusionSet.add(`${Math.min(di, dl)}-${Math.max(di, dl)}`);
     }
   } else {
     rebuildTopology();
