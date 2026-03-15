@@ -134,6 +134,8 @@ const MAX_HISTORY = 500;
 const MAX_REACTION_LOG = 200;
 const MAX_EVENT_LOG = 200;
 const MAX_TRAJECTORY_FRAMES = 5000;
+// Memory budget: 5000 frames × 100 atoms × 3 coords × 8 bytes ≈ 12 MB.
+// Acceptable for browser use; ring buffer drops oldest frames when full.
 
 /**
  * Factory: creates a vanilla Zustand store with its own SimulationWorker.
@@ -164,6 +166,27 @@ function buildStoreSlice(
       clearInterval(playbackTimerId);
       playbackTimerId = null;
     }
+  }
+
+  /** Start a playback interval that advances frames at the given speed */
+  function startPlaybackInterval(speed: number): void {
+    clearPlaybackTimer();
+    const intervalMs = Math.max(1, Math.round(16 / speed));
+    playbackTimerId = setInterval(() => {
+      const { trajectory: t } = get();
+      if (!t.playing) {
+        clearPlaybackTimer();
+        return;
+      }
+      const nextIndex = t.currentFrameIndex + 1;
+      if (nextIndex >= t.frames.length) {
+        clearPlaybackTimer();
+        set({ trajectory: { ...t, playing: false } });
+        return;
+      }
+      set({ trajectory: { ...t, currentFrameIndex: nextIndex } });
+      applyFrame(t.frames[nextIndex]);
+    }, intervalMs);
   }
 
   /** Apply a trajectory frame's data to the store, updating all visual state */
@@ -314,7 +337,7 @@ function buildStoreSlice(
         const frame: TrajectoryFrame = {
           step: state.step,
           positions: state.positions.slice(),
-          bonds: state.bonds,
+          bonds: [...state.bonds], // defensive copy — topology may change between frames
           charges: state.charges.slice(),
           energy: { ...state.energy },
           energyBreakdown: { ...state.energyBreakdown },
@@ -322,7 +345,7 @@ function buildStoreSlice(
           moleculeIds: state.moleculeIds
             ? new Int32Array(state.moleculeIds)
             : new Int32Array(0),
-          molecules: state.molecules ?? [],
+          molecules: [...(state.molecules ?? [])], // defensive copy
         };
         const newFrames = [...trajectory.frames, frame];
         if (newFrames.length > trajectory.maxFrames) {
@@ -512,25 +535,8 @@ function buildStoreSlice(
       // Apply the first frame immediately
       applyFrame(trajectory.frames[startIndex]);
 
-      // Start playback interval: base rate ~60 fps (16ms), speed adjusts interval
-      clearPlaybackTimer();
-      const intervalMs = Math.max(1, Math.round(16 / trajectory.playbackSpeed));
-      playbackTimerId = setInterval(() => {
-        const { trajectory: t } = get();
-        if (!t.playing) {
-          clearPlaybackTimer();
-          return;
-        }
-        const nextIndex = t.currentFrameIndex + 1;
-        if (nextIndex >= t.frames.length) {
-          // Reached end of trajectory — stop playback
-          clearPlaybackTimer();
-          set({ trajectory: { ...t, playing: false } });
-          return;
-        }
-        set({ trajectory: { ...t, currentFrameIndex: nextIndex } });
-        applyFrame(t.frames[nextIndex]);
-      }, intervalMs);
+      // Start playback interval
+      startPlaybackInterval(trajectory.playbackSpeed);
     },
 
     stopPlayback() {
@@ -585,23 +591,7 @@ function buildStoreSlice(
 
       // If currently playing, restart the timer with the new speed
       if (trajectory.playing) {
-        clearPlaybackTimer();
-        const intervalMs = Math.max(1, Math.round(16 / speed));
-        playbackTimerId = setInterval(() => {
-          const { trajectory: t } = get();
-          if (!t.playing) {
-            clearPlaybackTimer();
-            return;
-          }
-          const nextIndex = t.currentFrameIndex + 1;
-          if (nextIndex >= t.frames.length) {
-            clearPlaybackTimer();
-            set({ trajectory: { ...t, playing: false } });
-            return;
-          }
-          set({ trajectory: { ...t, currentFrameIndex: nextIndex } });
-          applyFrame(t.frames[nextIndex]);
-        }, intervalMs);
+        startPlaybackInterval(speed);
       }
     },
 
