@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { detectBonds, detectHydrogenBonds, buildAngleList } from '../bondDetector.ts';
+import {
+  detectBonds,
+  detectHydrogenBonds,
+  buildAngleList,
+} from '../bondDetector.ts';
 import type { Bond } from '../../data/types.ts';
 
 describe('detectBonds', () => {
@@ -18,9 +22,15 @@ describe('detectBonds', () => {
     // O at origin, H1 at ~0.96 Å along +x, H2 at ~0.96 Å at 104.5°
     const angle = (104.5 * Math.PI) / 180;
     const positions = new Float64Array([
-      0, 0, 0,                                     // O
-      0.96, 0, 0,                                   // H1
-      0.96 * Math.cos(angle), 0.96 * Math.sin(angle), 0, // H2
+      0,
+      0,
+      0, // O
+      0.96,
+      0,
+      0, // H1
+      0.96 * Math.cos(angle),
+      0.96 * Math.sin(angle),
+      0, // H2
     ]);
     const atomicNumbers = [8, 1, 1];
 
@@ -56,16 +66,22 @@ describe('detectBonds', () => {
     // Hydrogen can only form 1 bond (maxValence = 1)
     // Place one H between two O atoms
     const positions = new Float64Array([
-      0, 0, 0,    // O1
-      0.96, 0, 0, // H (bonded to O1)
-      1.92, 0, 0, // O2 (also close to H)
+      0,
+      0,
+      0, // O1
+      0.96,
+      0,
+      0, // H (bonded to O1)
+      1.92,
+      0,
+      0, // O2 (also close to H)
     ]);
     const atomicNumbers = [8, 1, 8];
 
     const bonds = detectBonds(positions, atomicNumbers);
 
     // H should only have 1 bond (maxValence = 1)
-    const hBonds = bonds.filter(b => b.atomA === 1 || b.atomB === 1);
+    const hBonds = bonds.filter((b) => b.atomA === 1 || b.atomB === 1);
     expect(hBonds.length).toBeLessThanOrEqual(1);
   });
 
@@ -84,8 +100,16 @@ describe('detectBonds', () => {
     const bondsNew = detectBonds(positions, atomicNumbers, 1.2, [], 1.5);
 
     // With existing bond: should preserve
-    const existingBonds: Bond[] = [{ atomA: 0, atomB: 1, order: 1, type: 'covalent' }];
-    const bondsExisting = detectBonds(positions, atomicNumbers, 1.2, existingBonds, 1.5);
+    const existingBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+    ];
+    const bondsExisting = detectBonds(
+      positions,
+      atomicNumbers,
+      1.2,
+      existingBonds,
+      1.5,
+    );
 
     // The existing bond scenario should detect at least as many bonds
     expect(bondsExisting.length).toBeGreaterThanOrEqual(bondsNew.length);
@@ -112,9 +136,15 @@ describe('detectHydrogenBonds', () => {
     // Set up geometry: O at origin, H at (-0.96, 0, 0), acceptor O at (1.5, 0, 0)
     // D→H = (-0.96, 0, 0), H→A = (2.46, 0, 0) → angle ~180° > 120° ✓
     const positions = new Float64Array([
-      0, 0, 0,      // atom 0: donor O
-      -0.96, 0, 0,  // atom 1: H (behind donor relative to acceptor)
-      1.5, 0, 0,    // atom 2: acceptor O
+      0,
+      0,
+      0, // atom 0: donor O
+      -0.96,
+      0,
+      0, // atom 1: H (behind donor relative to acceptor)
+      1.5,
+      0,
+      0, // atom 2: acceptor O
     ]);
     const atomicNumbers = [8, 1, 8];
     const existingBonds: Bond[] = [
@@ -131,9 +161,15 @@ describe('detectHydrogenBonds', () => {
 
   it('does not detect H-bond at large distance', () => {
     const positions = new Float64Array([
-      0, 0, 0,
-      0.96, 0, 0,
-      10, 0, 0, // too far
+      0,
+      0,
+      0,
+      0.96,
+      0,
+      0,
+      10,
+      0,
+      0, // too far
     ]);
     const atomicNumbers = [8, 1, 8];
     const existingBonds: Bond[] = [
@@ -147,9 +183,15 @@ describe('detectHydrogenBonds', () => {
   it('requires donor atom to be N, O, or F', () => {
     // C-H ... O: carbon is not a valid H-bond donor
     const positions = new Float64Array([
-      0, 0, 0,     // C
-      0.96, 0, 0,  // H
-      2.7, 0, 0,   // O
+      0,
+      0,
+      0, // C
+      0.96,
+      0,
+      0, // H
+      2.7,
+      0,
+      0, // O
     ]);
     const atomicNumbers = [6, 1, 8]; // C, H, O
     const existingBonds: Bond[] = [
@@ -197,9 +239,7 @@ describe('buildAngleList', () => {
   });
 
   it('returns empty for single bond', () => {
-    const bonds: Bond[] = [
-      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
-    ];
+    const bonds: Bond[] = [{ atomA: 0, atomB: 1, order: 1, type: 'covalent' }];
 
     const angles = buildAngleList(bonds, 2);
     expect(angles.length).toBe(0);

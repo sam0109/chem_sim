@@ -19,7 +19,15 @@ describe('steepestDescent', () => {
       return 0.5 * k * dx * dx;
     };
 
-    const finalEnergy = steepestDescent(positions, forces, fixed, 1, computeForces, 500, 0.001);
+    const finalEnergy = steepestDescent(
+      positions,
+      forces,
+      fixed,
+      1,
+      computeForces,
+      500,
+      0.001,
+    );
 
     expect(positions[0]).toBeCloseTo(x0, 1);
     expect(finalEnergy).toBeLessThan(0.01);
@@ -113,7 +121,15 @@ describe('steepestDescent', () => {
       return energy;
     };
 
-    const finalEnergy = steepestDescent(positions, forces, fixed, 2, computeForces, 500, 0.001);
+    const finalEnergy = steepestDescent(
+      positions,
+      forces,
+      fixed,
+      2,
+      computeForces,
+      500,
+      0.001,
+    );
 
     const finalDist = Math.abs(positions[3] - positions[0]);
     expect(finalDist).toBeCloseTo(re, 0);
