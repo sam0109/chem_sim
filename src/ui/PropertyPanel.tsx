@@ -281,6 +281,9 @@ export const PropertyPanel: React.FC = () => {
 
       {/* Orbital visualization controls */}
       <OrbitalControls atoms={selectedAtoms} />
+
+      {/* Electron density visualization controls */}
+      <ElectronDensityControls />
     </div>
   );
 };
@@ -409,6 +412,110 @@ const OrbitalControls: React.FC<{ atoms: Atom[] }> = ({ atoms }) => {
             />
             <span style={{ color: '#aaa', minWidth: 36, textAlign: 'right' }}>
               {orbitalIsovalue.toFixed(3)}
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ---- Electron Density Controls Sub-component ----
+
+const ElectronDensityControls: React.FC = () => {
+  const showElectronDensity = useUIStore((s) => s.showElectronDensity);
+  const toggleElectronDensity = useUIStore((s) => s.toggleElectronDensity);
+  const electronDensityIsovalue = useUIStore((s) => s.electronDensityIsovalue);
+  const setElectronDensityIsovalue = useUIStore(
+    (s) => s.setElectronDensityIsovalue,
+  );
+  const electronDensityOpacity = useUIStore((s) => s.electronDensityOpacity);
+  const setElectronDensityOpacity = useUIStore(
+    (s) => s.setElectronDensityOpacity,
+  );
+
+  const handleIsovalueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setElectronDensityIsovalue(parseFloat(e.target.value));
+  };
+
+  const handleOpacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setElectronDensityOpacity(parseFloat(e.target.value));
+  };
+
+  return (
+    <div
+      style={{
+        marginTop: 8,
+        padding: 6,
+        background: 'rgba(68,170,221,0.08)',
+        borderRadius: 4,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          marginBottom: 4,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={showElectronDensity}
+          onChange={toggleElectronDensity}
+          style={{ margin: 0, cursor: 'pointer' }}
+        />
+        <span style={{ fontSize: 11, color: '#44aadd' }}>Electron Density</span>
+      </div>
+
+      {showElectronDensity && (
+        <>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 10,
+              marginBottom: 4,
+            }}
+          >
+            <span style={{ color: '#888', whiteSpace: 'nowrap' }}>
+              Isovalue
+            </span>
+            <input
+              type="range"
+              min={0.001}
+              max={0.5}
+              step={0.001}
+              value={electronDensityIsovalue}
+              onChange={handleIsovalueChange}
+              style={{ flex: 1, cursor: 'pointer' }}
+            />
+            <span style={{ color: '#aaa', minWidth: 36, textAlign: 'right' }}>
+              {electronDensityIsovalue.toFixed(3)}
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 10,
+            }}
+          >
+            <span style={{ color: '#888', whiteSpace: 'nowrap' }}>Opacity</span>
+            <input
+              type="range"
+              min={0.1}
+              max={0.8}
+              step={0.05}
+              value={electronDensityOpacity}
+              onChange={handleOpacityChange}
+              style={{ flex: 1, cursor: 'pointer' }}
+            />
+            <span style={{ color: '#aaa', minWidth: 36, textAlign: 'right' }}>
+              {electronDensityOpacity.toFixed(2)}
             </span>
           </div>
         </>
