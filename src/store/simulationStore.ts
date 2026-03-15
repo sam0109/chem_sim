@@ -55,6 +55,7 @@ export interface SimulationStoreState {
 
   // ---- Actions ----
   setConfig: (config: Partial<SimulationConfig>) => void;
+  setBox: (box: Partial<SimulationBox>) => void;
   addAtom: (atom: Atom) => void;
   addMolecule: (atoms: Atom[]) => void;
   removeAtom: (atomId: number) => void;
@@ -172,6 +173,7 @@ function buildStoreSlice(
         energyHistory: newHistory,
         moleculeIds: state.moleculeIds ?? new Int32Array(0),
         molecules: state.molecules ?? [],
+        ...(state.box ? { box: state.box } : {}),
         ...(state.reactionEvents && state.reactionEvents.length > 0
           ? {
               reactionLog: [
@@ -187,6 +189,12 @@ function buildStoreSlice(
       const config = { ...get().config, ...partialConfig };
       set({ config });
       get().worker?.updateConfig(partialConfig);
+    },
+
+    setBox(partialBox: Partial<SimulationBox>) {
+      const newBox = { ...get().box, ...partialBox };
+      set({ box: newBox });
+      get().worker?.updateBox(partialBox);
     },
 
     addAtom(atom: Atom) {

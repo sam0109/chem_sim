@@ -52,6 +52,8 @@ import {
 } from '../io/examples';
 import type { Atom, Bond, Hybridization } from '../data/types';
 import { findMolecules, computeMoleculeInfo } from './moleculeTracker';
+import { minimumImage, wrapPositions } from './pbc';
+import type { Vector3Tuple } from '../data/types';
 import {
   diffBonds,
   detectReactions,
@@ -1412,6 +1414,267 @@ function runMoleculeTests(): void {
   }
 }
 
+// ==============================================================
+// PERIODIC BOUNDARY CONDITION TESTS
+// ==============================================================
+
+function runPBCTests(): void {
+  console.log('\n=== PERIODIC BOUNDARY CONDITION TESTS ===\n');
+
+  // PBC-01: Minimum image convention correctness
+  // Two atoms at opposite edges of a 10 Å box should see a short distance,
+  // not the naive long distance.
+  {
+    if (!isSkipped('PBC-01')) {
+      const boxSize: Vector3Tuple = [10, 10, 10];
+
+      // Atom at x=1, other at x=9 → naive dx=8, minimum image dx=-2
+      const [dx, dy, dz] = minimumImage(8, 0, 0, boxSize);
+      const r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      // Should give distance of 2, not 8
+      const passed = Math.abs(r - 2.0) < 1e-10;
+      report(
+        'PBC-01',
+        'Minimum image convention gives shortest distance',
+        passed,
+        `r=${r.toFixed(6)} Å (dx=${dx.toFixed(4)})`,
+        'r = 2.0 Å (not 8.0 Å)',
+      );
+    }
+  }
+
+  // PBC-02: Position wrapping into primary cell
+  {
+    if (!isSkipped('PBC-02')) {
+      const boxSize: Vector3Tuple = [10, 10, 10];
+      const positions = new Float64Array([
+        -1,
+        12,
+        25, // atom 0: all outside box
+        5,
+        5,
+        5, // atom 1: already inside
+        10.001,
+        -0.001,
+        20.5, // atom 2: edge cases
+      ]);
+
+      wrapPositions(positions, 3, boxSize);
+
+      // Atom 0: -1 → 9, 12 → 2, 25 → 5
+      // Atom 1: unchanged (5, 5, 5)
+      // Atom 2: 10.001 → 0.001, -0.001 → 9.999, 20.5 → 0.5
+      const tol = 1e-6;
+      const check0 =
+        Math.abs(positions[0] - 9) < tol &&
+        Math.abs(positions[1] - 2) < tol &&
+        Math.abs(positions[2] - 5) < tol;
+      const check1 =
+        Math.abs(positions[3] - 5) < tol &&
+        Math.abs(positions[4] - 5) < tol &&
+        Math.abs(positions[5] - 5) < tol;
+      const check2 =
+        Math.abs(positions[6] - 0.001) < tol &&
+        Math.abs(positions[7] - 9.999) < tol &&
+        Math.abs(positions[8] - 0.5) < tol;
+
+      const passed = check0 && check1 && check2;
+      report(
+        'PBC-02',
+        'Position wrapping maps atoms into primary cell',
+        passed,
+        `[${positions[0].toFixed(3)},${positions[1].toFixed(3)},${positions[2].toFixed(3)}], ` +
+          `[${positions[3].toFixed(3)},${positions[4].toFixed(3)},${positions[5].toFixed(3)}], ` +
+          `[${positions[6].toFixed(3)},${positions[7].toFixed(3)},${positions[8].toFixed(3)}]`,
+        '[9,2,5], [5,5,5], [0.001,9.999,0.5]',
+      );
+    }
+  }
+
+  // PBC-03: Force symmetry across periodic boundary
+  // An atom near the left wall (x=0.5) should feel the same LJ force from an
+  // atom near the right wall (x=9.5) as two atoms separated by 1 Å in vacuum.
+  {
+    if (!isSkipped('PBC-03')) {
+      const boxSize: Vector3Tuple = [10, 10, 10];
+
+      // Case A: Two atoms 1 Å apart in vacuum (no PBC)
+      const posA = new Float64Array([0, 0, 0, 1, 0, 0]);
+      const frcA = new Float64Array(6);
+      const lj = getLJParams(8, 8); // O-O
+      ljForce(posA, frcA, 0, 1, lj.sigma, lj.epsilon, 10);
+
+      // Case B: Same distance across periodic boundary
+      const posB = new Float64Array([0.5, 5, 5, 9.5, 5, 5]);
+      const frcB = new Float64Array(6);
+      ljForce(posB, frcB, 0, 1, lj.sigma, lj.epsilon, 10, boxSize);
+
+      // Forces should match in magnitude
+      const fA = Math.abs(frcA[0]);
+      const fB = Math.abs(frcB[0]);
+      const relErr = fA > 1e-15 ? Math.abs(fA - fB) / fA : Math.abs(fA - fB);
+
+      const passed = relErr < 1e-10;
+      report(
+        'PBC-03',
+        'LJ force across periodic boundary matches vacuum at same distance',
+        passed,
+        `F_vacuum=${fA.toExponential(4)}, F_pbc=${fB.toExponential(4)}, relErr=${relErr.toExponential(3)}`,
+        'relative error < 1e-10',
+      );
+    }
+  }
+
+  // PBC-04: NVE energy conservation with PBC
+  // Run a two-atom LJ system in a periodic box for many steps.
+  // Total energy should be conserved.
+  {
+    if (!isSkipped('PBC-04')) {
+      const boxSize: Vector3Tuple = [10, 10, 10];
+      // Two Ar-like atoms (element 18, Argon) in a periodic box
+      // Place them ~3.5 Å apart so they interact via LJ
+      const nAtoms = 2;
+      const pos = new Float64Array([2, 5, 5, 5.5, 5, 5]);
+      const vel = new Float64Array([0.001, 0, 0, -0.001, 0, 0]); // small initial velocities
+      const frc = new Float64Array(6);
+      const masses = new Float64Array([39.948, 39.948]); // Argon mass
+      const fixedArr = new Uint8Array(2);
+      const ljParams = getLJParams(18, 18);
+      const dt = 0.5; // fs
+
+      const calcForcesPBC = (p: Float64Array, f: Float64Array): number => {
+        return ljForce(
+          p,
+          f,
+          0,
+          1,
+          ljParams.sigma,
+          ljParams.epsilon,
+          4.5,
+          boxSize,
+        );
+      };
+
+      // Run 5000 steps and track energy
+      let E0 = 0;
+      let Emin = Infinity;
+      let Emax = -Infinity;
+
+      for (let s = 0; s < 5000; s++) {
+        const { kineticEnergy, potentialEnergy } = velocityVerletStep(
+          pos,
+          vel,
+          frc,
+          masses,
+          fixedArr,
+          dt,
+          calcForcesPBC,
+        );
+        // Wrap positions
+        wrapPositions(pos, nAtoms, boxSize);
+
+        const totalE = kineticEnergy + potentialEnergy;
+        if (s === 0) E0 = totalE;
+        if (totalE < Emin) Emin = totalE;
+        if (totalE > Emax) Emax = totalE;
+      }
+
+      const drift =
+        Math.abs(E0) > 1e-15
+          ? ((Emax - Emin) / Math.abs(E0)) * 100
+          : (Emax - Emin) * 100;
+      const passed = drift < 5.0; // < 5% drift
+
+      report(
+        'PBC-04',
+        'NVE energy conservation with PBC (2 Ar atoms)',
+        passed,
+        `${drift.toFixed(4)}%`,
+        '< 5.00%',
+        `E0=${E0.toFixed(4)} range=[${Emin.toFixed(4)}, ${Emax.toFixed(4)}]`,
+      );
+    }
+  }
+
+  // PBC-05: Gradient consistency with PBC
+  // Numerical gradient of LJ + Coulomb with minimum image should match
+  // analytical forces.
+  {
+    if (!isSkipped('PBC-05')) {
+      const boxSize: Vector3Tuple = [10, 10, 10];
+      const pbcWc = computeWolfConstants(10);
+      // Two atoms: O at (1, 5, 5), O at (8, 5, 5) → across boundary, distance = 3 Å
+      const pos = new Float64Array([1, 5, 5, 8, 5, 5]);
+      const frc = new Float64Array(6);
+      const ljParams = getLJParams(8, 8);
+      const qi = -0.5;
+      const qj = 0.3;
+
+      // Compute analytical forces
+      ljForce(pos, frc, 0, 1, ljParams.sigma, ljParams.epsilon, 10, boxSize);
+      coulombForce(pos, frc, 0, 1, qi, qj, pbcWc, boxSize);
+
+      // Compute numerical gradient
+      const h = 1e-5;
+      let maxErr = 0;
+
+      for (let atom = 0; atom < 2; atom++) {
+        for (let dim = 0; dim < 3; dim++) {
+          const idx = atom * 3 + dim;
+          const orig = pos[idx];
+
+          // +h
+          pos[idx] = orig + h;
+          const frcP = new Float64Array(6);
+          let ep = ljForce(
+            pos,
+            frcP,
+            0,
+            1,
+            ljParams.sigma,
+            ljParams.epsilon,
+            10,
+            boxSize,
+          );
+          ep += coulombForce(pos, frcP, 0, 1, qi, qj, pbcWc, boxSize);
+
+          // -h
+          pos[idx] = orig - h;
+          const frcM = new Float64Array(6);
+          let em = ljForce(
+            pos,
+            frcM,
+            0,
+            1,
+            ljParams.sigma,
+            ljParams.epsilon,
+            10,
+            boxSize,
+          );
+          em += coulombForce(pos, frcM, 0, 1, qi, qj, pbcWc, boxSize);
+
+          pos[idx] = orig;
+
+          const numForce = -(ep - em) / (2 * h);
+          const anaForce = frc[idx];
+          const err = Math.abs(numForce - anaForce);
+          if (err > maxErr) maxErr = err;
+        }
+      }
+
+      const passed = maxErr < 1e-6;
+      report(
+        'PBC-05',
+        'Gradient consistency with PBC (LJ + Coulomb)',
+        passed,
+        `${maxErr.toExponential(3)} eV/A`,
+        '< 1e-6 eV/A',
+      );
+    }
+  }
+}
+
 // ---- Wolf summation tests ----
 
 function runWolfTests(): void {
@@ -1837,6 +2100,7 @@ runGeometryTests();
 runThermodynamicTests();
 runChargeTests();
 runMoleculeTests();
+runPBCTests();
 runWolfTests();
 runReactionTests();
 

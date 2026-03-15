@@ -92,6 +92,10 @@ export class SimulationWorker {
     this.send({ type: 'set-velocities', entries });
   }
 
+  updateBox(box: Partial<SimulationBox>): void {
+    this.send({ type: 'box', box });
+  }
+
   terminate(): void {
     this.worker.terminate();
   }

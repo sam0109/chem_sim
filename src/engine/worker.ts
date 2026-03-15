@@ -55,6 +55,7 @@ import { CellList } from './neighborList';
 import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
 import { detectHybridization } from './hybridization';
 import { findMolecules, computeMoleculeInfo } from './moleculeTracker';
+import { wrapPositions } from './pbc';
 import { diffBonds, detectReactions } from './reactionDetector';
 
 // ---- Simulation state ----
@@ -82,6 +83,7 @@ let config: SimulationConfig = {
   running: false,
 };
 let step = 0;
+let box: SimulationBox = { size: [50, 50, 50], periodic: false };
 
 // Cached Wolf summation constants (recomputed when cutoff changes)
 let wolfConst: WolfConstants = computeWolfConstants(10.0);
@@ -464,6 +466,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   // 1-2 and 1-3 pairs are fully excluded; 1-4 pairs get SCALE_14 (0.5×).
   // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
   const cutoff = config.cutoff;
+  const pbcBoxSize = box.periodic ? box.size : undefined;
   const wc = wolfConst;
   const pairCallback = (i: number, j: number): void => {
     // Skip 1-2 (bonded) and 1-3 (angle) pairs
@@ -483,6 +486,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       sigma,
       epsilon * scaleFactor,
       cutoff,
+      pbcBoxSize,
     );
     potentialEnergy += coulombForce(
       pos,
@@ -492,14 +496,19 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       charges[i] * scaleFactor,
       charges[j],
       wc,
+      pbcBoxSize,
     );
   };
 
   if (nAtoms < 50) {
-    CellList.forEachPairBrute(pos, nAtoms, cutoff, pairCallback);
+    CellList.forEachPairBrute(pos, nAtoms, cutoff, pairCallback, pbcBoxSize);
   } else {
-    cellList!.build(pos, nAtoms);
-    cellList!.forEachPair(pos, cutoff, pairCallback);
+    if (box.periodic) {
+      cellList!.buildPeriodic(pos, nAtoms, box.size);
+    } else {
+      cellList!.build(pos, nAtoms);
+    }
+    cellList!.forEachPair(pos, cutoff, pairCallback, pbcBoxSize);
   }
 
   // 3.5. Wolf self-energy correction (position-independent, affects PE only)
@@ -526,10 +535,11 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
 function initSimulation(
   atoms: Atom[],
   inputBonds: Bond[],
-  _box: SimulationBox,
+  inputBox: SimulationBox,
   cfg: SimulationConfig,
 ): void {
   config = { ...config, ...cfg };
+  box = { ...inputBox };
   wolfConst = computeWolfConstants(config.cutoff);
   nAtoms = atoms.length;
 
@@ -653,6 +663,11 @@ function runSteps(nSteps: number): void {
       config.timestep,
       computeAllForces,
     );
+
+    // Wrap positions into primary cell if PBC is enabled
+    if (box.periodic) {
+      wrapPositions(positions, nAtoms, box.size);
+    }
 
     // Apply thermostat
     if (config.thermostat === 'berendsen') {
@@ -786,6 +801,10 @@ function minimize(maxSteps: number, tolerance: number): void {
     maxSteps,
     tolerance,
   );
+  // Wrap positions into primary cell if PBC is enabled
+  if (box.periodic) {
+    wrapPositions(positions, nAtoms, box.size);
+  }
   // Zero velocities after minimization
   velocities.fill(0);
   rebuildTopology();
@@ -825,6 +844,7 @@ function sendState(): void {
     temperature,
     moleculeIds: moleculeIds.slice(),
     molecules: [...moleculeInfo],
+    box: { ...box },
     reactionEvents: [...pendingReactionEvents],
   };
 
@@ -926,6 +946,15 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
           velocities[idx * 3 + 1] = entry.velocity[1];
           velocities[idx * 3 + 2] = entry.velocity[2];
         }
+      }
+      sendState();
+      break;
+
+    case 'box':
+      box = { ...box, ...msg.box };
+      // Wrap positions immediately when enabling PBC
+      if (box.periodic) {
+        wrapPositions(positions, nAtoms, box.size);
       }
       sendState();
       break;

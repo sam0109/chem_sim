@@ -10,6 +10,7 @@
 // the simple shifted Coulomb potential.
 // ==============================================================
 
+import type { Vector3Tuple } from '../../data/types';
 import { erfc } from '../math';
 
 // Coulomb constant in eV·Å/e² (e = elementary charge)
@@ -121,6 +122,7 @@ export function wolfSelfEnergy(
  * @param qi         Charge of atom i (elementary charges)
  * @param qj         Charge of atom j (elementary charges)
  * @param wc         Precomputed Wolf constants
+ * @param boxSize    Box dimensions for PBC minimum image (undefined = no PBC)
  * @returns Pair potential energy contribution (eV)
  */
 export function coulombForce(
@@ -131,15 +133,24 @@ export function coulombForce(
   qi: number,
   qj: number,
   wc: WolfConstants,
+  boxSize?: Vector3Tuple,
 ): number {
   if (Math.abs(qi) < 1e-10 || Math.abs(qj) < 1e-10) return 0;
 
   const i3 = i * 3;
   const j3 = j * 3;
 
-  const dx = positions[j3] - positions[i3];
-  const dy = positions[j3 + 1] - positions[i3 + 1];
-  const dz = positions[j3 + 2] - positions[i3 + 2];
+  let dx = positions[j3] - positions[i3];
+  let dy = positions[j3 + 1] - positions[i3 + 1];
+  let dz = positions[j3 + 2] - positions[i3 + 2];
+
+  // Apply minimum image convention for periodic boundaries
+  // Reference: Allen & Tildesley, "Computer Simulation of Liquids", Ch. 1.5.2
+  if (boxSize) {
+    dx -= boxSize[0] * Math.round(dx / boxSize[0]);
+    dy -= boxSize[1] * Math.round(dy / boxSize[1]);
+    dz -= boxSize[2] * Math.round(dz / boxSize[2]);
+  }
 
   const r2 = dx * dx + dy * dy + dz * dz;
   const rc2 = wc.cutoff * wc.cutoff;
