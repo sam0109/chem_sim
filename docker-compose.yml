@@ -30,4 +30,4 @@ services:
       # Allows the container to reach the host machine's services
       - "host.docker.internal:host-gateway"
     working_dir: /workspace
-    command: bash -c "git clone https://github.com/sam0109/chem_sim.git /workspace/chem_sim && cd /workspace/chem_sim && git config user.name 'samsobellassistant' && git config user.email 'samsobellassistant@users.noreply.github.com' && npm install && exec claude --dangerously-skip-permissions --print 'Follow AGENTS.md' 2>&1"
+    command: bash -c "git clone https://github.com/sam0109/chem_sim.git /workspace/chem_sim && cd /workspace/chem_sim && git config user.name 'samsobellassistant' && git config user.email 'samsobellassistant@users.noreply.github.com' && npm install && echo 'Follow AGENTS.md' | exec claude --dangerously-skip-permissions --output-format stream-json --verbose"

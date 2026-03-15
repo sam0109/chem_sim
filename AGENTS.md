@@ -15,30 +15,43 @@ This document defines the process by which an AI agent claims, plans, implements
 
 ## Step 0: Select and Claim an Issue
 
-**Goal:** Pick an unassigned issue and atomically claim it so no other agent works on it.
+**Goal:** Pick an unassigned issue and atomically claim it so no other agent works on it. Multiple agents may be running concurrently, so a claim-hash locking protocol is used to prevent duplicate work.
 
-```bash
-# 1. List unclaimed issues (no assignee), sorted by priority label
-gh issue list --assignee "" --limit 20 --json number,title,labels
+### Procedure
 
-# 2. Pick the highest-priority unclaimed issue
-#    Priority order: guardrails > P1 > P2 > P3 > P4 > P6 > P5
+1. **List unclaimed issues:**
+   ```bash
+   gh issue list --assignee "" --limit 20 --json number,title,labels
+   ```
 
-# 3. Claim it by self-assigning (idempotent — safe if already assigned to you)
-gh issue edit <NUMBER> --add-assignee "@me"
+2. **Pick an issue based on priority.** Priority order: `guardrails > P1 > P2 > P3 > P4 > P6 > P5`. If multiple issues share the same highest priority, **pick one at random** (do not always pick the first).
 
-# 4. Verify you got it (another agent may have claimed it in the same instant)
-ASSIGNEE=$(gh issue view <NUMBER> --json assignees -q '.assignees[0].login')
-if [ "$ASSIGNEE" != "<your-username>" ]; then
-  echo "Issue was claimed by $ASSIGNEE — pick another"
-  exit 1
-fi
+3. **Assign the issue to yourself:**
+   ```bash
+   gh issue edit <NUMBER> --add-assignee "@me"
+   ```
 
-# 5. Add "in progress" label
-gh issue edit <NUMBER> --add-label "in progress"
-```
+4. **Post a claim comment with a unique hash.** Generate a short random hex string (8+ characters) and post it as a comment:
+   ```bash
+   CLAIM_HASH=$(python3 -c "import secrets; print(secrets.token_hex(4))")
+   gh issue comment <NUMBER> --body "CLAIM: $CLAIM_HASH"
+   ```
 
-**Idempotency:** If the issue already has an assignee that isn't you, skip it and pick another. The assign + verify pattern prevents race conditions.
+5. **Verify your claim won the race.** Re-read the issue comments and check whether your `CLAIM: <hash>` comment is the **first** comment on the issue:
+   ```bash
+   FIRST_COMMENT=$(gh issue view <NUMBER> --json comments --jq '.comments[0].body')
+   ```
+   - If the first comment is `CLAIM: <your-hash>` → you own the issue. Proceed.
+   - If the first comment is a different `CLAIM:` → another agent claimed it first. Leave the assignment and your comment in place (removing the assignee would disrupt the winning agent), and go back to step 1 to pick a different issue.
+
+6. **Add the "in progress" label:**
+   ```bash
+   gh issue edit <NUMBER> --add-label "in progress"
+   ```
+
+### Why this works
+
+Assignment alone is not atomic — two agents can assign themselves to the same issue in the same instant. The claim-comment acts as a tie-breaker: GitHub orders comments chronologically, so the first `CLAIM:` comment determines the winner. The random priority selection spreads agents across issues, reducing contention.
 
 ---
 
