@@ -79,6 +79,17 @@ let bondParams: Array<{
 }> = [];
 const ljCache: Map<string, { sigma: number; epsilon: number }> = new Map();
 let cellList: CellList | null = null;
+
+// Pauli repulsion cell list — uses a much shorter cutoff than LJ/Coulomb.
+// Max Pauli rCut = 2 × rMin, where rMin = 0.5 × max covalent radius (~2.03 Å for K).
+// 2.5 Å provides margin for all element pairs.
+// Source: rCut formula from src/engine/forces/pauli.ts, radii from Blue Obelisk / NIST.
+const PAULI_CUTOFF = 2.5;
+let pauliCellList: CellList | null = null;
+
+// Pre-computed per-atom Pauli rMin values to avoid element lookups in the hot loop.
+// pauliRMin[i] = 0.5 × covalentRadius[i], floored at 0.15 Å.
+let pauliRMin: Float64Array = new Float64Array(0);
 // Cached angle parameters (precomputed once per topology rebuild)
 let angleParams: Array<{
   i: number;
@@ -194,6 +205,9 @@ function rebuildTopology(): void {
   if (!cellList) {
     cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
   }
+  if (!pauliCellList) {
+    pauliCellList = new CellList(PAULI_CUTOFF, Math.max(nAtoms, 100));
+  }
 }
 
 /**
@@ -300,6 +314,9 @@ function buildTorsionParams(): void {
   // Rebuild cell list
   if (!cellList) {
     cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
+  }
+  if (!pauliCellList) {
+    pauliCellList = new CellList(PAULI_CUTOFF, Math.max(nAtoms, 100));
   }
 
   // Identify molecules (connected components of the bond graph)
@@ -417,27 +434,18 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   }
 
   // 4. Pauli repulsion — prevents atomic overlap for ALL pairs
-  // This is a short-range exponential wall that acts regardless of bonding
-  for (let i = 0; i < nAtoms; i++) {
-    for (let j = i + 1; j < nAtoms; j++) {
-      // Use element-dependent minimum approach distance (~0.5 × smallest covalent radius)
-      const elI = elements[atomicNumbers[i]];
-      const elJ = elements[atomicNumbers[j]];
-      const rMin =
-        0.5 *
-        Math.min(
-          elI ? elI.covalentRadius : 0.5,
-          elJ ? elJ.covalentRadius : 0.5,
-        );
-      potentialEnergy += pauliRepulsion(
-        pos,
-        frc,
-        i,
-        j,
-        Math.max(rMin, 0.15),
-        20.0,
-      );
-    }
+  // This is a short-range exponential wall that acts regardless of bonding.
+  // Uses a dedicated cell list with short cutoff (2.5 Å) for O(N) scaling.
+  const pauliCallback = (i: number, j: number): void => {
+    const rMin = Math.min(pauliRMin[i], pauliRMin[j]);
+    potentialEnergy += pauliRepulsion(pos, frc, i, j, rMin, 20.0);
+  };
+
+  if (nAtoms < 50) {
+    CellList.forEachPairBrute(pos, nAtoms, PAULI_CUTOFF, pauliCallback);
+  } else {
+    pauliCellList!.build(pos, nAtoms);
+    pauliCellList!.forEachPair(pos, PAULI_CUTOFF, pauliCallback);
   }
 
   // 5. Drag force (spring to target position)
@@ -491,6 +499,14 @@ function initSimulation(
   }
 
   cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
+  pauliCellList = new CellList(PAULI_CUTOFF, Math.max(nAtoms, 100));
+
+  // Pre-compute per-atom Pauli rMin values
+  pauliRMin = new Float64Array(nAtoms);
+  for (let i = 0; i < nAtoms; i++) {
+    const el = elements[atomicNumbers[i]];
+    pauliRMin[i] = Math.max(0.5 * (el ? el.covalentRadius : 0.5), 0.15);
+  }
 
   // Use provided bonds or detect them
   if (inputBonds.length > 0) {
@@ -601,6 +617,7 @@ function addAtom(atom: Atom): void {
   const newMasses = new Float64Array(newN);
   const newCharges = new Float64Array(newN);
   const newFixed = new Uint8Array(newN);
+  const newPauliRMin = new Float64Array(newN);
 
   newAtomicNumbers.set(atomicNumbers);
   newPositions.set(positions);
@@ -608,6 +625,7 @@ function addAtom(atom: Atom): void {
   newMasses.set(masses);
   newCharges.set(charges);
   newFixed.set(fixed);
+  newPauliRMin.set(pauliRMin);
 
   const i = nAtoms;
   newAtomicNumbers[i] = atom.elementNumber;
@@ -618,6 +636,7 @@ function addAtom(atom: Atom): void {
   newMasses[i] = el ? el.mass : 1.0;
   newCharges[i] = atom.charge;
   newFixed[i] = atom.fixed ? 1 : 0;
+  newPauliRMin[i] = Math.max(0.5 * (el ? el.covalentRadius : 0.5), 0.15);
 
   atomicNumbers = newAtomicNumbers;
   positions = newPositions;
@@ -626,6 +645,7 @@ function addAtom(atom: Atom): void {
   masses = newMasses;
   charges = newCharges;
   fixed = newFixed;
+  pauliRMin = newPauliRMin;
   hybridizations.push(atom.hybridization);
   nAtoms = newN;
 
@@ -645,6 +665,7 @@ function removeAtom(atomId: number): void {
   const newMasses = new Float64Array(newN);
   const newCharges = new Float64Array(newN);
   const newFixed = new Uint8Array(newN);
+  const newPauliRMin = new Float64Array(newN);
 
   let dst = 0;
   for (let src = 0; src < nAtoms; src++) {
@@ -659,6 +680,7 @@ function removeAtom(atomId: number): void {
     newMasses[dst] = masses[src];
     newCharges[dst] = charges[src];
     newFixed[dst] = fixed[src];
+    newPauliRMin[dst] = pauliRMin[src];
     dst++;
   }
 
@@ -669,6 +691,7 @@ function removeAtom(atomId: number): void {
   masses = newMasses;
   charges = newCharges;
   fixed = newFixed;
+  pauliRMin = newPauliRMin;
   hybridizations.splice(atomId, 1);
   nAtoms = newN;
 
