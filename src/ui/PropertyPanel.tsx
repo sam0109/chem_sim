@@ -6,6 +6,7 @@ import React from 'react';
 import { useSimContextStore } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
+import { BOND_TYPE_COLORS } from '../data/bondColors';
 
 export const PropertyPanel: React.FC = () => {
   const showPropertyPanel = useUIStore((s) => s.showPropertyPanel);
@@ -170,13 +171,34 @@ export const PropertyPanel: React.FC = () => {
             Bonds
           </div>
           {selectedBonds.slice(0, 8).map((bond, idx) => (
-            <div key={idx} style={{ fontSize: 10, marginBottom: 2 }}>
+            <div
+              key={idx}
+              style={{
+                fontSize: 10,
+                marginBottom: 2,
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
               {elements[atoms[bond.atomA]?.elementNumber]?.symbol ?? '?'}
               {bond.atomA}
               {bond.order === 2 ? '=' : bond.order === 3 ? '≡' : '—'}
               {elements[atoms[bond.atomB]?.elementNumber]?.symbol ?? '?'}
               {bond.atomB}
-              <span style={{ color: '#888', marginLeft: 4 }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: BOND_TYPE_COLORS[bond.type],
+                  marginLeft: 6,
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{ color: BOND_TYPE_COLORS[bond.type], marginLeft: 4 }}
+              >
                 ({bond.type})
               </span>
             </div>
