@@ -1,5 +1,5 @@
 // ==============================================================
-// PeriodicTable — interactive element picker
+// PeriodicTable — interactive element picker with educational features
 // ==============================================================
 
 import React from 'react';
@@ -15,6 +15,13 @@ const GRID: number[][] = [
   [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36],
 ];
 
+/** Cell width in px — used for grid layout and tooltip positioning */
+const CELL_W = 38;
+/** Cell height in px */
+const CELL_H = 42;
+/** Gap between cells in px */
+const CELL_GAP = 2;
+
 const categoryColors: Record<string, string> = {
   nonmetal: '#4a9c47',
   'noble-gas': '#7b5ea7',
@@ -28,20 +35,170 @@ const categoryColors: Record<string, string> = {
   actinide: '#a06f6f',
 };
 
+/** Human-readable category labels */
+const categoryLabels: Record<string, string> = {
+  nonmetal: 'Nonmetal',
+  'noble-gas': 'Noble Gas',
+  'alkali-metal': 'Alkali Metal',
+  'alkaline-earth-metal': 'Alkaline Earth Metal',
+  metalloid: 'Metalloid',
+  halogen: 'Halogen',
+  'transition-metal': 'Transition Metal',
+  'post-transition-metal': 'Post-Transition Metal',
+  lanthanide: 'Lanthanide',
+  actinide: 'Actinide',
+};
+
+// ---- Tooltip ----
+
+/** Row in the tooltip property table */
+const TooltipRow: React.FC<{ label: string; value: string }> = ({
+  label,
+  value,
+}) => (
+  <tr>
+    <td
+      style={{
+        color: '#888',
+        paddingRight: 8,
+        whiteSpace: 'nowrap',
+        fontSize: 10,
+      }}
+    >
+      {label}
+    </td>
+    <td style={{ color: '#ddd', fontSize: 10 }}>{value}</td>
+  </tr>
+);
+
+/** Rich tooltip shown on element hover — displays all known properties */
+const ElementTooltip: React.FC<{
+  el: ChemicalElement;
+  gridRow: number;
+  gridCol: number;
+}> = ({ el, gridRow, gridCol }) => {
+  // Position tooltip above the hovered cell
+  const tooltipLeft = gridCol * (CELL_W + CELL_GAP);
+  // Show above the grid for rows near the bottom, below for the top row
+  const showBelow = gridRow === 0;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: tooltipLeft,
+        ...(showBelow
+          ? { top: (gridRow + 1) * (CELL_H + CELL_GAP) + 4 }
+          : { bottom: (GRID.length - gridRow) * (CELL_H + CELL_GAP) + 28 }),
+        background: 'rgba(10, 10, 30, 0.97)',
+        border: '1px solid rgba(120, 160, 255, 0.3)',
+        borderRadius: 6,
+        padding: '8px 10px',
+        zIndex: 200,
+        pointerEvents: 'none',
+        minWidth: 200,
+        fontFamily: 'monospace',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+      }}
+    >
+      {/* Header: symbol + name */}
+      <div style={{ marginBottom: 6 }}>
+        <span style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
+          {el.symbol}
+        </span>
+        <span style={{ fontSize: 12, color: '#aaccff', marginLeft: 8 }}>
+          {el.name}
+        </span>
+      </div>
+
+      {/* Category badge */}
+      <div
+        style={{
+          display: 'inline-block',
+          background: categoryColors[el.category] || '#555',
+          color: '#fff',
+          fontSize: 9,
+          padding: '1px 6px',
+          borderRadius: 3,
+          marginBottom: 6,
+        }}
+      >
+        {categoryLabels[el.category] || el.category}
+      </div>
+
+      {/* Properties table */}
+      <table style={{ borderCollapse: 'collapse' }}>
+        <tbody>
+          <TooltipRow label="Atomic #" value={String(el.number)} />
+          <TooltipRow label="Mass" value={`${el.mass.toFixed(3)} amu`} />
+          <TooltipRow
+            label="Electronegativity"
+            value={
+              el.electronegativity > 0 ? String(el.electronegativity) : '—'
+            }
+          />
+          <TooltipRow
+            label="Covalent radius"
+            value={`${el.covalentRadius.toFixed(2)} Å`}
+          />
+          <TooltipRow
+            label="vdW radius"
+            value={`${el.vdwRadius.toFixed(2)} Å`}
+          />
+          <TooltipRow label="Electron config" value={el.electronConfig} />
+          <TooltipRow
+            label="Ionization energy"
+            value={
+              el.ionizationEnergy > 0
+                ? `${el.ionizationEnergy.toFixed(2)} eV`
+                : '—'
+            }
+          />
+          <TooltipRow
+            label="Electron affinity"
+            value={
+              el.electronAffinity !== 0
+                ? `${el.electronAffinity.toFixed(2)} eV`
+                : '—'
+            }
+          />
+          <TooltipRow
+            label="Oxidation states"
+            value={
+              el.oxidationStates.length > 0
+                ? el.oxidationStates
+                    .map((s) => (s > 0 ? `+${s}` : String(s)))
+                    .join(', ')
+                : '—'
+            }
+          />
+          <TooltipRow label="Max valence" value={String(el.maxValence)} />
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// ---- Element Cell ----
+
 const ElementCell: React.FC<{
   el: ChemicalElement;
   selected: boolean;
   onClick: () => void;
-}> = ({ el, selected, onClick }) => {
+  onHoverStart: () => void;
+  onHoverEnd: () => void;
+}> = ({ el, selected, onClick, onHoverStart, onHoverEnd }) => {
   const bgColor = categoryColors[el.category] || '#555';
 
   return (
     <button
       data-testid={`element-${el.symbol}`}
       onClick={onClick}
+      onMouseEnter={onHoverStart}
+      onMouseLeave={onHoverEnd}
       style={{
-        width: 38,
-        height: 42,
+        width: CELL_W,
+        height: CELL_H,
         border: selected ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)',
         borderRadius: 3,
         background: selected ? bgColor : `${bgColor}99`,
@@ -57,7 +214,6 @@ const ElementCell: React.FC<{
         transition: 'all 0.15s',
         boxShadow: selected ? `0 0 8px ${bgColor}` : 'none',
       }}
-      title={`${el.name} (${el.number})\nEN: ${el.electronegativity}\nMass: ${el.mass}`}
     >
       <span style={{ fontSize: 7, opacity: 0.7 }}>{el.number}</span>
       <span style={{ fontSize: 13, fontWeight: 'bold' }}>{el.symbol}</span>
@@ -65,12 +221,32 @@ const ElementCell: React.FC<{
   );
 };
 
+// ---- Main Component ----
+
 export const PeriodicTable: React.FC = () => {
   const selectedElement = useUIStore((s) => s.selectedElement);
   const setSelectedElement = useUIStore((s) => s.setSelectedElement);
   const showPeriodicTable = useUIStore((s) => s.showPeriodicTable);
+  const hoveredElement = useUIStore((s) => s.hoveredElement);
+  const setHoveredElement = useUIStore((s) => s.setHoveredElement);
 
   if (!showPeriodicTable) return null;
+
+  // Find grid position of hovered element for tooltip placement
+  let tooltipRow = 0;
+  let tooltipCol = 0;
+  let tooltipEl: ChemicalElement | null = null;
+  if (hoveredElement !== null) {
+    for (let r = 0; r < GRID.length; r++) {
+      for (let c = 0; c < GRID[r].length; c++) {
+        if (GRID[r][c] === hoveredElement) {
+          tooltipRow = r;
+          tooltipCol = c;
+          tooltipEl = elements[hoveredElement] ?? null;
+        }
+      }
+    }
+  }
 
   return (
     <div
@@ -87,7 +263,7 @@ export const PeriodicTable: React.FC = () => {
         backdropFilter: 'blur(10px)',
         zIndex: 100,
         maxWidth: '95vw',
-        overflow: 'auto',
+        overflow: 'visible',
       }}
     >
       <div
@@ -101,27 +277,54 @@ export const PeriodicTable: React.FC = () => {
       >
         Periodic Table — click to select element
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {GRID.map((row, rowIdx) => (
-          <div key={rowIdx} style={{ display: 'flex', gap: 2 }}>
-            {row.map((z, colIdx) => {
-              if (z === 0) {
-                return <div key={colIdx} style={{ width: 38, height: 42 }} />;
-              }
-              const el = elements[z];
-              if (!el)
-                return <div key={colIdx} style={{ width: 38, height: 42 }} />;
-              return (
-                <ElementCell
-                  key={z}
-                  el={el}
-                  selected={selectedElement === z}
-                  onClick={() => setSelectedElement(z)}
-                />
-              );
-            })}
-          </div>
-        ))}
+
+      {/* Grid container — relative for tooltip positioning */}
+      <div style={{ position: 'relative' }}>
+        <div
+          style={{ display: 'flex', flexDirection: 'column', gap: CELL_GAP }}
+        >
+          {GRID.map((row, rowIdx) => (
+            <div key={rowIdx} style={{ display: 'flex', gap: CELL_GAP }}>
+              {row.map((z, colIdx) => {
+                if (z === 0) {
+                  return (
+                    <div
+                      key={colIdx}
+                      style={{ width: CELL_W, height: CELL_H }}
+                    />
+                  );
+                }
+                const el = elements[z];
+                if (!el)
+                  return (
+                    <div
+                      key={colIdx}
+                      style={{ width: CELL_W, height: CELL_H }}
+                    />
+                  );
+                return (
+                  <ElementCell
+                    key={z}
+                    el={el}
+                    selected={selectedElement === z}
+                    onClick={() => setSelectedElement(z)}
+                    onHoverStart={() => setHoveredElement(z)}
+                    onHoverEnd={() => setHoveredElement(null)}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        {/* Rich tooltip */}
+        {tooltipEl && (
+          <ElementTooltip
+            el={tooltipEl}
+            gridRow={tooltipRow}
+            gridCol={tooltipCol}
+          />
+        )}
       </div>
     </div>
   );
