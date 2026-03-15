@@ -410,13 +410,23 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
 
   // 3. Non-bonded forces (LJ + Coulomb) using cell list or brute force
   const cutoff = config.cutoff;
+  const pbcBoxSize = box.periodic ? box.size : undefined;
   const pairCallback = (i: number, j: number): void => {
     // Skip 1-2 (bonded) and 1-3 (angle) pairs
     const key = `${Math.min(i, j)}-${Math.max(i, j)}`;
     if (exclusionSet.has(key)) return;
 
     const { sigma, epsilon } = getLJCached(atomicNumbers[i], atomicNumbers[j]);
-    potentialEnergy += ljForce(pos, frc, i, j, sigma, epsilon, cutoff);
+    potentialEnergy += ljForce(
+      pos,
+      frc,
+      i,
+      j,
+      sigma,
+      epsilon,
+      cutoff,
+      pbcBoxSize,
+    );
     potentialEnergy += coulombForce(
       pos,
       frc,
@@ -425,14 +435,19 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       charges[i],
       charges[j],
       cutoff,
+      pbcBoxSize,
     );
   };
 
   if (nAtoms < 50) {
-    CellList.forEachPairBrute(pos, nAtoms, cutoff, pairCallback);
+    CellList.forEachPairBrute(pos, nAtoms, cutoff, pairCallback, pbcBoxSize);
   } else {
-    cellList!.build(pos, nAtoms);
-    cellList!.forEachPair(pos, cutoff, pairCallback);
+    if (box.periodic) {
+      cellList!.buildPeriodic(pos, nAtoms, box.size);
+    } else {
+      cellList!.build(pos, nAtoms);
+    }
+    cellList!.forEachPair(pos, cutoff, pairCallback, pbcBoxSize);
   }
 
   // 4. Pauli repulsion — prevents atomic overlap for ALL pairs
@@ -440,14 +455,24 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   // Uses a dedicated cell list with short cutoff (2.5 Å) for O(N) scaling.
   const pauliCallback = (i: number, j: number): void => {
     const rMin = Math.min(pauliRMin[i], pauliRMin[j]);
-    potentialEnergy += pauliRepulsion(pos, frc, i, j, rMin, 20.0);
+    potentialEnergy += pauliRepulsion(pos, frc, i, j, rMin, 20.0, pbcBoxSize);
   };
 
   if (nAtoms < 50) {
-    CellList.forEachPairBrute(pos, nAtoms, PAULI_CUTOFF, pauliCallback);
+    CellList.forEachPairBrute(
+      pos,
+      nAtoms,
+      PAULI_CUTOFF,
+      pauliCallback,
+      pbcBoxSize,
+    );
   } else {
-    pauliCellList!.build(pos, nAtoms);
-    pauliCellList!.forEachPair(pos, PAULI_CUTOFF, pauliCallback);
+    if (box.periodic) {
+      pauliCellList!.buildPeriodic(pos, nAtoms, box.size);
+    } else {
+      pauliCellList!.build(pos, nAtoms);
+    }
+    pauliCellList!.forEachPair(pos, PAULI_CUTOFF, pauliCallback, pbcBoxSize);
   }
 
   // 5. Drag force (spring to target position)
