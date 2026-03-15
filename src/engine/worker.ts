@@ -30,6 +30,8 @@ import {
   buildAngleList,
 } from './bondDetector';
 import { CellList } from './neighborList';
+import { computeGasteigerCharges } from './gasteiger';
+import { detectHybridization } from './hybridization';
 
 // ---- Simulation state ----
 let nAtoms = 0;
@@ -126,6 +128,21 @@ function rebuildTopology(): void {
       atomicNumbers[tk],
     );
     angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
+  }
+
+  // Compute Gasteiger partial charges from bond topology.
+  // This replaces the hardcoded/zero charges with physically meaningful
+  // values based on orbital electronegativity equilibration.
+  // Atoms with only ionic bonds keep their existing charges.
+  const hyb = detectHybridization(atomicNumbers, bonds, nAtoms);
+  const gasteigerQ = computeGasteigerCharges(atomicNumbers, bonds, nAtoms, hyb);
+  for (let i = 0; i < nAtoms; i++) {
+    const hasCovalentBond = bonds.some(
+      (b) => b.type === 'covalent' && (b.atomA === i || b.atomB === i),
+    );
+    if (hasCovalentBond) {
+      charges[i] = gasteigerQ[i];
+    }
   }
 
   // Rebuild cell list
