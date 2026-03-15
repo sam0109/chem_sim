@@ -261,6 +261,7 @@ export function detectHydrogenBonds(
   atomicNumbers: Int32Array | number[],
   existingBonds: Bond[],
   previousHBonds: Bond[] = [],
+  boxSize?: Vector3Tuple,
 ): Bond[] {
   const N = atomicNumbers.length;
   const hBonds: Bond[] = [];
@@ -304,17 +305,28 @@ export function detectHydrogenBonds(
       const minAngle = isExisting ? HBOND_BREAK_ANGLE : HBOND_FORM_ANGLE;
 
       // Distance H···A
-      const dx = positions[a * 3] - positions[h * 3];
-      const dy = positions[a * 3 + 1] - positions[h * 3 + 1];
-      const dz = positions[a * 3 + 2] - positions[h * 3 + 2];
+      let dx = positions[a * 3] - positions[h * 3];
+      let dy = positions[a * 3 + 1] - positions[h * 3 + 1];
+      let dz = positions[a * 3 + 2] - positions[h * 3 + 2];
+
+      // Apply minimum image convention for periodic boundary conditions.
+      // Reference: Allen & Tildesley, Ch. 1.5.2
+      if (boxSize) {
+        [dx, dy, dz] = minimumImage(dx, dy, dz, boxSize);
+      }
+
       const distHA = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
       if (distHA > maxDist || distHA < HBOND_MIN_DIST) continue;
 
       // Angle D-H···A
-      const dhX = positions[h * 3] - positions[donor * 3];
-      const dhY = positions[h * 3 + 1] - positions[donor * 3 + 1];
-      const dhZ = positions[h * 3 + 2] - positions[donor * 3 + 2];
+      let dhX = positions[h * 3] - positions[donor * 3];
+      let dhY = positions[h * 3 + 1] - positions[donor * 3 + 1];
+      let dhZ = positions[h * 3 + 2] - positions[donor * 3 + 2];
+
+      if (boxSize) {
+        [dhX, dhY, dhZ] = minimumImage(dhX, dhY, dhZ, boxSize);
+      }
       const dhLen = Math.sqrt(dhX * dhX + dhY * dhY + dhZ * dhZ);
 
       if (dhLen < 1e-10) continue;
