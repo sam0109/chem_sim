@@ -78,6 +78,10 @@ export class SimulationWorker {
     this.send({ type: 'remove-atom', atomId });
   }
 
+  transmuteAtom(atomId: number, newElementNumber: number): void {
+    this.send({ type: 'transmute-atom', atomId, newElementNumber });
+  }
+
   drag(atomId: number, targetPosition: [number, number, number]): void {
     this.send({ type: 'drag', atomId, targetPosition });
   }

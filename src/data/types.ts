@@ -279,6 +279,14 @@ export interface WorkerBoxMessage {
   box: Partial<SimulationBox>;
 }
 
+export interface WorkerTransmuteAtomMessage {
+  type: 'transmute-atom';
+  /** Index of the atom to transmute */
+  atomId: number;
+  /** Atomic number of the new element */
+  newElementNumber: number;
+}
+
 export type WorkerInMessage =
   | WorkerInitMessage
   | WorkerStepMessage
@@ -288,7 +296,8 @@ export type WorkerInMessage =
   | WorkerDragMessage
   | WorkerMinimizeMessage
   | WorkerSetVelocitiesMessage
-  | WorkerBoxMessage;
+  | WorkerBoxMessage
+  | WorkerTransmuteAtomMessage;
 
 export interface WorkerStateUpdate {
   type: 'state';
