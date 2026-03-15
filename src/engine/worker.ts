@@ -161,11 +161,35 @@ function rebuildTopology(): void {
     angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
   }
 
-  // Build dihedral list and precompute torsion parameters.
-  // The UFF barrier V is the total barrier for rotation around the
-  // central bond j-k. When multiple dihedrals share the same j-k
-  // bond, V must be divided by the count to avoid over-counting.
-  // Source: Rappé et al., JACS 114, 10024 (1992), p. 10034.
+  buildTorsionParams();
+
+  // Compute Gasteiger partial charges from bond topology.
+  // This replaces the hardcoded/zero charges with physically meaningful
+  // values based on orbital electronegativity equilibration.
+  // Atoms with only ionic bonds keep their existing charges.
+  const hyb = detectHybridization(atomicNumbers, bonds, nAtoms);
+  const gasteigerQ = computeGasteigerCharges(atomicNumbers, bonds, nAtoms, hyb);
+  const covalentAtoms = buildCovalentAtomSet(bonds, nAtoms);
+  for (let i = 0; i < nAtoms; i++) {
+    if (covalentAtoms[i]) {
+      charges[i] = gasteigerQ[i];
+    }
+  }
+
+  // Rebuild cell list
+  if (!cellList) {
+    cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
+  }
+}
+
+/**
+ * Build dihedral list and precompute torsion parameters.
+ * The UFF barrier V is the total barrier for rotation around the
+ * central bond j-k. When multiple dihedrals share the same j-k
+ * bond, V must be divided by the count to avoid over-counting.
+ * Source: Rappé et al., JACS 114, 10024 (1992), p. 10034.
+ */
+function buildTorsionParams(): void {
   dihedrals = buildDihedralList(bonds, nAtoms);
   // Count dihedrals per central bond
   const dihedralCountPerBond = new Map<string, number>();
@@ -433,40 +457,7 @@ function initSimulation(
       );
       angleParams.push({ i: ti, j: central, k: tk, kAngle, theta0 });
     }
-    // Precompute torsion params (barrier normalized per central bond)
-    dihedrals = buildDihedralList(bonds, nAtoms);
-    const initDihedralCount = new Map<string, number>();
-    for (const [, dj, dk] of dihedrals) {
-      const bk = `${Math.min(dj, dk)}-${Math.max(dj, dk)}`;
-      initDihedralCount.set(bk, (initDihedralCount.get(bk) ?? 0) + 1);
-    }
-    torsionParams = [];
-    for (const [di, dj, dk, dl] of dihedrals) {
-      const {
-        V,
-        n: nPeriod,
-        phi0,
-      } = getUFFTorsionParams(
-        atomicNumbers[dj],
-        atomicNumbers[dk],
-        hybridizations[dj],
-        hybridizations[dk],
-        1,
-      );
-      if (V > 0) {
-        const bk = `${Math.min(dj, dk)}-${Math.max(dj, dk)}`;
-        const nDih = initDihedralCount.get(bk) ?? 1;
-        torsionParams.push({
-          i: di,
-          j: dj,
-          k: dk,
-          l: dl,
-          V: V / nDih,
-          n: nPeriod,
-          phi0,
-        });
-      }
-    }
+    buildTorsionParams();
   } else {
     rebuildTopology();
   }
