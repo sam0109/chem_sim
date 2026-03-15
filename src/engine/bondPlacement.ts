@@ -206,11 +206,11 @@ function getExistingBondDirections(
  * given the already-occupied directions.
  *
  * Strategy:
- * 1. If no existing bonds: rotate ideal frame so first direction has a
- *    sensible world-space orientation (slight upward tilt from +x).
- * 2. If existing bonds: align the ideal direction frame to the existing
- *    bonds, then pick the first unoccupied site.
- * 3. Fallback: pick the direction maximally separated from all existing bonds.
+ * 1. If no existing bonds: return the first ideal direction.
+ * 2. If 1 existing bond: align ideal frame so first ideal direction matches
+ *    the existing bond, then return the second ideal direction (rotated).
+ * 3. If multiple existing bonds and ideal directions remain: find the
+ *    direction maximally separated from all existing bond directions.
  */
 function pickNextDirection(
   idealDirs: Vector3Tuple[],
@@ -218,7 +218,6 @@ function pickNextDirection(
 ): Vector3Tuple {
   if (existingDirs.length === 0) {
     // No existing bonds — return the first ideal direction
-    // with a slight upward tilt so the atom doesn't land exactly on y=0
     return idealDirs[0];
   }
 
@@ -228,12 +227,8 @@ function pickNextDirection(
     return alignAndPickNext(idealDirs, existingDirs[0], 1);
   }
 
-  if (existingDirs.length >= 2 && idealDirs.length > existingDirs.length) {
-    // Multiple existing bonds: use alignment approach
-    return alignAndPickNext(idealDirs, existingDirs[0], existingDirs.length);
-  }
-
-  // Fallback: find direction maximally distant from all existing bond directions
+  // Multiple existing bonds: find direction maximally distant from all existing
+  // bond directions. This handles all cases (2, 3, ... existing bonds) correctly.
   return findMaxSeparatedDirection(existingDirs);
 }
 

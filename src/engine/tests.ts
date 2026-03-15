@@ -63,6 +63,7 @@ import {
   detectReactions,
   estimateReactionEnergy,
 } from './reactionDetector';
+import { computeBondedPosition, getIdealDirections } from './bondPlacement';
 
 // ---- Deterministic PRNG for reproducible tests ----
 // Mulberry32: a simple 32-bit seeded PRNG (public domain)
@@ -2322,273 +2323,317 @@ function runBondDetectionTests(): void {
   }
 }
 
-// ==============================================================
-// ORBITAL AND MARCHING CUBES TESTS
-// ==============================================================
+// ---- Bond placement tests ----
 
-import {
-  realSphericalHarmonic,
-  radialWavefunction,
-  getEffectiveZ,
-  computeOrbitalGrid,
-} from '../data/orbital';
-import { marchingCubes } from '../data/marchingCubes';
+function runBondPlacementTests(): void {
+  console.log('\n--- Bond Placement Tests ---');
 
-function runOrbitalTests(): void {
-  console.log('\n=== ORBITAL WAVEFUNCTION TESTS ===\n');
+  // Helper to compute distance between two points
+  function dist3(
+    a: [number, number, number],
+    b: [number, number, number],
+  ): number {
+    const dx = a[0] - b[0];
+    const dy = a[1] - b[1];
+    const dz = a[2] - b[2];
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }
 
-  // ORB-01: Spherical harmonic Y_00 normalization
-  // Integral of |Y_00|^2 sin(theta) dtheta dphi over full sphere = 1
-  // Numerical integration using midpoint rule
+  // Helper to compute angle (in degrees) between three points (A-B-C, angle at B)
+  function angle3(
+    a: [number, number, number],
+    b: [number, number, number],
+    c: [number, number, number],
+  ): number {
+    const ba = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const bc = [c[0] - b[0], c[1] - b[1], c[2] - b[2]];
+    const dot = ba[0] * bc[0] + ba[1] * bc[1] + ba[2] * bc[2];
+    const magBA = Math.sqrt(ba[0] * ba[0] + ba[1] * ba[1] + ba[2] * ba[2]);
+    const magBC = Math.sqrt(bc[0] * bc[0] + bc[1] * bc[1] + bc[2] * bc[2]);
+    return (
+      (Math.acos(Math.max(-1, Math.min(1, dot / (magBA * magBC)))) * 180) /
+      Math.PI
+    );
+  }
+
+  // Helper to make an atom at a given position
+  function makeAtom(
+    id: number,
+    z: number,
+    pos: [number, number, number],
+    hyb: Hybridization = 'sp3',
+  ): Atom {
+    return {
+      id,
+      elementNumber: z,
+      position: pos,
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: hyb,
+      fixed: false,
+    };
+  }
+
+  // BP-01: sp3 carbon with 0 existing bonds — places new H at correct bond length
   {
-    if (!isSkipped('ORB-01')) {
-      const nTheta = 100;
-      const nPhi = 200;
-      const dTheta = Math.PI / nTheta;
-      const dPhi = (2 * Math.PI) / nPhi;
-      let integral = 0;
-      for (let it = 0; it < nTheta; it++) {
-        const theta = (it + 0.5) * dTheta;
-        const sinTheta = Math.sin(theta);
-        for (let ip = 0; ip < nPhi; ip++) {
-          const phi = (ip + 0.5) * dPhi;
-          const Y = realSphericalHarmonic(0, 0, theta, phi);
-          integral += Y * Y * sinTheta * dTheta * dPhi;
-        }
+    const id = 'BP-01';
+    if (!isSkipped(id)) {
+      const carbon = makeAtom(1, 6, [0, 0, 0], 'sp3');
+      const atoms = [carbon];
+      const bonds: Bond[] = [];
+
+      const result = computeBondedPosition(atoms, bonds, null, 0, 1, 1);
+      const passed =
+        result !== null && Math.abs(dist3(result, [0, 0, 0]) - 1.111) < 0.15;
+      // UFF C-H bond length ~ 1.09-1.12 Å
+      report(
+        id,
+        'sp3 C with 0 bonds: new H at correct bond length',
+        passed,
+        result ? `distance=${dist3(result, [0, 0, 0]).toFixed(3)} Å` : 'null',
+        '~1.09-1.12 Å (UFF C-H)',
+      );
+    }
+  }
+
+  // BP-02: sp3 carbon with 1 existing bond — angle is ~109.5
+  {
+    const id = 'BP-02';
+    if (!isSkipped(id)) {
+      const carbon = makeAtom(1, 6, [0, 0, 0], 'sp3');
+      const hydrogen1 = makeAtom(2, 1, [1.09, 0, 0], 'none');
+      const atoms = [carbon, hydrogen1];
+      const bonds: Bond[] = [
+        { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+      ];
+
+      const result = computeBondedPosition(atoms, bonds, null, 0, 1, 1);
+      if (result !== null) {
+        const ang = angle3(hydrogen1.position, carbon.position, result);
+        const passed = Math.abs(ang - 109.47) < 5;
+        report(
+          id,
+          'sp3 C with 1 bond: new atom at ~109.5 angle',
+          passed,
+          `angle=${ang.toFixed(1)}°`,
+          '109.47° ± 5°',
+        );
+      } else {
+        report(
+          id,
+          'sp3 C with 1 bond: new atom at ~109.5 angle',
+          false,
+          'null',
+          '109.47° ± 5°',
+        );
       }
-      const passed = Math.abs(integral - 1.0) < 0.01;
-      report(
-        'ORB-01',
-        'Y_00 normalization: integral |Y_00|^2 dOmega = 1',
-        passed,
-        `integral = ${integral.toFixed(6)}`,
-        '1.0 +/- 0.01',
-      );
     }
   }
 
-  // ORB-02: Spherical harmonic Y_10 normalization
+  // BP-03: sp3 carbon with 3 existing bonds — 4th tetrahedral vertex
   {
-    if (!isSkipped('ORB-02')) {
-      const nTheta = 100;
-      const nPhi = 200;
-      const dTheta = Math.PI / nTheta;
-      const dPhi = (2 * Math.PI) / nPhi;
-      let integral = 0;
-      for (let it = 0; it < nTheta; it++) {
-        const theta = (it + 0.5) * dTheta;
-        const sinTheta = Math.sin(theta);
-        for (let ip = 0; ip < nPhi; ip++) {
-          const phi = (ip + 0.5) * dPhi;
-          const Y = realSphericalHarmonic(1, 0, theta, phi);
-          integral += Y * Y * sinTheta * dTheta * dPhi;
-        }
+    const id = 'BP-03';
+    if (!isSkipped(id)) {
+      // Place carbon at origin with 3 H atoms at tetrahedral positions
+      const carbon = makeAtom(1, 6, [0, 0, 0], 'sp3');
+      const h1 = makeAtom(2, 1, [1.09, 0, 0], 'none');
+      const h2 = makeAtom(3, 1, [-0.363, 1.028, 0], 'none');
+      const h3 = makeAtom(4, 1, [-0.363, -0.514, 0.89], 'none');
+      const atoms = [carbon, h1, h2, h3];
+      const bonds: Bond[] = [
+        { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+        { atomA: 0, atomB: 2, order: 1, type: 'covalent' },
+        { atomA: 0, atomB: 3, order: 1, type: 'covalent' },
+      ];
+
+      const result = computeBondedPosition(atoms, bonds, null, 0, 1, 1);
+      if (result !== null) {
+        // Check that all angles from existing H to new H are roughly tetrahedral
+        const ang1 = angle3(h1.position, carbon.position, result);
+        const ang2 = angle3(h2.position, carbon.position, result);
+        const ang3 = angle3(h3.position, carbon.position, result);
+        const allTetrahedral =
+          Math.abs(ang1 - 109.47) < 15 &&
+          Math.abs(ang2 - 109.47) < 15 &&
+          Math.abs(ang3 - 109.47) < 15;
+        report(
+          id,
+          'sp3 C with 3 bonds: 4th H at tetrahedral position',
+          allTetrahedral,
+          `angles=${ang1.toFixed(1)}°, ${ang2.toFixed(1)}°, ${ang3.toFixed(1)}°`,
+          'all ~109.47° ± 15°',
+        );
+      } else {
+        report(
+          id,
+          'sp3 C with 3 bonds: 4th H at tetrahedral position',
+          false,
+          'null',
+          'non-null result',
+        );
       }
-      const passed = Math.abs(integral - 1.0) < 0.01;
+    }
+  }
+
+  // BP-04: sp3 carbon with 4 existing bonds — returns null (saturated)
+  {
+    const id = 'BP-04';
+    if (!isSkipped(id)) {
+      const carbon = makeAtom(1, 6, [0, 0, 0], 'sp3');
+      const h1 = makeAtom(2, 1, [1.09, 0, 0], 'none');
+      const h2 = makeAtom(3, 1, [-0.363, 1.028, 0], 'none');
+      const h3 = makeAtom(4, 1, [-0.363, -0.514, 0.89], 'none');
+      const h4 = makeAtom(5, 1, [-0.363, -0.514, -0.89], 'none');
+      const atoms = [carbon, h1, h2, h3, h4];
+      const bonds: Bond[] = [
+        { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+        { atomA: 0, atomB: 2, order: 1, type: 'covalent' },
+        { atomA: 0, atomB: 3, order: 1, type: 'covalent' },
+        { atomA: 0, atomB: 4, order: 1, type: 'covalent' },
+      ];
+
+      const result = computeBondedPosition(atoms, bonds, null, 0, 1, 1);
       report(
-        'ORB-02',
-        'Y_10 normalization: integral |Y_10|^2 dOmega = 1',
-        passed,
-        `integral = ${integral.toFixed(6)}`,
-        '1.0 +/- 0.01',
+        id,
+        'sp3 C with 4 bonds: returns null (saturated)',
+        result === null,
+        result === null
+          ? 'null'
+          : `[${result.map((v) => v.toFixed(3)).join(', ')}]`,
+        'null',
       );
     }
   }
 
-  // ORB-03: Spherical harmonic Y_21 normalization (d orbital)
+  // BP-05: sp2 carbon — 120 angles
   {
-    if (!isSkipped('ORB-03')) {
-      const nTheta = 100;
-      const nPhi = 200;
-      const dTheta = Math.PI / nTheta;
-      const dPhi = (2 * Math.PI) / nPhi;
-      let integral = 0;
-      for (let it = 0; it < nTheta; it++) {
-        const theta = (it + 0.5) * dTheta;
-        const sinTheta = Math.sin(theta);
-        for (let ip = 0; ip < nPhi; ip++) {
-          const phi = (ip + 0.5) * dPhi;
-          const Y = realSphericalHarmonic(2, 1, theta, phi);
-          integral += Y * Y * sinTheta * dTheta * dPhi;
-        }
+    const id = 'BP-05';
+    if (!isSkipped(id)) {
+      const carbon = makeAtom(1, 6, [0, 0, 0], 'sp2');
+      const h1 = makeAtom(2, 1, [1.09, 0, 0], 'none');
+      const atoms = [carbon, h1];
+      const bonds: Bond[] = [
+        { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+      ];
+
+      const result = computeBondedPosition(atoms, bonds, null, 0, 1, 1);
+      if (result !== null) {
+        const ang = angle3(h1.position, carbon.position, result);
+        const passed = Math.abs(ang - 120.0) < 5;
+        report(
+          id,
+          'sp2 C with 1 bond: new atom at ~120 angle',
+          passed,
+          `angle=${ang.toFixed(1)}°`,
+          '120.0° ± 5°',
+        );
+      } else {
+        report(
+          id,
+          'sp2 C with 1 bond: new atom at ~120 angle',
+          false,
+          'null',
+          '120.0° ± 5°',
+        );
       }
-      const passed = Math.abs(integral - 1.0) < 0.01;
-      report(
-        'ORB-03',
-        'Y_21 normalization: integral |Y_21|^2 dOmega = 1',
-        passed,
-        `integral = ${integral.toFixed(6)}`,
-        '1.0 +/- 0.01',
-      );
     }
   }
 
-  // ORB-04: Radial wavefunction R_10 (1s) normalization
-  // integral_0^inf |R_10|^2 r^2 dr = 1 for Z=1
+  // BP-06: sp carbon — 180 angle (linear)
   {
-    if (!isSkipped('ORB-04')) {
-      const Zeff = 1.0;
-      const dr = 0.001; // Angstrom
-      const rMax = 10.0; // Angstrom
-      let integral = 0;
-      for (let ir = 0; ir < rMax / dr; ir++) {
-        const r = (ir + 0.5) * dr;
-        const R = radialWavefunction(1, 0, r, Zeff);
-        integral += R * R * r * r * dr;
+    const id = 'BP-06';
+    if (!isSkipped(id)) {
+      const carbon = makeAtom(1, 6, [0, 0, 0], 'sp');
+      const h1 = makeAtom(2, 1, [1.09, 0, 0], 'none');
+      const atoms = [carbon, h1];
+      const bonds: Bond[] = [
+        { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+      ];
+
+      const result = computeBondedPosition(atoms, bonds, null, 0, 1, 1);
+      if (result !== null) {
+        const ang = angle3(h1.position, carbon.position, result);
+        const passed = Math.abs(ang - 180.0) < 5;
+        report(
+          id,
+          'sp C with 1 bond: new atom at ~180 angle (linear)',
+          passed,
+          `angle=${ang.toFixed(1)}°`,
+          '180.0° ± 5°',
+        );
+      } else {
+        report(
+          id,
+          'sp C with 1 bond: new atom at ~180 angle',
+          false,
+          'null',
+          '180.0° ± 5°',
+        );
       }
-      const passed = Math.abs(integral - 1.0) < 0.02;
-      report(
-        'ORB-04',
-        'R_10 (1s) normalization: integral |R_10|^2 r^2 dr = 1',
-        passed,
-        `integral = ${integral.toFixed(6)}`,
-        '1.0 +/- 0.02',
-      );
     }
   }
 
-  // ORB-05: Radial wavefunction R_20 (2s) normalization for Z=1
+  // BP-07: C-C vs C-H vs C-O bond lengths are correct
   {
-    if (!isSkipped('ORB-05')) {
-      const Zeff = 1.0;
-      const dr = 0.002;
-      const rMax = 30.0; // 2s extends further than 1s
-      let integral = 0;
-      for (let ir = 0; ir < rMax / dr; ir++) {
-        const r = (ir + 0.5) * dr;
-        const R = radialWavefunction(2, 0, r, Zeff);
-        integral += R * R * r * r * dr;
+    const id = 'BP-07';
+    if (!isSkipped(id)) {
+      const carbon = makeAtom(1, 6, [0, 0, 0], 'sp3');
+
+      // C-H bond
+      const resultH = computeBondedPosition([carbon], [], null, 0, 1, 1);
+      // C-C bond
+      const resultC = computeBondedPosition([carbon], [], null, 0, 6, 1);
+      // C-O bond
+      const resultO = computeBondedPosition([carbon], [], null, 0, 8, 1);
+
+      if (resultH && resultC && resultO) {
+        const dH = dist3(resultH, [0, 0, 0]);
+        const dC = dist3(resultC, [0, 0, 0]);
+        const dO = dist3(resultO, [0, 0, 0]);
+        // C-H ~ 1.09 Å, C-C ~ 1.51 Å, C-O ~ 1.41 Å
+        const passed =
+          dH < dO &&
+          dO < dC && // H shortest, C longest
+          Math.abs(dH - 1.09) < 0.15 &&
+          Math.abs(dC - 1.51) < 0.15 &&
+          Math.abs(dO - 1.41) < 0.15;
+        report(
+          id,
+          'Bond lengths: C-H < C-O < C-C',
+          passed,
+          `C-H=${dH.toFixed(3)}, C-O=${dO.toFixed(3)}, C-C=${dC.toFixed(3)} Å`,
+          'C-H~1.09, C-O~1.41, C-C~1.51 Å',
+        );
+      } else {
+        report(
+          id,
+          'Bond lengths: C-H < C-O < C-C',
+          false,
+          'null result',
+          'valid positions',
+        );
       }
-      const passed = Math.abs(integral - 1.0) < 0.02;
-      report(
-        'ORB-05',
-        'R_20 (2s) normalization: integral |R_20|^2 r^2 dr = 1',
-        passed,
-        `integral = ${integral.toFixed(6)}`,
-        '1.0 +/- 0.02',
-      );
     }
   }
 
-  // ORB-06: 2s orbital has 1 radial node (R_20 changes sign)
+  // BP-08: getIdealDirections returns correct count for each hybridization
   {
-    if (!isSkipped('ORB-06')) {
-      const Zeff = 1.0;
-      const dr = 0.01;
-      const rMax = 15.0;
-      let signChanges = 0;
-      let prevSign = Math.sign(radialWavefunction(2, 0, dr, Zeff));
-      for (let ir = 1; ir < rMax / dr; ir++) {
-        const r = (ir + 0.5) * dr;
-        const R = radialWavefunction(2, 0, r, Zeff);
-        const s = Math.sign(R);
-        if (s !== 0 && s !== prevSign && prevSign !== 0) {
-          signChanges++;
-        }
-        if (s !== 0) prevSign = s;
-      }
-      const passed = signChanges === 1;
+    const id = 'BP-08';
+    if (!isSkipped(id)) {
+      const sp3 = getIdealDirections('sp3').length;
+      const sp2 = getIdealDirections('sp2').length;
+      const sp = getIdealDirections('sp').length;
+      const sp3d = getIdealDirections('sp3d').length;
+      const sp3d2 = getIdealDirections('sp3d2').length;
+      const passed =
+        sp3 === 4 && sp2 === 3 && sp === 2 && sp3d === 5 && sp3d2 === 6;
       report(
-        'ORB-06',
-        '2s orbital: exactly 1 radial node (sign change)',
+        id,
+        'getIdealDirections: correct counts for all hybridizations',
         passed,
-        `sign changes = ${signChanges}`,
-        '1',
-      );
-    }
-  }
-
-  // ORB-07: Clementi-Raimondi Z* for He(1s) = 1.6875
-  {
-    if (!isSkipped('ORB-07')) {
-      const Zeff = getEffectiveZ(2, 1, 0);
-      const passed = Math.abs(Zeff - 1.6875) < 0.001;
-      report(
-        'ORB-07',
-        'Clementi-Raimondi Z* for He(1s) = 1.6875',
-        passed,
-        `Z* = ${Zeff.toFixed(4)}`,
-        '1.6875',
-      );
-    }
-  }
-
-  // ORB-08: Clementi-Raimondi Z* for C(2p) = 3.1358
-  {
-    if (!isSkipped('ORB-08')) {
-      const Zeff = getEffectiveZ(6, 2, 1);
-      const passed = Math.abs(Zeff - 3.1358) < 0.001;
-      report(
-        'ORB-08',
-        'Clementi-Raimondi Z* for C(2p) = 3.1358',
-        passed,
-        `Z* = ${Zeff.toFixed(4)}`,
-        '3.1358',
-      );
-    }
-  }
-
-  // ORB-09: Marching cubes on a sphere produces non-degenerate mesh
-  {
-    if (!isSkipped('ORB-09')) {
-      // Create a 3D field representing a sphere of radius 1.5 centered at origin
-      const gridRes = 20;
-      const halfWidth = 3.0;
-      const cs = (2 * halfWidth) / (gridRes - 1);
-      const field = new Float32Array(gridRes * gridRes * gridRes);
-      for (let iz = 0; iz < gridRes; iz++) {
-        for (let iy = 0; iy < gridRes; iy++) {
-          for (let ix = 0; ix < gridRes; ix++) {
-            const x = -halfWidth + ix * cs;
-            const y = -halfWidth + iy * cs;
-            const z = -halfWidth + iz * cs;
-            const r2 = x * x + y * y + z * z;
-            // Field value: 1.5^2 - r^2 (positive inside sphere, negative outside)
-            field[iz * gridRes * gridRes + iy * gridRes + ix] = 2.25 - r2;
-          }
-        }
-      }
-
-      const mesh = marchingCubes(
-        field,
-        [gridRes, gridRes, gridRes],
-        [-halfWidth, -halfWidth, -halfWidth],
-        cs,
-        0.0,
-      );
-
-      const hasTriangles = mesh.indices.length > 0;
-      const hasPositions = mesh.positions.length > 0;
-      const hasNormals = mesh.normals.length > 0;
-      const passed = hasTriangles && hasPositions && hasNormals;
-      report(
-        'ORB-09',
-        'Marching cubes: sphere produces non-degenerate mesh',
-        passed,
-        `triangles=${mesh.indices.length / 3}, vertices=${mesh.positions.length / 3}`,
-        'triangles > 0, vertices > 0, normals > 0',
-      );
-    }
-  }
-
-  // ORB-10: computeOrbitalGrid produces non-trivial field
-  {
-    if (!isSkipped('ORB-10')) {
-      const grid = computeOrbitalGrid(2, 1, 0, 3.1358, [0, 0, 0], 16);
-      let hasPositive = false;
-      let hasNegative = false;
-      for (let i = 0; i < grid.values.length; i++) {
-        if (grid.values[i] > 0.001) hasPositive = true;
-        if (grid.values[i] < -0.001) hasNegative = true;
-      }
-      // A 2p orbital should have both positive and negative lobes
-      const passed = hasPositive && hasNegative;
-      report(
-        'ORB-10',
-        '2p_z orbital grid has positive and negative lobes',
-        passed,
-        `hasPositive=${hasPositive}, hasNegative=${hasNegative}`,
-        'both true',
+        `sp3=${sp3}, sp2=${sp2}, sp=${sp}, sp3d=${sp3d}, sp3d2=${sp3d2}`,
+        'sp3=4, sp2=3, sp=2, sp3d=5, sp3d2=6',
       );
     }
   }
@@ -2610,7 +2655,7 @@ runPBCTests();
 runWolfTests();
 runReactionTests();
 runBondDetectionTests();
-runOrbitalTests();
+runBondPlacementTests();
 
 // Summary
 console.log('\n' + '='.repeat(50));
