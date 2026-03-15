@@ -166,18 +166,53 @@ function estimateBondOrder(dist: number, singleDist: number): number {
 }
 
 /**
- * Detect hydrogen bonds.
+ * Detect hydrogen bonds with hysteresis to prevent flickering during dynamics.
+ *
  * Criteria: D-H···A where D and A are N, O, or F
- * Distance H···A < 2.5 Å, angle D-H···A > 120°
+ *
+ * Formation thresholds (new H-bonds):
+ *   H···A distance < 2.5 Å, D-H···A angle > 120°
+ *
+ * Break thresholds (existing H-bonds get looser criteria):
+ *   H···A distance < 3.0 Å, D-H···A angle > 100°
+ *
+ * Hysteresis prevents rapid on/off switching when geometry fluctuates
+ * near the threshold during molecular dynamics.
+ *
+ * Source: Jeffrey, "An Introduction to Hydrogen Bonding" (1997).
+ * Strong H-bonds: H···A < 2.5 Å; weak H-bonds: H···A < 3.2 Å.
+ * IUPAC recommends D···A < 3.5 Å. We use H···A < 2.5/3.0 Å (form/break)
+ * and angle > 120°/100° (form/break) for a conservative hysteresis band.
  */
+
+// H-bond formation thresholds (tighter — must be clearly an H-bond to form)
+const HBOND_FORM_DIST = 2.5; // Å, H···A distance
+const HBOND_FORM_ANGLE = 120; // degrees, D-H···A angle minimum
+
+// H-bond break thresholds (looser — existing H-bond persists in wider range)
+const HBOND_BREAK_DIST = 3.0; // Å, H···A distance
+const HBOND_BREAK_ANGLE = 100; // degrees, D-H···A angle minimum
+
+// Minimum H···A distance to avoid nonsensical detections
+const HBOND_MIN_DIST = 0.5; // Å
+
 export function detectHydrogenBonds(
   positions: Float64Array,
   atomicNumbers: Int32Array | number[],
   existingBonds: Bond[],
+  previousHBonds: Bond[] = [],
 ): Bond[] {
   const N = atomicNumbers.length;
   const hBonds: Bond[] = [];
   const hbAcceptors = new Set([7, 8, 9]); // N, O, F
+
+  // Build set of existing H-bond pairs for hysteresis lookup
+  const existingHBondPairs = new Set<string>();
+  for (const b of previousHBonds) {
+    existingHBondPairs.add(
+      `${Math.min(b.atomA, b.atomB)}-${Math.max(b.atomA, b.atomB)}`,
+    );
+  }
 
   // Find hydrogen atoms bonded to N, O, F
   const donorHydrogens: Array<{ h: number; donor: number }> = [];
@@ -200,13 +235,21 @@ export function detectHydrogenBonds(
       if (a === h || a === donor) continue;
       if (!hbAcceptors.has(atomicNumbers[a])) continue;
 
+      // Check if this H-bond already existed (for hysteresis)
+      const pairKey = `${Math.min(h, a)}-${Math.max(h, a)}`;
+      const isExisting = existingHBondPairs.has(pairKey);
+
+      // Apply hysteresis: existing H-bonds get looser break thresholds
+      const maxDist = isExisting ? HBOND_BREAK_DIST : HBOND_FORM_DIST;
+      const minAngle = isExisting ? HBOND_BREAK_ANGLE : HBOND_FORM_ANGLE;
+
       // Distance H···A
       const dx = positions[a * 3] - positions[h * 3];
       const dy = positions[a * 3 + 1] - positions[h * 3 + 1];
       const dz = positions[a * 3 + 2] - positions[h * 3 + 2];
       const distHA = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-      if (distHA > 2.5 || distHA < 0.5) continue;
+      if (distHA > maxDist || distHA < HBOND_MIN_DIST) continue;
 
       // Angle D-H···A
       const dhX = positions[h * 3] - positions[donor * 3];
@@ -220,7 +263,7 @@ export function detectHydrogenBonds(
       const angle =
         (Math.acos(Math.max(-1, Math.min(1, cosAngle))) * 180) / Math.PI;
 
-      if (angle > 120) {
+      if (angle > minAngle) {
         hBonds.push({
           atomA: h,
           atomB: a,
