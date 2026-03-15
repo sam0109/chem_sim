@@ -15,12 +15,31 @@ const _tempColor = new THREE.Color();
 
 const MAX_ATOMS = 2000;
 
+/**
+ * Distinct color palette for molecule coloring.
+ * 10 perceptually distinct colors chosen for accessibility.
+ * Source: Tableau 10 categorical palette.
+ */
+const MOLECULE_PALETTE = [
+  '#4e79a7', // blue
+  '#f28e2b', // orange
+  '#e15759', // red
+  '#76b7b2', // teal
+  '#59a14f', // green
+  '#edc948', // yellow
+  '#b07aa1', // purple
+  '#ff9da7', // pink
+  '#9c755f', // brown
+  '#bab0ac', // gray
+];
+
 export const AtomRenderer: React.FC = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const colorArrayRef = useRef(new Float32Array(MAX_ATOMS * 3));
   const renderMode = useUIStore((s) => s.renderMode);
   const selectedAtomIds = useUIStore((s) => s.selectedAtomIds);
   const hoveredAtomId = useUIStore((s) => s.hoveredAtomId);
+  const colorMode = useUIStore((s) => s.colorMode);
 
   // Create shared geometry
   const geometry = useMemo(() => {
@@ -32,7 +51,7 @@ export const AtomRenderer: React.FC = () => {
     const mesh = meshRef.current;
     if (!mesh) return;
 
-    const { atoms, positions } = useSimulationStore.getState();
+    const { atoms, positions, moleculeIds } = useSimulationStore.getState();
     const nAtoms = atoms.length;
 
     if (nAtoms === 0) {
@@ -79,6 +98,9 @@ export const AtomRenderer: React.FC = () => {
         _tempColor.set(0x4da6ff);
       } else if (isHovered) {
         _tempColor.set(0x88ccff);
+      } else if (colorMode === 'molecule' && moleculeIds.length > i) {
+        const molId = moleculeIds[i];
+        _tempColor.set(MOLECULE_PALETTE[molId % MOLECULE_PALETTE.length]);
       } else {
         _tempColor.set(el?.color ?? '#cccccc');
       }

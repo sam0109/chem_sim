@@ -99,6 +99,25 @@ export interface Molecule {
   bonds: Bond[];
 }
 
+/** Per-molecule computed properties from union-find decomposition */
+export interface MoleculeInfo {
+  /** Contiguous molecule ID (0-indexed) */
+  id: number;
+  /** Indices of atoms belonging to this molecule */
+  atomIndices: number[];
+  /** Center of mass in Å [x, y, z] */
+  centerOfMass: Vector3Tuple;
+  /** Sum of partial charges (elementary charge units) */
+  totalCharge: number;
+  /** Dipole moment vector in e·Å [x, y, z] */
+  dipoleMoment: Vector3Tuple;
+  /** Dipole moment magnitude in e·Å */
+  dipoleMagnitude: number;
+}
+
+/** Color mode for atom rendering */
+export type ColorMode = 'element' | 'molecule';
+
 // --------------- Simulation State ---------------
 
 export interface SimulationBox {
@@ -228,6 +247,10 @@ export interface WorkerStateUpdate {
   step: number;
   energy: { kinetic: number; potential: number; total: number };
   temperature: number;
+  /** Molecule ID per atom (from union-find on bond graph) */
+  moleculeIds: Int32Array;
+  /** Per-molecule computed properties */
+  molecules: MoleculeInfo[];
 }
 
 export interface WorkerReadyMessage {

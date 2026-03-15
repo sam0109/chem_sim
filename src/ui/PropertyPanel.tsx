@@ -13,6 +13,8 @@ export const PropertyPanel: React.FC = () => {
   const atoms = useSimulationStore((s) => s.atoms);
   const bonds = useSimulationStore((s) => s.bonds);
   const positions = useSimulationStore((s) => s.positions);
+  const moleculeIds = useSimulationStore((s) => s.moleculeIds);
+  const molecules = useSimulationStore((s) => s.molecules);
 
   if (!showPropertyPanel || selectedAtomIds.length === 0) return null;
 
@@ -137,6 +139,10 @@ export const PropertyPanel: React.FC = () => {
               </span>
               <span style={{ color: '#888' }}>Hybridization</span>
               <span>{atom.hybridization}</span>
+              <span style={{ color: '#888' }}>Molecule</span>
+              <span>
+                {moleculeIds.length > i ? `#${moleculeIds[i]}` : 'N/A'}
+              </span>
             </div>
           </div>
         );
@@ -177,6 +183,50 @@ export const PropertyPanel: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* Molecule info for the first selected atom */}
+      {selectedAtomIds.length > 0 &&
+        moleculeIds.length > selectedAtomIds[0] &&
+        (() => {
+          const molId = moleculeIds[selectedAtomIds[0]];
+          const mol = molecules.find((m) => m.id === molId);
+          if (!mol) return null;
+          return (
+            <div
+              style={{
+                marginTop: 8,
+                padding: 6,
+                background: 'rgba(100,255,180,0.08)',
+                borderRadius: 4,
+              }}
+            >
+              <div style={{ fontSize: 11, color: '#88ffaa', marginBottom: 4 }}>
+                Molecule #{molId}
+              </div>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '2px 8px',
+                  fontSize: 10,
+                }}
+              >
+                <span style={{ color: '#888' }}>Atoms</span>
+                <span>{mol.atomIndices.length}</span>
+                <span style={{ color: '#888' }}>Total charge</span>
+                <span>{mol.totalCharge.toFixed(3)} e</span>
+                <span style={{ color: '#888' }}>COM</span>
+                <span>
+                  {mol.centerOfMass[0].toFixed(2)},{' '}
+                  {mol.centerOfMass[1].toFixed(2)},{' '}
+                  {mol.centerOfMass[2].toFixed(2)}
+                </span>
+                <span style={{ color: '#888' }}>Dipole</span>
+                <span>{mol.dipoleMagnitude.toFixed(3)} e·Å</span>
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 };

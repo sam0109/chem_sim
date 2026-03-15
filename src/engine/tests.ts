@@ -32,6 +32,7 @@ import {
   ethanolMolecule,
 } from '../io/examples';
 import type { Atom, Bond, Hybridization } from '../data/types';
+import { findMolecules, computeMoleculeInfo } from './moleculeTracker';
 
 // ---- Deterministic PRNG for reproducible tests ----
 // Mulberry32: a simple 32-bit seeded PRNG (public domain)
@@ -929,6 +930,135 @@ function runChargeTests(): void {
   }
 }
 
+// ---- Molecule tracking tests ----
+
+function runMoleculeTests(): void {
+  console.log('\n=== MOLECULE TRACKING TESTS ===\n');
+
+  // MOL-01: Water is one molecule with 3 atoms
+  {
+    const s = initSim(waterMolecule());
+    const molIds = findMolecules(s.bonds, s.N);
+    // All 3 atoms should have the same molecule ID
+    const allSame = molIds[0] === molIds[1] && molIds[1] === molIds[2];
+    // Count unique molecule IDs
+    const uniqueIds = new Set<number>();
+    for (let i = 0; i < s.N; i++) uniqueIds.add(molIds[i]);
+
+    const passed = allSame && uniqueIds.size === 1;
+    report(
+      'MOL-01',
+      'Water identified as one molecule with 3 atoms',
+      passed,
+      `${uniqueIds.size} molecule(s), IDs=[${molIds[0]},${molIds[1]},${molIds[2]}]`,
+      '1 molecule, all atoms share same ID',
+    );
+  }
+
+  // MOL-02: Two water molecules at 5 Å separation → 2 molecules
+  {
+    const water1 = waterMolecule();
+    const water2 = waterMolecule();
+    // Shift second water 5 Å along x
+    const allAtoms: Atom[] = [
+      ...water1,
+      ...water2.map((a, i) => ({
+        ...a,
+        id: water1.length + i,
+        position: [a.position[0] + 5, a.position[1], a.position[2]] as [
+          number,
+          number,
+          number,
+        ],
+      })),
+    ];
+    const s = initSim(allAtoms);
+    const molIds = findMolecules(s.bonds, s.N);
+
+    // Water1 atoms (0,1,2) should share one ID, Water2 atoms (3,4,5) another
+    const mol1Id = molIds[0];
+    const mol1Same = molIds[0] === molIds[1] && molIds[1] === molIds[2];
+    const mol2Id = molIds[3];
+    const mol2Same = molIds[3] === molIds[4] && molIds[4] === molIds[5];
+    const different = mol1Id !== mol2Id;
+
+    const uniqueIds = new Set<number>();
+    for (let i = 0; i < s.N; i++) uniqueIds.add(molIds[i]);
+
+    const passed = mol1Same && mol2Same && different && uniqueIds.size === 2;
+    report(
+      'MOL-02',
+      'Two H2O molecules identified as two separate molecules',
+      passed,
+      `${uniqueIds.size} molecule(s), water1=${mol1Id}, water2=${mol2Id}`,
+      '2 molecules with distinct IDs',
+    );
+  }
+
+  // MOL-03: Water center of mass matches hand computation
+  {
+    const atoms = waterMolecule();
+    const s = initSim(atoms);
+    const molIds = findMolecules(s.bonds, s.N);
+    const molInfo = computeMoleculeInfo(
+      molIds,
+      s.pos,
+      new Float64Array(s.charges),
+      s.masses,
+      s.N,
+    );
+
+    // Hand-compute COM for water: m_O=15.999, m_H=1.008
+    // O at [0,0,0], H1 at [hx,hy,0], H2 at [-hx,hy,0]
+    const mO = 15.999;
+    const mH = 1.008;
+    const totalM = mO + 2 * mH;
+    // x: (mO*0 + mH*hx + mH*(-hx)) / totalM = 0
+    // y: (mO*0 + mH*hy + mH*hy) / totalM = 2*mH*hy / totalM
+    const hy = 0.99 * Math.cos(((104.51 / 2) * Math.PI) / 180);
+    const expectedY = (2 * mH * hy) / totalM;
+
+    const mol = molInfo[0];
+    const comErr = Math.sqrt(
+      (mol.centerOfMass[0] - 0) ** 2 +
+        (mol.centerOfMass[1] - expectedY) ** 2 +
+        (mol.centerOfMass[2] - 0) ** 2,
+    );
+
+    const passed = comErr < 0.01; // Within 0.01 Å
+    report(
+      'MOL-03',
+      'Water center of mass correct',
+      passed,
+      `COM=[${mol.centerOfMass.map((v) => v.toFixed(4)).join(',')}], err=${comErr.toExponential(3)} Å`,
+      'Error < 0.01 Å from hand-computed value',
+    );
+  }
+
+  // MOL-04: Water total charge is zero
+  {
+    const s = initSim(waterMolecule());
+    const molIds = findMolecules(s.bonds, s.N);
+    const molInfo = computeMoleculeInfo(
+      molIds,
+      s.pos,
+      new Float64Array(s.charges),
+      s.masses,
+      s.N,
+    );
+
+    const totalQ = molInfo[0].totalCharge;
+    const passed = Math.abs(totalQ) < 1e-10;
+    report(
+      'MOL-04',
+      'Water molecule total charge is zero',
+      passed,
+      `Q=${totalQ.toExponential(3)} e`,
+      '|Q| < 1e-10 e',
+    );
+  }
+}
+
 // ---- Main ----
 
 console.log('╔══════════════════════════════════════════════════╗');
@@ -940,6 +1070,7 @@ runNVETests();
 runGeometryTests();
 runThermodynamicTests();
 runChargeTests();
+runMoleculeTests();
 
 // Summary
 console.log('\n' + '='.repeat(50));

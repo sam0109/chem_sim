@@ -304,10 +304,35 @@ export function co2Molecule(): Atom[] {
   ];
 }
 
+/**
+ * Create two water molecules separated by ~5 Å.
+ * Demonstrates multi-molecule tracking: each water is
+ * identified as a separate molecule by the union-find
+ * decomposition of the bond graph.
+ */
+export function twoWaterMolecules(): Atom[] {
+  const water1 = waterMolecule();
+  const water2 = waterMolecule();
+  // Shift second water 5 Å along x to ensure separation
+  return [
+    ...water1,
+    ...water2.map((a, i) => ({
+      ...a,
+      id: water1.length + i,
+      position: [a.position[0] + 5, a.position[1], a.position[2]] as [
+        number,
+        number,
+        number,
+      ],
+    })),
+  ];
+}
+
 export const exampleMolecules = {
   'Water (H₂O)': waterMolecule,
   'Methane (CH₄)': methaneMolecule,
   'Ethanol (C₂H₅OH)': ethanolMolecule,
   'NaCl pair': naclPair,
   'Carbon Dioxide (CO₂)': co2Molecule,
+  'Two H₂O molecules': twoWaterMolecules,
 };
