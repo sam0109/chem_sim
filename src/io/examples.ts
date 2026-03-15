@@ -8,6 +8,7 @@
 // ==============================================================
 
 import type { Atom } from '../data/types';
+import { parseSMILES } from './smiles';
 
 /**
  * Create a water molecule (H2O).
@@ -743,6 +744,45 @@ export function hfH2oPair(): Atom[] {
   return combineMolecules(hfMolecule(), waterMolecule(), 5);
 }
 
+// ==============================================================
+// SMILES-based examples — generated from SMILES notation via
+// openchemlib's ConformerGenerator (3D coordinate generation).
+// These demonstrate molecules that would be tedious to build
+// atom-by-atom with hardcoded coordinates.
+// ==============================================================
+
+/**
+ * Create a benzene molecule from SMILES.
+ * Aromatic ring — tests SMILES aromatic notation.
+ */
+export function benzeneSMILES(): Atom[] {
+  return parseSMILES('c1ccccc1');
+}
+
+/**
+ * Create a cyclohexane molecule from SMILES.
+ * Non-aromatic ring with chair conformation.
+ */
+export function cyclohexaneSMILES(): Atom[] {
+  return parseSMILES('C1CCCCC1');
+}
+
+/**
+ * Create an aspirin (acetylsalicylic acid) molecule from SMILES.
+ * A familiar drug molecule demonstrating complex SMILES.
+ */
+export function aspirinSMILES(): Atom[] {
+  return parseSMILES('CC(=O)Oc1ccccc1C(=O)O');
+}
+
+/**
+ * Create a caffeine molecule from SMILES.
+ * Bicyclic purine derivative found in coffee/tea.
+ */
+export function caffeineSMILES(): Atom[] {
+  return parseSMILES('Cn1c(=O)c2c(ncn2C)n(C)c1=O');
+}
+
 export const exampleMolecules = {
   // Single molecules
   'Water (H₂O)': waterMolecule,
@@ -760,4 +800,9 @@ export const exampleMolecules = {
   'HCl + NH₃ (acid-base)': hclNh3Pair,
   'H₂ + F₂ (reaction)': h2F2Pair,
   'HF + H₂O (H-bonding)': hfH2oPair,
+  // SMILES-generated molecules
+  'Benzene (SMILES)': benzeneSMILES,
+  'Cyclohexane (SMILES)': cyclohexaneSMILES,
+  'Aspirin (SMILES)': aspirinSMILES,
+  'Caffeine (SMILES)': caffeineSMILES,
 };

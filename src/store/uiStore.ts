@@ -42,6 +42,7 @@ interface UIStore {
   showEncounterPanel: boolean;
   showReactionLog: boolean;
   showEventLog: boolean;
+  showExperimentPanel: boolean;
   togglePeriodicTable: () => void;
   togglePropertyPanel: () => void;
   toggleEnergyPlot: () => void;
@@ -49,6 +50,14 @@ interface UIStore {
   toggleEncounterPanel: () => void;
   toggleReactionLog: () => void;
   toggleEventLog: () => void;
+  toggleExperimentPanel: () => void;
+
+  // ---- Quantity dashboard ----
+  showDashboard: boolean;
+  toggleDashboard: () => void;
+  /** IDs of expanded dashboard cards (e.g. 'temperature', 'ke', 'pe', 'total') */
+  expandedDashboardCards: Set<string>;
+  toggleDashboardCard: (cardId: string) => void;
 
   // ---- Hover ----
   hoveredAtomId: number | null;
@@ -123,7 +132,12 @@ export const useUIStore = create<UIStore>((set, get) => ({
   showEncounterPanel: false,
   showReactionLog: false,
   showEventLog: false,
+  showExperimentPanel: false,
   hoveredAtomId: null,
+
+  // Quantity dashboard
+  showDashboard: false,
+  expandedDashboardCards: new Set<string>(),
   renderMode: 'ball-and-stick',
   showLabels: true,
   colorMode: 'element' as ColorMode,
@@ -174,6 +188,19 @@ export const useUIStore = create<UIStore>((set, get) => ({
     set({ showEncounterPanel: !get().showEncounterPanel }),
   toggleReactionLog: () => set({ showReactionLog: !get().showReactionLog }),
   toggleEventLog: () => set({ showEventLog: !get().showEventLog }),
+  toggleExperimentPanel: () =>
+    set({ showExperimentPanel: !get().showExperimentPanel }),
+
+  toggleDashboard: () => set({ showDashboard: !get().showDashboard }),
+  toggleDashboardCard: (cardId: string) => {
+    const cards = new Set(get().expandedDashboardCards);
+    if (cards.has(cardId)) {
+      cards.delete(cardId);
+    } else {
+      cards.add(cardId);
+    }
+    set({ expandedDashboardCards: cards });
+  },
 
   setHoveredAtom: (id) => set({ hoveredAtomId: id }),
 

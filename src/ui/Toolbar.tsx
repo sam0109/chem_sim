@@ -75,8 +75,12 @@ export const Toolbar: React.FC = () => {
   const toggleReactionLog = useUIStore((s) => s.toggleReactionLog);
   const showEventLog = useUIStore((s) => s.showEventLog);
   const toggleEventLog = useUIStore((s) => s.toggleEventLog);
+  const showDashboard = useUIStore((s) => s.showDashboard);
+  const toggleDashboard = useUIStore((s) => s.toggleDashboard);
   const bondColorMode = useUIStore((s) => s.bondColorMode);
   const toggleBondColorMode = useUIStore((s) => s.toggleBondColorMode);
+  const showExperimentPanel = useUIStore((s) => s.showExperimentPanel);
+  const toggleExperimentPanel = useUIStore((s) => s.toggleExperimentPanel);
 
   // When selecting the place-molecule tool, show the encounter panel
   const handleToolSelect = useCallback(
@@ -313,6 +317,28 @@ export const Toolbar: React.FC = () => {
         E(t)
       </button>
       <button
+        data-testid="toggle-dashboard"
+        onClick={toggleDashboard}
+        title="Toggle Quantity Dashboard"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showDashboard
+            ? '2px solid #c4a24e'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showDashboard
+            ? 'rgba(196,162,78,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        Qty
+      </button>
+      <button
         data-testid="toggle-molecule-colors"
         onClick={() =>
           setColorMode(colorMode === 'element' ? 'molecule' : 'element')
@@ -463,6 +489,30 @@ export const Toolbar: React.FC = () => {
         }}
       >
         📋
+      </button>
+
+      {/* Guided experiments */}
+      <button
+        data-testid="toggle-experiment-panel"
+        onClick={toggleExperimentPanel}
+        title="Guided Experiments"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showExperimentPanel
+            ? '2px solid #c084fc'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showExperimentPanel
+            ? 'rgba(192,132,252,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        Lab
       </button>
     </div>
   );

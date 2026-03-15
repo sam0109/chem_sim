@@ -8,6 +8,7 @@ import type { StoreApi } from 'zustand';
 import type {
   Atom,
   Bond,
+  EnergyBreakdown,
   MoleculeInfo,
   ReactionEvent,
   SimulationConfig,
@@ -55,6 +56,8 @@ export interface SimulationStoreState {
     total: number;
     thermostat: number;
   };
+  /** Per-force-type potential energy decomposition */
+  energyBreakdown: EnergyBreakdown;
   temperature: number;
   config: SimulationConfig;
   box: SimulationBox;
@@ -67,6 +70,7 @@ export interface SimulationStoreState {
     total: number;
     thermostat: number;
     temperature: number;
+    breakdown: EnergyBreakdown;
   }>;
 
   // ---- Actions ----
@@ -141,6 +145,14 @@ function buildStoreSlice(
     eventLog: [],
     step: 0,
     energy: { kinetic: 0, potential: 0, total: 0, thermostat: 0 },
+    energyBreakdown: {
+      morse: 0,
+      angle: 0,
+      torsion: 0,
+      inversion: 0,
+      lj: 0,
+      coulomb: 0,
+    },
     temperature: 0,
     config: { ...DEFAULT_CONFIG },
     box: { ...DEFAULT_BOX },
@@ -164,6 +176,7 @@ function buildStoreSlice(
         total: state.energy.total,
         thermostat: state.energy.thermostat,
         temperature: state.temperature,
+        breakdown: state.energyBreakdown,
       };
 
       const newHistory = [...energyHistory, newEntry];
@@ -243,6 +256,7 @@ function buildStoreSlice(
         charges: state.charges,
         step: state.step,
         energy: state.energy,
+        energyBreakdown: state.energyBreakdown,
         temperature: state.temperature,
         atoms: updatedAtoms,
         energyHistory: newHistory,

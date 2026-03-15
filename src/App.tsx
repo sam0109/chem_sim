@@ -11,6 +11,7 @@ import { PropertyPanel } from './ui/PropertyPanel';
 import { Toolbar } from './ui/Toolbar';
 import { EnergyPlot } from './ui/EnergyPlot';
 import { ChallengePanel } from './ui/ChallengePanel';
+import { ExperimentPanel } from './ui/ExperimentPanel';
 import { SimulationPanel } from './SimulationPanel';
 import { ComparisonTable } from './ui/ComparisonTable';
 import { EncounterPanel } from './ui/EncounterPanel';
@@ -23,9 +24,11 @@ import type { SimulationStoreState } from './store/simulationStore';
 import { SimulationContext } from './store/SimulationContext';
 import { ReactionLog } from './ui/ReactionLog';
 import { EventLog } from './ui/EventLog';
+import { QuantityDashboard } from './ui/QuantityDashboard';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
 import { parseXYZ } from './io/xyz';
+import { parseSMILES } from './io/smiles';
 import {
   stateToUrlParam,
   urlParamToState,
@@ -262,6 +265,9 @@ const App: React.FC = () => {
   const [showExamples, setShowExamples] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [showSmilesInput, setShowSmilesInput] = useState(false);
+  const [smilesValue, setSmilesValue] = useState('');
+  const [smilesError, setSmilesError] = useState<string | null>(null);
 
   // Secondary simulation store for comparison mode.
   // Created once when comparison mode is first activated, then persists.
@@ -359,6 +365,22 @@ const App: React.FC = () => {
       }
     };
     input.click();
+  };
+
+  const handleSmilesLoad = () => {
+    const trimmed = smilesValue.trim();
+    if (!trimmed) return;
+    try {
+      const atoms = parseSMILES(trimmed);
+      initSimulation(atoms);
+      setSmilesError(null);
+      setShowSmilesInput(false);
+      setSmilesValue('');
+    } catch (err) {
+      setSmilesError(
+        err instanceof Error ? err.message : 'Invalid SMILES string',
+      );
+    }
   };
 
   const handleCopyLink = async () => {
@@ -539,6 +561,91 @@ const App: React.FC = () => {
               Import
             </button>
 
+            {/* SMILES input */}
+            <div style={{ position: 'relative' }}>
+              <button
+                data-testid="smiles-button"
+                onClick={() => {
+                  setShowSmilesInput(!showSmilesInput);
+                  setSmilesError(null);
+                }}
+                style={headerButtonStyle}
+              >
+                SMILES
+              </button>
+              {showSmilesInput && (
+                <div
+                  data-testid="smiles-popover"
+                  style={{
+                    ...dropdownContainerStyle,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    minWidth: 260,
+                    padding: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 4,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <input
+                      data-testid="smiles-input"
+                      type="text"
+                      value={smilesValue}
+                      onChange={(e) => {
+                        setSmilesValue(e.target.value);
+                        setSmilesError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSmilesLoad();
+                        if (e.key === 'Escape') setShowSmilesInput(false);
+                      }}
+                      placeholder="e.g. CCO, c1ccccc1"
+                      autoFocus
+                      style={{
+                        flex: 1,
+                        padding: '4px 6px',
+                        borderRadius: 3,
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        background: 'rgba(10, 10, 30, 0.9)',
+                        color: '#eee',
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        outline: 'none',
+                      }}
+                    />
+                    <button
+                      data-testid="smiles-load-button"
+                      onClick={handleSmilesLoad}
+                      style={{
+                        ...headerButtonStyle,
+                        padding: '4px 8px',
+                        background: 'rgba(60, 120, 200, 0.7)',
+                      }}
+                    >
+                      Load
+                    </button>
+                  </div>
+                  {smilesError && (
+                    <div
+                      data-testid="smiles-error"
+                      style={{
+                        marginTop: 4,
+                        color: '#f88',
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {smilesError}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Share dropdown */}
             <div style={{ position: 'relative' }}>
               <button
@@ -583,9 +690,11 @@ const App: React.FC = () => {
         <PeriodicTable />
         <EnergyPlot />
         <ChallengePanel />
+        <ExperimentPanel />
         <EncounterPanel />
         <ReactionLog />
         <EventLog />
+        <QuantityDashboard />
 
         <div
           data-testid="status-bar"
