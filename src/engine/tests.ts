@@ -46,6 +46,11 @@ import {
 } from '../io/examples';
 import type { Atom, Bond, Hybridization } from '../data/types';
 import { findMolecules, computeMoleculeInfo } from './moleculeTracker';
+import {
+  diffBonds,
+  detectReactions,
+  estimateReactionEnergy,
+} from './reactionDetector';
 
 // ---- Deterministic PRNG for reproducible tests ----
 // Mulberry32: a simple 32-bit seeded PRNG (public domain)
@@ -1390,6 +1395,304 @@ function runMoleculeTests(): void {
   }
 }
 
+// ==================================================
+// Reaction Detection Tests
+// ==================================================
+
+function runReactionTests(): void {
+  console.log('\n=== REACTION DETECTION TESTS ===\n');
+
+  // RXN-01: diffBonds correctly identifies a formed bond
+  {
+    const prevBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+    ];
+    const currBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+      { atomA: 1, atomB: 2, order: 1, type: 'covalent' },
+    ];
+    const changes = diffBonds(prevBonds, currBonds);
+    const formed = changes.filter((c) => c.change === 'formed');
+    const broken = changes.filter((c) => c.change === 'broken');
+
+    const passed =
+      formed.length === 1 &&
+      broken.length === 0 &&
+      formed[0].atomA === 1 &&
+      formed[0].atomB === 2;
+    report(
+      'RXN-01',
+      'diffBonds identifies a formed bond',
+      passed,
+      `formed=${formed.length}, broken=${broken.length}, atoms=${formed[0]?.atomA}-${formed[0]?.atomB}`,
+      '1 formed (1-2), 0 broken',
+    );
+  }
+
+  // RXN-02: diffBonds correctly identifies a broken bond
+  {
+    const prevBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+      { atomA: 1, atomB: 2, order: 2, type: 'covalent' },
+    ];
+    const currBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+    ];
+    const changes = diffBonds(prevBonds, currBonds);
+    const formed = changes.filter((c) => c.change === 'formed');
+    const broken = changes.filter((c) => c.change === 'broken');
+
+    const passed =
+      formed.length === 0 &&
+      broken.length === 1 &&
+      broken[0].atomA === 1 &&
+      broken[0].atomB === 2 &&
+      broken[0].order === 2;
+    report(
+      'RXN-02',
+      'diffBonds identifies a broken bond',
+      passed,
+      `formed=${formed.length}, broken=${broken.length}, order=${broken[0]?.order}`,
+      '0 formed, 1 broken (1-2, order=2)',
+    );
+  }
+
+  // RXN-03: diffBonds ignores hydrogen bond changes
+  {
+    const prevBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+      { atomA: 2, atomB: 3, order: 0.5, type: 'hydrogen' },
+    ];
+    const currBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+      // H-bond broken, new H-bond formed elsewhere
+      { atomA: 4, atomB: 5, order: 0.5, type: 'hydrogen' },
+    ];
+    const changes = diffBonds(prevBonds, currBonds);
+
+    const passed = changes.length === 0;
+    report(
+      'RXN-03',
+      'diffBonds ignores hydrogen bond changes',
+      passed,
+      `changes=${changes.length}`,
+      '0 changes (H-bond changes excluded)',
+    );
+  }
+
+  // RXN-04: detectReactions identifies a molecule merge event
+  {
+    // Set up: 3 atoms, initially two molecules (0-1 bonded, 2 separate)
+    // Then a bond forms between 1 and 2, merging into one molecule
+    const prevBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+    ];
+    const currBonds: Bond[] = [
+      { atomA: 0, atomB: 1, order: 1, type: 'covalent' },
+      { atomA: 1, atomB: 2, order: 1, type: 'covalent' },
+    ];
+
+    const nAtoms = 3;
+    const prevMolIds = findMolecules(prevBonds, nAtoms);
+    const currMolIds = findMolecules(currBonds, nAtoms);
+
+    // Dummy positions/charges/masses for MoleculeInfo computation
+    const positions = new Float64Array([0, 0, 0, 1, 0, 0, 2, 0, 0]);
+    const charges = new Float64Array(nAtoms);
+    const masses = new Float64Array(nAtoms).fill(1.0);
+
+    const prevMols = computeMoleculeInfo(
+      prevMolIds,
+      positions,
+      charges,
+      masses,
+      nAtoms,
+    );
+    const currMols = computeMoleculeInfo(
+      currMolIds,
+      positions,
+      charges,
+      masses,
+      nAtoms,
+    );
+
+    const bondChanges = diffBonds(prevBonds, currBonds);
+    const atomicNumbers = new Int32Array([1, 1, 1]); // All hydrogen
+    const events = detectReactions(
+      bondChanges,
+      prevMolIds,
+      currMolIds,
+      prevMols,
+      currMols,
+      atomicNumbers,
+      100,
+    );
+
+    const passed =
+      events.length === 1 &&
+      events[0].reactants.length === 2 &&
+      events[0].products.length === 1 &&
+      events[0].step === 100;
+    report(
+      'RXN-04',
+      'detectReactions identifies a molecule merge',
+      passed,
+      `events=${events.length}, reactants=${events[0]?.reactants.length}, products=${events[0]?.products.length}`,
+      '1 event with 2 reactants → 1 product',
+    );
+  }
+
+  // RXN-05: Two H₂ molecules at 5 Å separation remain separate at 300K
+  // This tests that normal thermal motion doesn't create spurious reactions
+  {
+    // Build two H₂ molecules separated by 5 Å
+    const atoms: Atom[] = [
+      {
+        id: 0,
+        elementNumber: 1,
+        position: [-0.37, 0, 0],
+        velocity: [0, 0, 0],
+        force: [0, 0, 0],
+        charge: 0,
+        hybridization: 'none',
+        fixed: false,
+      },
+      {
+        id: 1,
+        elementNumber: 1,
+        position: [0.37, 0, 0],
+        velocity: [0, 0, 0],
+        force: [0, 0, 0],
+        charge: 0,
+        hybridization: 'none',
+        fixed: false,
+      },
+      {
+        id: 2,
+        elementNumber: 1,
+        position: [5, 0, 0],
+        velocity: [0, 0, 0],
+        force: [0, 0, 0],
+        charge: 0,
+        hybridization: 'none',
+        fixed: false,
+      },
+      {
+        id: 3,
+        elementNumber: 1,
+        position: [5.74, 0, 0],
+        velocity: [0, 0, 0],
+        force: [0, 0, 0],
+        charge: 0,
+        hybridization: 'none',
+        fixed: false,
+      },
+    ];
+
+    const s = initSim(atoms);
+
+    // Initialize with thermal velocities at 300K
+    initializeVelocities(s.vel, s.masses, s.fixed, 300);
+
+    // Detect initial bonds
+    let currentBonds = detectBonds(s.pos, s.Z, 1.2);
+    let currentMolIds = findMolecules(currentBonds, s.N);
+    const initialMolCount = new Set(Array.from(currentMolIds)).size;
+
+    // Run 500 steps of dynamics and check for reactions
+    let reactionDetected = false;
+    for (let frame = 0; frame < 100; frame++) {
+      // 5 steps per frame (matching worker cadence)
+      for (let step = 0; step < 5; step++) {
+        // Simple force computation: just Morse bonds
+        s.frc.fill(0);
+        for (const bp of s.bondParams) {
+          morseBondForce(s.pos, s.frc, bp.i, bp.j, bp.De, bp.alpha, bp.re);
+        }
+        velocityVerletStep(
+          s.pos,
+          s.vel,
+          s.frc,
+          s.masses,
+          s.fixed,
+          0.5,
+          (pos, frc) => {
+            frc.fill(0);
+            for (const bp of s.bondParams) {
+              morseBondForce(pos, frc, bp.i, bp.j, bp.De, bp.alpha, bp.re);
+            }
+            return 0;
+          },
+        );
+        berendsenThermostat(
+          s.vel,
+          s.masses,
+          s.fixed,
+          computeTemperature(0, s.N) * s.N * 3 * 4.3e-5,
+          300,
+          0.5,
+          100,
+        );
+      }
+
+      // Rebuild topology
+      const prevBonds = currentBonds;
+      currentBonds = detectBonds(s.pos, s.Z, 1.2, currentBonds, 1.5);
+      const bondChanges = diffBonds(
+        prevBonds.filter(
+          (b) => b.type !== 'hydrogen' && b.type !== 'vanderwaals',
+        ),
+        currentBonds.filter(
+          (b) => b.type !== 'hydrogen' && b.type !== 'vanderwaals',
+        ),
+      );
+
+      if (bondChanges.length > 0) {
+        reactionDetected = true;
+        break;
+      }
+
+      currentMolIds = findMolecules(currentBonds, s.N);
+    }
+
+    const finalMolCount = new Set(Array.from(currentMolIds)).size;
+    const passed = !reactionDetected && finalMolCount === initialMolCount;
+    report(
+      'RXN-05',
+      'Two H₂ at 5 Å remain separate at 300K (no spurious reactions)',
+      passed,
+      `reactionDetected=${reactionDetected}, molecules: ${initialMolCount}→${finalMolCount}`,
+      'No reactions, molecule count unchanged',
+    );
+  }
+
+  // RXN-06: estimateReactionEnergy returns correct sign for H-H bond breaking
+  {
+    const bondChanges = [
+      {
+        atomA: 0,
+        atomB: 1,
+        order: 1,
+        type: 'covalent' as const,
+        change: 'broken' as const,
+      },
+    ];
+    const atomicNumbers = new Int32Array([1, 1]);
+    const deltaE = estimateReactionEnergy(bondChanges, atomicNumbers);
+
+    // H-H BDE = 104.2 kcal/mol = ~4.52 eV
+    // Breaking a bond is endothermic → positive ΔE
+    const passed = deltaE !== null && deltaE > 4.0 && deltaE < 5.0;
+    report(
+      'RXN-06',
+      'Reaction energy: H-H bond breaking is endothermic (~4.5 eV)',
+      passed,
+      `ΔE=${deltaE?.toFixed(3) ?? 'null'} eV`,
+      'ΔE ∈ [4.0, 5.0] eV (endothermic)',
+    );
+  }
+}
+
 // ---- Main ----
 
 console.log('╔══════════════════════════════════════════════════╗');
@@ -1402,6 +1705,7 @@ runGeometryTests();
 runThermodynamicTests();
 runChargeTests();
 runMoleculeTests();
+runReactionTests();
 
 // Summary
 console.log('\n' + '='.repeat(50));
