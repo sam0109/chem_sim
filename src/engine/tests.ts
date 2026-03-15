@@ -346,6 +346,29 @@ function runGradientTests(): void {
     water.pos,
     water.N,
   );
+
+  // GRAD-07: Linear angle potential (θ₀ = 180°)
+  // Near-linear O-C-O arrangement at ~170° to test the UFF linear penalty
+  // V(θ) = kA*(1 + cosθ). Source: Rappé et al., JACS 114, 10024 (1992).
+  const linearAnglePos = new Float64Array([
+    -1.16,
+    0,
+    0, // O at (-1.16, 0, 0)
+    0,
+    0,
+    0, // C at origin
+    1.16,
+    0.2,
+    0, // O at (1.16, 0.2, 0) — ~170° angle
+  ]);
+  const linearK = getUFFAngleK(8, 6, 8, 1, 1, 'sp');
+  testGradient(
+    'GRAD-07',
+    'Linear angle O-C-O gradient (theta0=180)',
+    (p, f) => harmonicAngleForce(p, f, 0, 1, 2, linearK.kAngle, linearK.theta0),
+    linearAnglePos,
+    3,
+  );
 }
 
 // ---- NVE energy conservation tests ----
