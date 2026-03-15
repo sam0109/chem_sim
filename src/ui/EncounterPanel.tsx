@@ -17,6 +17,8 @@ import {
 
 export const EncounterPanel: React.FC = () => {
   const showEncounterPanel = useUIStore((s) => s.showEncounterPanel);
+  const toggleEncounterPanel = useUIStore((s) => s.toggleEncounterPanel);
+  const setActiveTool = useUIStore((s) => s.setActiveTool);
   const selectedTemplate = useUIStore((s) => s.selectedMoleculeTemplate);
   const setSelectedTemplate = useUIStore((s) => s.setSelectedMoleculeTemplate);
   const separation = useUIStore((s) => s.encounterSeparation);
@@ -93,6 +95,10 @@ export const EncounterPanel: React.FC = () => {
     const molA = molecules[0];
     const molB = molecules[1];
     launchEncounter(molA.atomIndices, molB.atomIndices, speed, impactParam);
+    // Dismiss the panel and return to the default tool so the user
+    // can observe the encounter without UI obstruction (#97)
+    toggleEncounterPanel();
+    setActiveTool('select');
   };
 
   return (
