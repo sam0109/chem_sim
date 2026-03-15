@@ -16,10 +16,18 @@ import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
 import { pauliRepulsion } from './forces/pauli';
 import { detectBonds, buildAngleList } from './bondDetector';
-import { velocityVerletStep, initializeVelocities, computeTemperature } from './integrator';
+import {
+  velocityVerletStep,
+  initializeVelocities,
+  computeTemperature,
+} from './integrator';
 import { berendsenThermostat } from './thermostat';
 import {
-  waterMolecule, methaneMolecule, co2Molecule, naclPair, ethanolMolecule
+  waterMolecule,
+  methaneMolecule,
+  co2Molecule,
+  naclPair,
+  ethanolMolecule,
 } from '../io/examples';
 import type { Atom, Bond } from '../data/types';
 
@@ -29,7 +37,7 @@ import type { Atom, Bond } from '../data/types';
 function mulberry32(seed: number): () => number {
   let s = seed | 0;
   return () => {
-    s = (s + 0x6D2B79F5) | 0;
+    s = (s + 0x6d2b79f5) | 0;
     let t = Math.imul(s ^ (s >>> 15), 1 | s);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -48,7 +56,8 @@ const KNOWN_FAILURES: Record<string, string> = {
   'GEO-05': 'Methane HCH angle — needs torsion potential (#1)',
   'GEO-06': 'Methane C-H distance — needs torsion potential (#1)',
   'GEO-07': 'Methane bond count — needs torsion potential (#1)',
-  'GEO-09': 'CO2 C=O distance — needs linear angle handling (#2) and double bond params (#3)',
+  'GEO-09':
+    'CO2 C=O distance — needs linear angle handling (#2) and double bond params (#3)',
 };
 
 // ---- Test infrastructure ----
@@ -75,7 +84,14 @@ function isSkipped(id: string): boolean {
   return false;
 }
 
-function report(id: string, name: string, passed: boolean, measured: string, expected: string, detail: string = ''): void {
+function report(
+  id: string,
+  name: string,
+  passed: boolean,
+  measured: string,
+  expected: string,
+  detail: string = '',
+): void {
   results.push({ id, name, passed, measured, expected, detail });
   const icon = passed ? '✅' : '❌';
   console.log(`  ${icon} ${id}: ${name}`);
@@ -98,8 +114,20 @@ interface SimState {
   bonds: Bond[];
   angles: Array<[number, number, number]>;
   exclusionSet: Set<string>;
-  bondParams: Array<{ i: number; j: number; De: number; alpha: number; re: number }>;
-  angleParams: Array<{ i: number; j: number; k: number; kA: number; t0: number }>;
+  bondParams: Array<{
+    i: number;
+    j: number;
+    De: number;
+    alpha: number;
+    re: number;
+  }>;
+  angleParams: Array<{
+    i: number;
+    j: number;
+    k: number;
+    kA: number;
+    t0: number;
+  }>;
 }
 
 function initSim(atoms: Atom[]): SimState {
@@ -124,10 +152,19 @@ function initSim(atoms: Atom[]): SimState {
   }
 
   const state: SimState = {
-    pos, vel, frc, masses, fixed, Z, charges, N,
-    bonds: [], angles: [],
+    pos,
+    vel,
+    frc,
+    masses,
+    fixed,
+    Z,
+    charges,
+    N,
+    bonds: [],
+    angles: [],
     exclusionSet: new Set(),
-    bondParams: [], angleParams: [],
+    bondParams: [],
+    angleParams: [],
   };
 
   rebuildTopo(state);
@@ -141,7 +178,9 @@ function rebuildTopo(s: SimState): void {
   s.bondParams = [];
   s.angleParams = [];
   for (const b of s.bonds) {
-    s.exclusionSet.add(Math.min(b.atomA, b.atomB) + '-' + Math.max(b.atomA, b.atomB));
+    s.exclusionSet.add(
+      Math.min(b.atomA, b.atomB) + '-' + Math.max(b.atomA, b.atomB),
+    );
     if (b.type === 'hydrogen' || b.type === 'vanderwaals') continue;
     const p = getMorseBondParams(s.Z[b.atomA], s.Z[b.atomB], b.order);
     s.bondParams.push({ i: b.atomA, j: b.atomB, ...p });
@@ -157,8 +196,10 @@ function rebuildTopo(s: SimState): void {
 
 function calcForces(s: SimState, p: Float64Array, f: Float64Array): number {
   let pe = 0;
-  for (const b of s.bondParams) pe += morseBondForce(p, f, b.i, b.j, b.De, b.alpha, b.re);
-  for (const a of s.angleParams) pe += harmonicAngleForce(p, f, a.i, a.j, a.k, a.kA, a.t0);
+  for (const b of s.bondParams)
+    pe += morseBondForce(p, f, b.i, b.j, b.De, b.alpha, b.re);
+  for (const a of s.angleParams)
+    pe += harmonicAngleForce(p, f, a.i, a.j, a.k, a.kA, a.t0);
   for (let i = 0; i < s.N; i++) {
     for (let j = i + 1; j < s.N; j++) {
       if (s.exclusionSet.has(i + '-' + j)) continue;
@@ -187,17 +228,27 @@ function dist(pos: Float64Array, i: number, j: number): number {
 }
 
 function angle(pos: Float64Array, i: number, j: number, k: number): number {
-  const dx1 = pos[i * 3] - pos[j * 3], dy1 = pos[i * 3 + 1] - pos[j * 3 + 1], dz1 = pos[i * 3 + 2] - pos[j * 3 + 2];
-  const dx2 = pos[k * 3] - pos[j * 3], dy2 = pos[k * 3 + 1] - pos[j * 3 + 1], dz2 = pos[k * 3 + 2] - pos[j * 3 + 2];
+  const dx1 = pos[i * 3] - pos[j * 3],
+    dy1 = pos[i * 3 + 1] - pos[j * 3 + 1],
+    dz1 = pos[i * 3 + 2] - pos[j * 3 + 2];
+  const dx2 = pos[k * 3] - pos[j * 3],
+    dy2 = pos[k * 3 + 1] - pos[j * 3 + 1],
+    dz2 = pos[k * 3 + 2] - pos[j * 3 + 2];
   const r1 = Math.sqrt(dx1 * dx1 + dy1 * dy1 + dz1 * dz1);
   const r2 = Math.sqrt(dx2 * dx2 + dy2 * dy2 + dz2 * dz2);
   const cosT = (dx1 * dx2 + dy1 * dy2 + dz1 * dz2) / (r1 * r2);
-  return Math.acos(Math.max(-1, Math.min(1, cosT))) * 180 / Math.PI;
+  return (Math.acos(Math.max(-1, Math.min(1, cosT))) * 180) / Math.PI;
 }
 
 // ---- Gradient tests ----
 
-function testGradient(id: string, name: string, setupForces: (p: Float64Array, f: Float64Array) => number, pos: Float64Array, N: number): void {
+function testGradient(
+  id: string,
+  name: string,
+  setupForces: (p: Float64Array, f: Float64Array) => number,
+  pos: Float64Array,
+  N: number,
+): void {
   const h = 1e-5;
   let maxErr = 0;
 
@@ -232,34 +283,77 @@ function runGradientTests(): void {
   // GRAD-01: Morse
   const morsePos = new Float64Array([0, 0, 0, 1.0, 0, 0]);
   const morseP = getMorseBondParams(8, 1, 1);
-  testGradient('GRAD-01', 'Morse O-H gradient', (p, f) => morseBondForce(p, f, 0, 1, morseP.De, morseP.alpha, morseP.re), morsePos, 2);
+  testGradient(
+    'GRAD-01',
+    'Morse O-H gradient',
+    (p, f) => morseBondForce(p, f, 0, 1, morseP.De, morseP.alpha, morseP.re),
+    morsePos,
+    2,
+  );
 
   // GRAD-02: LJ
   const ljPos = new Float64Array([0, 0, 0, 3.5, 0, 0]);
   const ljP = getLJParams(8, 8);
-  testGradient('GRAD-02', 'LJ O-O gradient', (p, f) => ljForce(p, f, 0, 1, ljP.sigma, ljP.epsilon, 10), ljPos, 2);
+  testGradient(
+    'GRAD-02',
+    'LJ O-O gradient',
+    (p, f) => ljForce(p, f, 0, 1, ljP.sigma, ljP.epsilon, 10),
+    ljPos,
+    2,
+  );
 
   // GRAD-03: Coulomb
   const coulPos = new Float64Array([0, 0, 0, 2.0, 0, 0]);
-  testGradient('GRAD-03', 'Coulomb gradient', (p, f) => coulombForce(p, f, 0, 1, 0.5, -0.5, 10), coulPos, 2);
+  testGradient(
+    'GRAD-03',
+    'Coulomb gradient',
+    (p, f) => coulombForce(p, f, 0, 1, 0.5, -0.5, 10),
+    coulPos,
+    2,
+  );
 
   // GRAD-04: Cosine angle
   const anglePos = new Float64Array([1, 0, 0, 0, 0, 0, 0, 1, 0]); // 90 degree
   const ak = getUFFAngleK(1, 8, 1);
-  testGradient('GRAD-04', 'Cosine angle H-O-H gradient', (p, f) => harmonicAngleForce(p, f, 0, 1, 2, ak.kAngle, ak.theta0), anglePos, 3);
+  testGradient(
+    'GRAD-04',
+    'Cosine angle H-O-H gradient',
+    (p, f) => harmonicAngleForce(p, f, 0, 1, 2, ak.kAngle, ak.theta0),
+    anglePos,
+    3,
+  );
 
   // GRAD-05: Pauli (steep exponential — use looser tolerance)
   const pauliPos = new Float64Array([0, 0, 0, 0.25, 0, 0]);
-  testGradient('GRAD-05', 'Pauli repulsion gradient', (p, f) => pauliRepulsion(p, f, 0, 1, 0.15, 20), pauliPos, 2);
+  testGradient(
+    'GRAD-05',
+    'Pauli repulsion gradient',
+    (p, f) => pauliRepulsion(p, f, 0, 1, 0.15, 20),
+    pauliPos,
+    2,
+  );
 
   // GRAD-06: Full water system
   const water = initSim(waterMolecule());
-  testGradient('GRAD-06', 'Full H2O system gradient', (p, f) => calcForces(water, p, f), water.pos, water.N);
+  testGradient(
+    'GRAD-06',
+    'Full H2O system gradient',
+    (p, f) => calcForces(water, p, f),
+    water.pos,
+    water.N,
+  );
 }
 
 // ---- NVE energy conservation tests ----
 
-function runNVETest(id: string, name: string, atoms: Atom[], steps: number, dt: number, tolerance: number): void {
+function runNVETest(
+  id: string,
+  name: string,
+  atoms: Atom[],
+  steps: number,
+  dt: number,
+  tolerance: number,
+): void {
   if (isSkipped(id)) return;
   const s = initSim(atoms);
   initializeVelocities(s.vel, s.masses, s.fixed, 300);
@@ -268,10 +362,19 @@ function runNVETest(id: string, name: string, atoms: Atom[], steps: number, dt: 
   calcForces(s, s.pos, s.frc);
 
   let E0: number | null = null;
-  let minE = Infinity, maxE = -Infinity;
+  let minE = Infinity,
+    maxE = -Infinity;
 
   for (let step = 0; step < steps; step++) {
-    const r = velocityVerletStep(s.pos, s.vel, s.frc, s.masses, s.fixed, dt, (p, f) => calcForces(s, p, f));
+    const r = velocityVerletStep(
+      s.pos,
+      s.vel,
+      s.frc,
+      s.masses,
+      s.fixed,
+      dt,
+      (p, f) => calcForces(s, p, f),
+    );
     const E = r.kineticEnergy + r.potentialEnergy;
 
     if (step === 10) E0 = E; // skip first 10 steps for equilibration
@@ -285,31 +388,72 @@ function runNVETest(id: string, name: string, atoms: Atom[], steps: number, dt: 
   }
 
   if (E0 === null || !isFinite(E0) || E0 === 0) {
-    report(id, name, false, 'E0=0 or NaN', 'finite E0', 'Simulation failed to initialize');
+    report(
+      id,
+      name,
+      false,
+      'E0=0 or NaN',
+      'finite E0',
+      'Simulation failed to initialize',
+    );
     return;
   }
 
-  const drift = Math.max(Math.abs(maxE - E0), Math.abs(minE - E0)) / Math.abs(E0);
+  const drift =
+    Math.max(Math.abs(maxE - E0), Math.abs(minE - E0)) / Math.abs(E0);
   const passed = drift < tolerance;
-  report(id, name, passed, (drift * 100).toFixed(4) + '%', '< ' + (tolerance * 100).toFixed(2) + '%',
-    'E0=' + E0.toFixed(4) + ' range=[' + minE.toFixed(4) + ', ' + maxE.toFixed(4) + ']');
+  report(
+    id,
+    name,
+    passed,
+    (drift * 100).toFixed(4) + '%',
+    '< ' + (tolerance * 100).toFixed(2) + '%',
+    'E0=' +
+      E0.toFixed(4) +
+      ' range=[' +
+      minE.toFixed(4) +
+      ', ' +
+      maxE.toFixed(4) +
+      ']',
+  );
 }
 
 function runNVETests(): void {
   console.log('\n=== NVE ENERGY CONSERVATION TESTS ===\n');
 
   runNVETest('NVE-01', 'Water NVE dt=0.5fs', waterMolecule(), 10000, 0.5, 0.05);
-  runNVETest('NVE-02', 'Methane NVE dt=0.5fs', methaneMolecule(), 10000, 0.5, 0.05);
+  runNVETest(
+    'NVE-02',
+    'Methane NVE dt=0.5fs',
+    methaneMolecule(),
+    10000,
+    0.5,
+    0.05,
+  );
   runNVETest('NVE-03', 'CO2 NVE dt=0.5fs', co2Molecule(), 10000, 0.5, 0.05);
-  runNVETest('NVE-04', 'Ethanol NVE dt=0.5fs', ethanolMolecule(), 10000, 0.5, 0.10);
-  runNVETest('NVE-06', 'Water NVE dt=1.0fs', waterMolecule(), 10000, 1.0, 0.10);
+  runNVETest(
+    'NVE-04',
+    'Ethanol NVE dt=0.5fs',
+    ethanolMolecule(),
+    10000,
+    0.5,
+    0.1,
+  );
+  runNVETest('NVE-06', 'Water NVE dt=1.0fs', waterMolecule(), 10000, 1.0, 0.1);
 }
 
 // ---- Geometry / structural invariant tests ----
 
 function runGeometryTest(
-  id: string, atoms: Atom[], steps: number, dt: number,
-  check: (s: SimState, step: number, accumulator: Record<string, number[]>) => void,
+  id: string,
+  atoms: Atom[],
+  steps: number,
+  dt: number,
+  check: (
+    s: SimState,
+    step: number,
+    accumulator: Record<string, number[]>,
+  ) => void,
   evaluate: (accumulator: Record<string, number[]>) => void,
 ): void {
   if (isSkipped(id)) return;
@@ -321,8 +465,24 @@ function runGeometryTest(
   const acc: Record<string, number[]> = {};
 
   for (let step = 0; step < steps; step++) {
-    const r = velocityVerletStep(s.pos, s.vel, s.frc, s.masses, s.fixed, dt, (p, f) => calcForces(s, p, f));
-    berendsenThermostat(s.vel, s.masses, s.fixed, r.kineticEnergy, 300, dt, 100);
+    const r = velocityVerletStep(
+      s.pos,
+      s.vel,
+      s.frc,
+      s.masses,
+      s.fixed,
+      dt,
+      (p, f) => calcForces(s, p, f),
+    );
+    berendsenThermostat(
+      s.vel,
+      s.masses,
+      s.fixed,
+      r.kineticEnergy,
+      300,
+      dt,
+      100,
+    );
     if ((step + 1) % 5 === 0) rebuildTopo(s);
     if (step > 100 && step % 10 === 0) check(s, step, acc);
   }
@@ -330,7 +490,11 @@ function runGeometryTest(
   evaluate(acc);
 }
 
-function pushAcc(acc: Record<string, number[]>, key: string, val: number): void {
+function pushAcc(
+  acc: Record<string, number[]>,
+  key: string,
+  val: number,
+): void {
   if (!acc[key]) acc[key] = [];
   acc[key].push(val);
 }
@@ -343,18 +507,32 @@ function runGeometryTests(): void {
   console.log('\n=== STRUCTURAL INVARIANT TESTS (NVT 300K) ===\n');
 
   // --- Water ---
-  runGeometryTest('GEO-01', waterMolecule(), 6000, 0.5,
+  runGeometryTest(
+    'GEO-01',
+    waterMolecule(),
+    6000,
+    0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'angle', angle(s.pos, 1, 0, 2)); // H-O-H
     },
     (acc) => {
       const m = mean(acc['angle']);
       const passed = m > 99 && m < 110;
-      report('GEO-01', 'Water HOH angle mean', passed, m.toFixed(1) + ' deg', '99-110 deg');
-    }
+      report(
+        'GEO-01',
+        'Water HOH angle mean',
+        passed,
+        m.toFixed(1) + ' deg',
+        '99-110 deg',
+      );
+    },
   );
 
-  runGeometryTest('GEO-02', waterMolecule(), 6000, 0.5,
+  runGeometryTest(
+    'GEO-02',
+    waterMolecule(),
+    6000,
+    0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'oh1', dist(s.pos, 0, 1));
       pushAcc(acc, 'oh2', dist(s.pos, 0, 2));
@@ -362,35 +540,69 @@ function runGeometryTests(): void {
     (acc) => {
       const m = (mean(acc['oh1']) + mean(acc['oh2'])) / 2;
       const passed = m > 0.94 && m < 1.04;
-      report('GEO-02', 'Water O-H distance mean', passed, m.toFixed(3) + ' A', '0.94-1.04 A');
-    }
+      report(
+        'GEO-02',
+        'Water O-H distance mean',
+        passed,
+        m.toFixed(3) + ' A',
+        '0.94-1.04 A',
+      );
+    },
   );
 
-  runGeometryTest('GEO-03', waterMolecule(), 6000, 0.5,
+  runGeometryTest(
+    'GEO-03',
+    waterMolecule(),
+    6000,
+    0.5,
     (s, _step, acc) => {
-      const hh = s.bonds.find(b => s.Z[b.atomA] === 1 && s.Z[b.atomB] === 1);
+      const hh = s.bonds.find((b) => s.Z[b.atomA] === 1 && s.Z[b.atomB] === 1);
       pushAcc(acc, 'hh', hh ? 1 : 0);
     },
     (acc) => {
-      const count = acc['hh'].filter(v => v > 0).length;
-      report('GEO-03', 'Water no H-H bond', count === 0, count + ' frames with H-H', '0 frames');
-    }
+      const count = acc['hh'].filter((v) => v > 0).length;
+      report(
+        'GEO-03',
+        'Water no H-H bond',
+        count === 0,
+        count + ' frames with H-H',
+        '0 frames',
+      );
+    },
   );
 
-  runGeometryTest('GEO-04', waterMolecule(), 6000, 0.5,
+  runGeometryTest(
+    'GEO-04',
+    waterMolecule(),
+    6000,
+    0.5,
     (s, _step, acc) => {
-      pushAcc(acc, 'nbonds', s.bonds.filter(b => b.type === 'covalent').length);
+      pushAcc(
+        acc,
+        'nbonds',
+        s.bonds.filter((b) => b.type === 'covalent').length,
+      );
     },
     (acc) => {
-      const all2 = acc['nbonds'].every(n => n === 2);
+      const all2 = acc['nbonds'].every((n) => n === 2);
       const minB = Math.min(...acc['nbonds']);
       const maxB = Math.max(...acc['nbonds']);
-      report('GEO-04', 'Water bond count = 2', all2, 'range [' + minB + ', ' + maxB + ']', 'always 2');
-    }
+      report(
+        'GEO-04',
+        'Water bond count = 2',
+        all2,
+        'range [' + minB + ', ' + maxB + ']',
+        'always 2',
+      );
+    },
   );
 
   // --- Methane ---
-  runGeometryTest('GEO-05', methaneMolecule(), 6000, 0.5,
+  runGeometryTest(
+    'GEO-05',
+    methaneMolecule(),
+    6000,
+    0.5,
     (s, _step, acc) => {
       // Central C is atom 0; H atoms are 1,2,3,4
       pushAcc(acc, 'angle', angle(s.pos, 1, 0, 2));
@@ -398,66 +610,126 @@ function runGeometryTests(): void {
     (acc) => {
       const m = mean(acc['angle']);
       const passed = m > 100 && m < 120;
-      report('GEO-05', 'Methane HCH angle mean', passed, m.toFixed(1) + ' deg', '100-120 deg');
-    }
+      report(
+        'GEO-05',
+        'Methane HCH angle mean',
+        passed,
+        m.toFixed(1) + ' deg',
+        '100-120 deg',
+      );
+    },
   );
 
-  runGeometryTest('GEO-06', methaneMolecule(), 6000, 0.5,
+  runGeometryTest(
+    'GEO-06',
+    methaneMolecule(),
+    6000,
+    0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'ch', dist(s.pos, 0, 1));
     },
     (acc) => {
       const m = mean(acc['ch']);
-      const passed = m > 0.95 && m < 1.20;
-      report('GEO-06', 'Methane C-H distance mean', passed, m.toFixed(3) + ' A', '0.95-1.20 A');
-    }
+      const passed = m > 0.95 && m < 1.2;
+      report(
+        'GEO-06',
+        'Methane C-H distance mean',
+        passed,
+        m.toFixed(3) + ' A',
+        '0.95-1.20 A',
+      );
+    },
   );
 
-  runGeometryTest('GEO-07', methaneMolecule(), 6000, 0.5,
+  runGeometryTest(
+    'GEO-07',
+    methaneMolecule(),
+    6000,
+    0.5,
     (s, _step, acc) => {
-      pushAcc(acc, 'nbonds', s.bonds.filter(b => b.type === 'covalent').length);
+      pushAcc(
+        acc,
+        'nbonds',
+        s.bonds.filter((b) => b.type === 'covalent').length,
+      );
     },
     (acc) => {
-      const all4 = acc['nbonds'].every(n => n === 4);
+      const all4 = acc['nbonds'].every((n) => n === 4);
       const minB = Math.min(...acc['nbonds']);
       const maxB = Math.max(...acc['nbonds']);
-      report('GEO-07', 'Methane bond count = 4', all4, 'range [' + minB + ', ' + maxB + ']', 'always 4');
-    }
+      report(
+        'GEO-07',
+        'Methane bond count = 4',
+        all4,
+        'range [' + minB + ', ' + maxB + ']',
+        'always 4',
+      );
+    },
   );
 
   // --- CO2 ---
-  runGeometryTest('GEO-08', co2Molecule(), 6000, 0.5,
+  runGeometryTest(
+    'GEO-08',
+    co2Molecule(),
+    6000,
+    0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'angle', angle(s.pos, 1, 0, 2)); // O-C-O
     },
     (acc) => {
       const m = mean(acc['angle']);
       const passed = m > 170; // Linear
-      report('GEO-08', 'CO2 OCO angle mean (linear)', passed, m.toFixed(1) + ' deg', '> 170 deg');
-    }
+      report(
+        'GEO-08',
+        'CO2 OCO angle mean (linear)',
+        passed,
+        m.toFixed(1) + ' deg',
+        '> 170 deg',
+      );
+    },
   );
 
-  runGeometryTest('GEO-09', co2Molecule(), 6000, 0.5,
+  runGeometryTest(
+    'GEO-09',
+    co2Molecule(),
+    6000,
+    0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'co', (dist(s.pos, 0, 1) + dist(s.pos, 0, 2)) / 2);
     },
     (acc) => {
       const m = mean(acc['co']);
-      const passed = m > 1.05 && m < 1.30;
-      report('GEO-09', 'CO2 C=O distance mean', passed, m.toFixed(3) + ' A', '1.05-1.30 A');
-    }
+      const passed = m > 1.05 && m < 1.3;
+      report(
+        'GEO-09',
+        'CO2 C=O distance mean',
+        passed,
+        m.toFixed(3) + ' A',
+        '1.05-1.30 A',
+      );
+    },
   );
 
   // --- NaCl ---
-  runGeometryTest('GEO-11', naclPair(), 6000, 0.5,
+  runGeometryTest(
+    'GEO-11',
+    naclPair(),
+    6000,
+    0.5,
     (s, _step, acc) => {
       pushAcc(acc, 'd', dist(s.pos, 0, 1));
     },
     (acc) => {
       const m = mean(acc['d']);
       const passed = m > 2.0 && m < 3.0;
-      report('GEO-11', 'NaCl distance mean', passed, m.toFixed(3) + ' A', '2.0-3.0 A');
-    }
+      report(
+        'GEO-11',
+        'NaCl distance mean',
+        passed,
+        m.toFixed(3) + ' A',
+        '2.0-3.0 A',
+      );
+    },
   );
 }
 
@@ -474,16 +746,38 @@ function runThermodynamicTests(): void {
 
   const temps: number[] = [];
   for (let step = 0; step < 10000; step++) {
-    const r = velocityVerletStep(s.pos, s.vel, s.frc, s.masses, s.fixed, 0.5, (p, f) => calcForces(s, p, f));
+    const r = velocityVerletStep(
+      s.pos,
+      s.vel,
+      s.frc,
+      s.masses,
+      s.fixed,
+      0.5,
+      (p, f) => calcForces(s, p, f),
+    );
     const T = computeTemperature(r.kineticEnergy, s.N);
-    berendsenThermostat(s.vel, s.masses, s.fixed, r.kineticEnergy, 300, 0.5, 100);
+    berendsenThermostat(
+      s.vel,
+      s.masses,
+      s.fixed,
+      r.kineticEnergy,
+      300,
+      0.5,
+      100,
+    );
     if ((step + 1) % 5 === 0) rebuildTopo(s);
     if (step > 500) temps.push(T);
   }
 
   const avgT = mean(temps);
   const passed = avgT > 270 && avgT < 330;
-  report('THERMO-01', 'Water NVT temperature', passed, avgT.toFixed(1) + ' K', '270-330 K');
+  report(
+    'THERMO-01',
+    'Water NVT temperature',
+    passed,
+    avgT.toFixed(1) + ' K',
+    '270-330 K',
+  );
 }
 
 // ---- Main ----
@@ -501,8 +795,8 @@ runThermodynamicTests();
 console.log('\n' + '='.repeat(50));
 console.log('SUMMARY');
 console.log('='.repeat(50));
-const passed = results.filter(r => r.passed).length;
-const failed = results.filter(r => !r.passed).length;
+const passed = results.filter((r) => r.passed).length;
+const failed = results.filter((r) => !r.passed).length;
 const total = results.length;
 console.log(`  PASSED: ${passed}/${total}`);
 console.log(`  FAILED: ${failed}/${total}`);
@@ -511,8 +805,10 @@ if (skippedCount > 0) {
 }
 if (failed > 0) {
   console.log('\nFailed tests:');
-  for (const r of results.filter(r => !r.passed)) {
-    console.log(`  ${r.id}: ${r.name} — got ${r.measured}, expected ${r.expected}`);
+  for (const r of results.filter((r) => !r.passed)) {
+    console.log(
+      `  ${r.id}: ${r.name} — got ${r.measured}, expected ${r.expected}`,
+    );
   }
 }
 console.log('');

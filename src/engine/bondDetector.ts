@@ -40,11 +40,19 @@ export function detectBonds(
   // Build set of existing bonded pairs for hysteresis
   const existingPairs = new Set<string>();
   for (const b of existingBonds) {
-    existingPairs.add(Math.min(b.atomA, b.atomB) + '-' + Math.max(b.atomA, b.atomB));
+    existingPairs.add(
+      Math.min(b.atomA, b.atomB) + '-' + Math.max(b.atomA, b.atomB),
+    );
   }
 
   // Collect all candidate bonds
-  const candidates: Array<{ i: number; j: number; dist: number; type: BondType; order: number }> = [];
+  const candidates: Array<{
+    i: number;
+    j: number;
+    dist: number;
+    type: BondType;
+    order: number;
+  }> = [];
 
   for (let i = 0; i < N; i++) {
     const elI = elements[atomicNumbers[i]];
@@ -88,8 +96,16 @@ export function detectBonds(
 
   // Sort: existing bonds first (to preserve them), then by distance
   candidates.sort((a, b) => {
-    const aExisting = existingPairs.has(Math.min(a.i, a.j) + '-' + Math.max(a.i, a.j)) ? 0 : 1;
-    const bExisting = existingPairs.has(Math.min(b.i, b.j) + '-' + Math.max(b.i, b.j)) ? 0 : 1;
+    const aExisting = existingPairs.has(
+      Math.min(a.i, a.j) + '-' + Math.max(a.i, a.j),
+    )
+      ? 0
+      : 1;
+    const bExisting = existingPairs.has(
+      Math.min(b.i, b.j) + '-' + Math.max(b.i, b.j),
+    )
+      ? 0
+      : 1;
     if (aExisting !== bExisting) return aExisting - bExisting;
     return a.dist - b.dist;
   });
@@ -116,12 +132,14 @@ export function detectBonds(
 }
 
 function isMetallic(category: string): boolean {
-  return category === 'transition-metal' ||
+  return (
+    category === 'transition-metal' ||
     category === 'alkali-metal' ||
     category === 'alkaline-earth-metal' ||
     category === 'post-transition-metal' ||
     category === 'lanthanide' ||
-    category === 'actinide';
+    category === 'actinide'
+  );
 }
 
 /**
@@ -154,9 +172,15 @@ export function detectHydrogenBonds(
   // Find hydrogen atoms bonded to N, O, F
   const donorHydrogens: Array<{ h: number; donor: number }> = [];
   for (const bond of existingBonds) {
-    if (atomicNumbers[bond.atomA] === 1 && hbAcceptors.has(atomicNumbers[bond.atomB])) {
+    if (
+      atomicNumbers[bond.atomA] === 1 &&
+      hbAcceptors.has(atomicNumbers[bond.atomB])
+    ) {
       donorHydrogens.push({ h: bond.atomA, donor: bond.atomB });
-    } else if (atomicNumbers[bond.atomB] === 1 && hbAcceptors.has(atomicNumbers[bond.atomA])) {
+    } else if (
+      atomicNumbers[bond.atomB] === 1 &&
+      hbAcceptors.has(atomicNumbers[bond.atomA])
+    ) {
       donorHydrogens.push({ h: bond.atomB, donor: bond.atomA });
     }
   }
@@ -183,7 +207,8 @@ export function detectHydrogenBonds(
       if (dhLen < 1e-10) continue;
 
       const cosAngle = (dhX * dx + dhY * dy + dhZ * dz) / (dhLen * distHA);
-      const angle = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * 180 / Math.PI;
+      const angle =
+        (Math.acos(Math.max(-1, Math.min(1, cosAngle))) * 180) / Math.PI;
 
       if (angle > 120) {
         hBonds.push({

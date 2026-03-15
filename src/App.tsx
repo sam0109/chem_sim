@@ -56,70 +56,108 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{
-        width: '100vw', height: '100vh',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: '#1a1a2e', color: '#aaccff',
-        fontFamily: 'monospace', fontSize: 16,
-      }}>
+      <div
+        style={{
+          width: '100vw',
+          height: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#1a1a2e',
+          color: '#aaccff',
+          fontFamily: 'monospace',
+          fontSize: 16,
+        }}
+      >
         Initializing simulation engine...
       </div>
     );
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+    <div
+      style={{
+        width: '100vw',
+        height: '100vh',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
       <Scene />
 
       {/* Header bar */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 60,
-        right: 240,
-        height: 40,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 12,
-        zIndex: 100,
-        pointerEvents: 'none',
-      }}>
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 60,
+          right: 240,
+          height: 40,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+          zIndex: 100,
+          pointerEvents: 'none',
+        }}
+      >
         <div style={{ display: 'flex', gap: 6, pointerEvents: 'auto' }}>
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowExamples(!showExamples)}
               style={{
-                padding: '6px 12px', borderRadius: 4,
+                padding: '6px 12px',
+                borderRadius: 4,
                 border: '1px solid rgba(255,255,255,0.15)',
                 background: 'rgba(30, 30, 50, 0.9)',
-                color: '#ccc', cursor: 'pointer',
-                fontFamily: 'monospace', fontSize: 11,
+                color: '#ccc',
+                cursor: 'pointer',
+                fontFamily: 'monospace',
+                fontSize: 11,
                 backdropFilter: 'blur(10px)',
               }}
             >
               📦 Examples
             </button>
             {showExamples && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, marginTop: 4,
-                background: 'rgba(20, 20, 40, 0.98)', borderRadius: 6,
-                border: '1px solid rgba(255,255,255,0.1)',
-                padding: 4, minWidth: 180, zIndex: 200,
-              }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  marginTop: 4,
+                  background: 'rgba(20, 20, 40, 0.98)',
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  padding: 4,
+                  minWidth: 180,
+                  zIndex: 200,
+                }}
+              >
                 {Object.keys(exampleMolecules).map((name) => (
                   <button
                     key={name}
                     onClick={() => handleLoadExample(name)}
                     style={{
-                      display: 'block', width: '100%', padding: '6px 10px',
-                      border: 'none', background: 'transparent',
-                      color: '#ccc', cursor: 'pointer',
-                      fontFamily: 'monospace', fontSize: 11,
-                      textAlign: 'left', borderRadius: 3,
+                      display: 'block',
+                      width: '100%',
+                      padding: '6px 10px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#ccc',
+                      cursor: 'pointer',
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      textAlign: 'left',
+                      borderRadius: 3,
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(100,150,255,0.2)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background =
+                        'rgba(100,150,255,0.2)')
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = 'transparent')
+                    }
                   >
                     {name}
                   </button>
@@ -130,11 +168,14 @@ const App: React.FC = () => {
           <button
             onClick={handleFileImport}
             style={{
-              padding: '6px 12px', borderRadius: 4,
+              padding: '6px 12px',
+              borderRadius: 4,
               border: '1px solid rgba(255,255,255,0.15)',
               background: 'rgba(30, 30, 50, 0.9)',
-              color: '#ccc', cursor: 'pointer',
-              fontFamily: 'monospace', fontSize: 11,
+              color: '#ccc',
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              fontSize: 11,
               backdropFilter: 'blur(10px)',
             }}
           >
@@ -149,13 +190,24 @@ const App: React.FC = () => {
       <PeriodicTable />
       <EnergyPlot />
 
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, height: 22,
-        background: 'rgba(10, 10, 25, 0.9)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 12px', color: '#666',
-        fontFamily: 'monospace', fontSize: 10, zIndex: 50,
-      }}>
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 22,
+          background: 'rgba(10, 10, 25, 0.9)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 12px',
+          color: '#666',
+          fontFamily: 'monospace',
+          fontSize: 10,
+          zIndex: 50,
+        }}
+      >
         <span>ChemSim — Interactive Chemistry Bonding Simulator</span>
         <span>Press S/A/D/G/M for tools | L toggle labels</span>
       </div>

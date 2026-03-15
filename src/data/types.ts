@@ -76,7 +76,12 @@ export interface Atom {
 
 export type Hybridization = 'sp' | 'sp2' | 'sp3' | 'sp3d' | 'sp3d2' | 'none';
 
-export type BondType = 'covalent' | 'ionic' | 'metallic' | 'hydrogen' | 'vanderwaals';
+export type BondType =
+  | 'covalent'
+  | 'ionic'
+  | 'metallic'
+  | 'hydrogen'
+  | 'vanderwaals';
 
 export interface Bond {
   /** Index of first atom */

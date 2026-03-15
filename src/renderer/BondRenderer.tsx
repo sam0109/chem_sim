@@ -55,7 +55,11 @@ export const BondRenderer: React.FC = () => {
 
       const getPos = (i: number) => {
         if (positions.length > i * 3 + 2) {
-          return new THREE.Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+          return new THREE.Vector3(
+            positions[i * 3],
+            positions[i * 3 + 1],
+            positions[i * 3 + 2],
+          );
         }
         return new THREE.Vector3(...atoms[i].position);
       };
@@ -122,13 +126,15 @@ export const BondRenderer: React.FC = () => {
 
     if (!mesh.instanceColor) {
       mesh.instanceColor = new THREE.InstancedBufferAttribute(
-        colors.slice(0, instanceIdx * 3), 3
+        colors.slice(0, instanceIdx * 3),
+        3,
       );
     } else {
       const attr = mesh.instanceColor as THREE.InstancedBufferAttribute;
       if (attr.count !== instanceIdx) {
         mesh.instanceColor = new THREE.InstancedBufferAttribute(
-          colors.slice(0, instanceIdx * 3), 3
+          colors.slice(0, instanceIdx * 3),
+          3,
         );
       } else {
         attr.array = colors.slice(0, instanceIdx * 3);
@@ -143,11 +149,7 @@ export const BondRenderer: React.FC = () => {
       args={[geometry, undefined, MAX_BONDS]}
       frustumCulled={false}
     >
-      <meshStandardMaterial
-        vertexColors
-        roughness={0.5}
-        metalness={0.0}
-      />
+      <meshStandardMaterial vertexColors roughness={0.5} metalness={0.0} />
     </instancedMesh>
   );
 };

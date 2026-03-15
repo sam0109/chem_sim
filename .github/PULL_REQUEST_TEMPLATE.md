@@ -19,16 +19,19 @@ Closes #<!-- issue number -->
 ## PR Checklist
 
 ### Purpose
+
 - [ ] This change contributes toward a stated goal (references an issue)
 - [ ] Specific improvement addressed: <!-- name it -->
 
 ### Physics Accuracy
+
 - [ ] If force computation changed: gradient test still passes
 - [ ] If integrator changed: NVE energy conservation tests still pass
 - [ ] New potential/force has a gradient consistency test
 - [ ] No physics test tolerance was weakened
 
 ### Code Quality
+
 - [ ] No `any` types introduced
 - [ ] No `console.log` in production code
 - [ ] No duplicated logic
@@ -36,18 +39,22 @@ Closes #<!-- issue number -->
 - [ ] Constants cite their source
 
 ### Testing
+
 - [ ] All existing tests pass
 - [ ] New tests added for new functionality
 - [ ] Tests would FAIL if the feature were broken
 - [ ] Tests are not tautological
 
 ### Performance
+
 - [ ] No unnecessary O(N²) in hot loops
 - [ ] No per-frame allocations in hot paths
 
 ### Documentation
+
 - [ ] README.md updated if public API/usage changed
 - [ ] Complex algorithms have inline comments
 
 ### Follow-ups
+
 - [ ] Follow-up issues created for out-of-scope work discovered during implementation

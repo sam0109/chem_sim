@@ -51,7 +51,7 @@ export function ljForce(
   const energy = 4.0 * epsilon * (sr12 - sr6 - src12 + src6);
 
   // Force: -dV/dr * (r_vec / r) = 24ε/r² [2σ¹²/r¹² - σ⁶/r⁶] * r_vec
-  const fMag = 24.0 * epsilon * (2.0 * sr12 - sr6) / r2;
+  const fMag = (24.0 * epsilon * (2.0 * sr12 - sr6)) / r2;
 
   const fx = fMag * dx;
   const fy = fMag * dy;

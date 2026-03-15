@@ -2,8 +2,6 @@
 // Velocity Verlet integrator for molecular dynamics
 // ==============================================================
 
-
-
 /**
  * Flat-array based velocity Verlet integrator.
  *
@@ -85,7 +83,10 @@ export function velocityVerletStep(
  * Compute instantaneous temperature from kinetic energy.
  * T = 2 * KE / (3 * N * k_B)   (k_B in eV/K)
  */
-export function computeTemperature(kineticEnergy: number, nAtoms: number): number {
+export function computeTemperature(
+  kineticEnergy: number,
+  nAtoms: number,
+): number {
   const kB = 8.617333262e-5; // eV/K
   if (nAtoms <= 0) return 0;
   return (2.0 * kineticEnergy) / (3.0 * nAtoms * kB);
@@ -106,7 +107,8 @@ export function initializeVelocities(
 
   // Box-Muller transform for normal distribution
   function randn(): number {
-    let u = 0, v = 0;
+    let u = 0,
+      v = 0;
     while (u === 0) u = Math.random();
     while (v === 0) v = Math.random();
     return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
@@ -120,7 +122,7 @@ export function initializeVelocities(
       continue;
     }
     // sigma_v = sqrt(kB * T / m) in Å/fs
-    const sigma = Math.sqrt(kB * temperature / (masses[i] * CONV));
+    const sigma = Math.sqrt((kB * temperature) / (masses[i] * CONV));
     velocities[i * 3] = sigma * randn();
     velocities[i * 3 + 1] = sigma * randn();
     velocities[i * 3 + 2] = sigma * randn();
@@ -128,7 +130,9 @@ export function initializeVelocities(
 
   // Remove center-of-mass velocity
   let totalMass = 0;
-  let vcomX = 0, vcomY = 0, vcomZ = 0;
+  let vcomX = 0,
+    vcomY = 0,
+    vcomZ = 0;
   for (let i = 0; i < N; i++) {
     if (fixed[i]) continue;
     const m = masses[i];

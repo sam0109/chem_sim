@@ -49,8 +49,10 @@ export const AtomRenderer: React.FC = () => {
 
       // Position from flat array (more up-to-date than atom.position)
       const x = positions.length > i * 3 ? positions[i * 3] : atom.position[0];
-      const y = positions.length > i * 3 + 1 ? positions[i * 3 + 1] : atom.position[1];
-      const z = positions.length > i * 3 + 2 ? positions[i * 3 + 2] : atom.position[2];
+      const y =
+        positions.length > i * 3 + 1 ? positions[i * 3 + 1] : atom.position[1];
+      const z =
+        positions.length > i * 3 + 2 ? positions[i * 3 + 2] : atom.position[2];
 
       _tempObject.position.set(x, y, z);
 
@@ -91,13 +93,15 @@ export const AtomRenderer: React.FC = () => {
     // Update instance colors
     if (!mesh.instanceColor) {
       mesh.instanceColor = new THREE.InstancedBufferAttribute(
-        colors.slice(0, nAtoms * 3), 3
+        colors.slice(0, nAtoms * 3),
+        3,
       );
     } else {
       const attr = mesh.instanceColor as THREE.InstancedBufferAttribute;
       if (attr.count !== nAtoms) {
         mesh.instanceColor = new THREE.InstancedBufferAttribute(
-          colors.slice(0, nAtoms * 3), 3
+          colors.slice(0, nAtoms * 3),
+          3,
         );
       } else {
         attr.array = colors.slice(0, nAtoms * 3);
@@ -112,11 +116,7 @@ export const AtomRenderer: React.FC = () => {
       args={[geometry, undefined, MAX_ATOMS]}
       frustumCulled={false}
     >
-      <meshStandardMaterial
-        vertexColors
-        roughness={0.4}
-        metalness={0.1}
-      />
+      <meshStandardMaterial vertexColors roughness={0.4} metalness={0.1} />
     </instancedMesh>
   );
 };

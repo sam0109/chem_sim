@@ -50,7 +50,7 @@ export function pauliRepulsion(
 
   // Force: dV/dr = -A*b*exp(-b*(r-rMin))
   // F = -dV/dr * (r_vec/r) = A*b*exp*r_vec/r
-  const fMag = strength * b * expTerm / r;
+  const fMag = (strength * b * expTerm) / r;
 
   const fx = fMag * dx;
   const fy = fMag * dy;

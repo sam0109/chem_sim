@@ -23,9 +23,16 @@ export const AtomLabels: React.FC = () => {
     <>
       {atoms.slice(0, maxLabels).map((atom, i) => {
         const el = elements[atom.elementNumber];
-        const x = positions.length > i * 3 ? positions[i * 3] : atom.position[0];
-        const y = positions.length > i * 3 + 1 ? positions[i * 3 + 1] : atom.position[1];
-        const z = positions.length > i * 3 + 2 ? positions[i * 3 + 2] : atom.position[2];
+        const x =
+          positions.length > i * 3 ? positions[i * 3] : atom.position[0];
+        const y =
+          positions.length > i * 3 + 1
+            ? positions[i * 3 + 1]
+            : atom.position[1];
+        const z =
+          positions.length > i * 3 + 2
+            ? positions[i * 3 + 2]
+            : atom.position[2];
 
         return (
           <Html

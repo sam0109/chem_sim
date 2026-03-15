@@ -32,8 +32,12 @@ export class CellList {
    */
   build(positions: Float64Array, nAtoms: number): void {
     // Find bounding box
-    let minX = Infinity, minY = Infinity, minZ = Infinity;
-    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    let minX = Infinity,
+      minY = Infinity,
+      minZ = Infinity;
+    let maxX = -Infinity,
+      maxY = -Infinity,
+      maxZ = -Infinity;
 
     for (let i = 0; i < nAtoms; i++) {
       const x = positions[i * 3];
@@ -49,8 +53,12 @@ export class CellList {
 
     // Add padding
     const pad = this.cellSize;
-    minX -= pad; minY -= pad; minZ -= pad;
-    maxX += pad; maxY += pad; maxZ += pad;
+    minX -= pad;
+    minY -= pad;
+    minZ -= pad;
+    maxX += pad;
+    maxY += pad;
+    maxZ += pad;
 
     this.origin = [minX, minY, minZ];
     this.nx = Math.max(1, Math.ceil((maxX - minX) / this.cellSize));
@@ -73,13 +81,19 @@ export class CellList {
 
     // Assign atoms to cells
     for (let i = 0; i < nAtoms; i++) {
-      const cx = Math.floor((positions[i * 3] - this.origin[0]) / this.cellSize);
-      const cy = Math.floor((positions[i * 3 + 1] - this.origin[1]) / this.cellSize);
-      const cz = Math.floor((positions[i * 3 + 2] - this.origin[2]) / this.cellSize);
+      const cx = Math.floor(
+        (positions[i * 3] - this.origin[0]) / this.cellSize,
+      );
+      const cy = Math.floor(
+        (positions[i * 3 + 1] - this.origin[1]) / this.cellSize,
+      );
+      const cz = Math.floor(
+        (positions[i * 3 + 2] - this.origin[2]) / this.cellSize,
+      );
       const ci = this.cellIndex(
         Math.min(this.nx - 1, Math.max(0, cx)),
         Math.min(this.ny - 1, Math.max(0, cy)),
-        Math.min(this.nz - 1, Math.max(0, cz))
+        Math.min(this.nz - 1, Math.max(0, cz)),
       );
       this.next[i] = this.head[ci];
       this.head[ci] = i;
@@ -109,8 +123,8 @@ export class CellList {
           // Check this cell + 13 forward neighbors (half-shell)
           // to avoid double-counting pairs
           for (let dz = 0; dz <= 1; dz++) {
-            for (let dy = (dz === 0 ? 0 : -1); dy <= 1; dy++) {
-              for (let dx = (dz === 0 && dy === 0 ? 0 : -1); dx <= 1; dx++) {
+            for (let dy = dz === 0 ? 0 : -1; dy <= 1; dy++) {
+              for (let dx = dz === 0 && dy === 0 ? 0 : -1; dx <= 1; dx++) {
                 const nx = cx + dx;
                 const ny2 = cy + dy;
                 const nz2 = cz + dz;
