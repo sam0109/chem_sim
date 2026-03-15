@@ -343,6 +343,8 @@ export interface WorkerStateUpdate {
   box?: SimulationBox;
   /** Reaction events detected since last state update (empty if none) */
   reactionEvents: ReactionEvent[];
+  /** Whether GPU acceleration is active for non-bonded forces */
+  gpuAccelerated?: boolean;
 }
 
 export interface WorkerReadyMessage {
