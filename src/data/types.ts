@@ -153,6 +153,96 @@ export interface ReactionEvent {
   deltaE: number | null;
 }
 
+// --------------- Simulation Event Logger ---------------
+
+/** Types of physically significant events detected during simulation */
+export type SimulationEventType =
+  | 'bond-broken'
+  | 'bond-formed'
+  | 'temperature-spike'
+  | 'energy-drift'
+  | 'bond-strain';
+
+/** Severity level for simulation events */
+export type SimulationEventSeverity = 'info' | 'warning' | 'error';
+
+/** A physically significant event detected during simulation, with plain-language explanation */
+export interface SimulationEvent {
+  /** Simulation step when the event was detected */
+  step: number;
+  /** Event classification */
+  type: SimulationEventType;
+  /** Indices of atoms involved in this event */
+  atomIndices: number[];
+  /** Human-readable explanation referencing actual forces and energies */
+  explanation: string;
+  /** Severity level for UI color coding */
+  severity: SimulationEventSeverity;
+  /** Type-specific metadata for programmatic access */
+  metadata: SimulationEventMetadata;
+}
+
+/** Type-specific metadata attached to each SimulationEvent */
+export type SimulationEventMetadata =
+  | BondEventMetadata
+  | TemperatureSpikeMetadata
+  | EnergyDriftMetadata
+  | BondStrainMetadata;
+
+/** Metadata for bond-formed and bond-broken events */
+export interface BondEventMetadata {
+  kind: 'bond';
+  /** Current distance between atoms in Å */
+  distance: number;
+  /** Equilibrium bond length in Å */
+  equilibriumDistance: number;
+  /** Bond order (1, 2, 3) */
+  bondOrder: number;
+  /** Bond classification */
+  bondType: BondType;
+  /** Morse dissociation energy De in eV (if available) */
+  dissociationEnergy: number | null;
+}
+
+/** Metadata for temperature-spike events */
+export interface TemperatureSpikeMetadata {
+  kind: 'temperature';
+  /** Temperature before spike in K */
+  previousTemperature: number;
+  /** Temperature after spike in K */
+  currentTemperature: number;
+  /** Relative change |ΔT|/T_prev */
+  relativeChange: number;
+}
+
+/** Metadata for energy-drift events */
+export interface EnergyDriftMetadata {
+  kind: 'energy';
+  /** Total energy at start of rolling window in eV */
+  initialEnergy: number;
+  /** Total energy at end of rolling window in eV */
+  currentEnergy: number;
+  /** Relative drift |ΔE|/|E_initial| */
+  relativeDrift: number;
+  /** Number of steps in the rolling window */
+  windowSteps: number;
+  /** Current timestep in fs */
+  timestep: number;
+}
+
+/** Metadata for bond-strain events (bond stretched significantly beyond equilibrium) */
+export interface BondStrainMetadata {
+  kind: 'strain';
+  /** Current distance between atoms in Å */
+  distance: number;
+  /** Equilibrium bond length in Å */
+  equilibriumDistance: number;
+  /** Strain ratio: distance / equilibriumDistance */
+  strainRatio: number;
+  /** Bond order */
+  bondOrder: number;
+}
+
 /** Color mode for atom rendering */
 export type ColorMode = 'element' | 'molecule';
 
