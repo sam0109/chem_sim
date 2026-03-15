@@ -39,7 +39,12 @@ export interface SimulationStoreState {
 
   // ---- Simulation state ----
   step: number;
-  energy: { kinetic: number; potential: number; total: number };
+  energy: {
+    kinetic: number;
+    potential: number;
+    total: number;
+    thermostat: number;
+  };
   temperature: number;
   config: SimulationConfig;
   box: SimulationBox;
@@ -50,6 +55,7 @@ export interface SimulationStoreState {
     kinetic: number;
     potential: number;
     total: number;
+    thermostat: number;
     temperature: number;
   }>;
 
@@ -116,7 +122,7 @@ function buildStoreSlice(
     molecules: [],
     reactionLog: [],
     step: 0,
-    energy: { kinetic: 0, potential: 0, total: 0 },
+    energy: { kinetic: 0, potential: 0, total: 0, thermostat: 0 },
     temperature: 0,
     config: { ...DEFAULT_CONFIG },
     box: { ...DEFAULT_BOX },
@@ -138,6 +144,7 @@ function buildStoreSlice(
         kinetic: state.energy.kinetic,
         potential: state.energy.potential,
         total: state.energy.total,
+        thermostat: state.energy.thermostat,
         temperature: state.temperature,
       };
 

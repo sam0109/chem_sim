@@ -41,6 +41,7 @@ import {
   berendsenThermostat,
   noseHooverChainStep,
   createNoseHooverChainState,
+  computeNoseHooverEnergy,
 } from './thermostat';
 import type { NoseHooverChainState } from './thermostat';
 import { steepestDescent } from './minimizer';
@@ -652,8 +653,38 @@ function initSimulation(
 }
 
 // ---- Run MD steps ----
+function computeKineticEnergy(): number {
+  const CONV = 103.6427; // 1 eV = 103.6427 amu·Å²/fs²
+  let ke = 0;
+  for (let i = 0; i < nAtoms; i++) {
+    const i3 = i * 3;
+    const vx = velocities[i3];
+    const vy = velocities[i3 + 1];
+    const vz = velocities[i3 + 2];
+    ke += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz) * CONV;
+  }
+  return ke;
+}
+
 function runSteps(nSteps: number): void {
   for (let s = 0; s < nSteps; s++) {
+    // --- NH thermostat half-step BEFORE Verlet ---
+    // Split integration: apply thermostat at dt/2 before and after
+    // the Verlet step for time-reversible O(dt³) accuracy.
+    // Source: Martyna, Tuckerman, Tobias, Klein, Mol. Phys. 87, 1117 (1996)
+    if (config.thermostat === 'nose-hoover' && nhChainState) {
+      const ke = computeKineticEnergy();
+      noseHooverChainStep(
+        velocities,
+        masses,
+        fixed,
+        ke,
+        config.temperature,
+        config.timestep * 0.5,
+        nhChainState,
+      );
+    }
+
     const { kineticEnergy } = velocityVerletStep(
       positions,
       velocities,
@@ -681,13 +712,14 @@ function runSteps(nSteps: number): void {
         config.thermostatTau,
       );
     } else if (config.thermostat === 'nose-hoover' && nhChainState) {
+      // --- NH thermostat half-step AFTER Verlet ---
       noseHooverChainStep(
         velocities,
         masses,
         fixed,
         kineticEnergy,
         config.temperature,
-        config.timestep,
+        config.timestep * 0.5,
         nhChainState,
       );
     }
@@ -817,17 +849,16 @@ function sendState(): void {
   forces.fill(0);
   const potentialEnergy = computeAllForces(positions, forces);
 
-  const CONV = 103.6427;
-  let kineticEnergy = 0;
-  for (let i = 0; i < nAtoms; i++) {
-    const i3 = i * 3;
-    const vx = velocities[i3];
-    const vy = velocities[i3 + 1];
-    const vz = velocities[i3 + 2];
-    kineticEnergy += 0.5 * masses[i] * (vx * vx + vy * vy + vz * vz) * CONV;
-  }
+  const kineticEnergy = computeKineticEnergy();
 
   const temperature = computeTemperature(kineticEnergy, nAtoms);
+
+  // Compute thermostat energy for the extended Hamiltonian diagnostic.
+  // Only non-zero when Nosé-Hoover is active.
+  const thermostatEnergy =
+    config.thermostat === 'nose-hoover' && nhChainState
+      ? computeNoseHooverEnergy(nhChainState, config.temperature)
+      : 0;
 
   const msg: WorkerStateUpdate = {
     type: 'state',
@@ -840,6 +871,7 @@ function sendState(): void {
       kinetic: kineticEnergy,
       potential: potentialEnergy,
       total: kineticEnergy + potentialEnergy,
+      thermostat: thermostatEnergy,
     },
     temperature,
     moleculeIds: moleculeIds.slice(),

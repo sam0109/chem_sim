@@ -76,6 +76,8 @@ export interface NoseHooverChainState {
   vxi: Float64Array;
   /** Chain coupling masses Q (eV·fs²) — length M */
   Q: Float64Array;
+  /** Degrees of freedom coupled to the first thermostat */
+  Nf: number;
 }
 
 /**
@@ -84,9 +86,12 @@ export interface NoseHooverChainState {
  * Coupling masses:
  *   Q₁ = Nf · kB · T · τ²   (couples to particles)
  *   Qⱼ = kB · T · τ²         (j > 1, couples to previous thermostat)
- * where Nf = 3 * nAtoms (translational degrees of freedom).
+ * where Nf = 3N - 3 (translational DOF minus center-of-mass).
+ * For N ≤ 1, Nf = 3 to avoid degenerate coupling.
  *
  * Source: Martyna et al., J. Chem. Phys. 97, 2635 (1992), Eq. 2.13
+ * DOF correction: Allen & Tildesley, "Computer Simulation of Liquids",
+ *   2nd ed., Section 2.6 — subtract 3 for conserved COM momentum.
  *
  * @param nAtoms number of atoms
  * @param targetTemp target temperature (K)
@@ -98,7 +103,9 @@ export function createNoseHooverChainState(
   tau: number,
 ): NoseHooverChainState {
   const kB = 8.617333262e-5; // eV/K — CODATA 2018
-  const Nf = 3 * nAtoms; // degrees of freedom (translational)
+  // Subtract 3 translational DOF for conserved COM momentum.
+  // Guard: for very small systems (N ≤ 1) use Nf = 3 to avoid zero/negative.
+  const Nf = nAtoms > 1 ? 3 * nAtoms - 3 : 3;
   const kBT = kB * targetTemp;
 
   const xi = new Float64Array(NH_CHAIN_LENGTH);
@@ -112,19 +119,17 @@ export function createNoseHooverChainState(
     Q[m] = kBT * tau * tau;
   }
 
-  return { xi, vxi, Q };
+  return { xi, vxi, Q, Nf };
 }
 
 /**
  * Nosé-Hoover chain thermostat step: rescale velocities to sample
  * the canonical ensemble.
  *
- * This function applies the NH chain operator at a half-step level.
- * It should be called TWICE per velocity Verlet step (before and after
- * the force evaluation) to maintain time-reversibility. However, for
- * simplicity and following common MD practice, we apply the full
- * operator once per step (after the Verlet step), which is accurate
- * to O(dt²).
+ * This function propagates the NH chain for the given timestep dt.
+ * For correct velocity Verlet integration, call this TWICE per step
+ * with dt/2 (half-step before and after force evaluation) to achieve
+ * time-reversible O(dt³) integration.
  *
  * Algorithm (from outermost to innermost chain link):
  *   1. Compute "force" on each chain thermostat
@@ -133,13 +138,15 @@ export function createNoseHooverChainState(
  *   4. Update chain positions
  *
  * Source: Martyna et al., J. Chem. Phys. 97, 2635 (1992), Eqs. 2.10–2.14
+ * Split integration: Martyna, Tuckerman, Tobias, Klein,
+ *   Mol. Phys. 87, 1117 (1996), Section 3.
  *
  * @param velocities flat velocity array (modified in-place)
  * @param masses atom masses (amu)
  * @param fixed fixed flags
  * @param kineticEnergy current kinetic energy (eV)
  * @param targetTemp target temperature (K)
- * @param dt timestep (fs)
+ * @param dt timestep (fs) — pass dt/2 for split Verlet integration
  * @param chainState NH chain state (modified in-place)
  */
 export function noseHooverChainStep(
@@ -153,7 +160,7 @@ export function noseHooverChainStep(
 ): void {
   const N = masses.length;
   const kB = 8.617333262e-5; // eV/K — CODATA 2018
-  const Nf = 3 * N; // degrees of freedom
+  const Nf = chainState.Nf;
   const kBT = kB * targetTemp;
   if (targetTemp < 1e-10 || N <= 0) return;
 
@@ -239,6 +246,46 @@ export function noseHooverChainStep(
       vxi[M - 1] += Glast * wdt4;
     }
   }
+}
+
+/**
+ * Compute the thermostat contribution to the extended Hamiltonian.
+ *
+ * H_NH = Σ_m (½ Q_m vξ_m²) + Nf kBT ξ₁ + kBT Σ_{m>1} ξ_m
+ *
+ * The conserved quantity is H_ext = KE + PE + H_NH.
+ * In a correctly integrated NVT simulation, H_ext should be constant
+ * (up to numerical integration error).
+ *
+ * Source: Martyna et al., J. Chem. Phys. 97, 2635 (1992), Eq. 2.15
+ *
+ * @param chainState NH chain state
+ * @param targetTemp target temperature (K)
+ * @returns thermostat energy in eV
+ */
+export function computeNoseHooverEnergy(
+  chainState: NoseHooverChainState,
+  targetTemp: number,
+): number {
+  const kB = 8.617333262e-5; // eV/K — CODATA 2018
+  const kBT = kB * targetTemp;
+  const { xi, vxi, Q, Nf } = chainState;
+  const M = Q.length;
+
+  let energy = 0;
+
+  // Kinetic energy of chain thermostats: ½ Q_m vξ_m²
+  for (let m = 0; m < M; m++) {
+    energy += 0.5 * Q[m] * vxi[m] * vxi[m];
+  }
+
+  // Potential energy: Nf kBT ξ₁ + kBT Σ_{m>1} ξ_m
+  energy += Nf * kBT * xi[0];
+  for (let m = 1; m < M; m++) {
+    energy += kBT * xi[m];
+  }
+
+  return energy;
 }
 
 /**
