@@ -147,10 +147,20 @@ function isMetallic(category: string): boolean {
  * single bond ≈ sum of covalent radii
  * double bond ≈ 0.87 × single
  * triple bond ≈ 0.78 × single
+ *
+ * Thresholds chosen so that:
+ * - C≡C (1.20 Å / 1.52 Å = 0.789) → triple  (< 0.80 ✗, but ratio=0.789 ✓)
+ * - N≡N (1.10 Å / 1.40 Å = 0.786) → triple  ✓
+ * - C=O in CO₂ (1.16 Å / 1.42 Å = 0.817) → double  ✓
+ * - C=C (1.34 Å / 1.52 Å = 0.882) → double  ✓
+ *
+ * Previous threshold of 0.82 misclassified CO₂'s C=O as triple,
+ * causing valence overflow (3+3=6 > C maxValence=4).
+ * Source for typical bond lengths: CRC Handbook, 97th Ed.
  */
 function estimateBondOrder(dist: number, singleDist: number): number {
   const ratio = dist / singleDist;
-  if (ratio < 0.82) return 3;
+  if (ratio < 0.8) return 3;
   if (ratio < 0.92) return 2;
   return 1;
 }
