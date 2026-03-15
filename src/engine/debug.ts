@@ -5,7 +5,6 @@ import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
 import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
-import { pauliRepulsion } from './forces/pauli';
 import { detectBonds, buildAngleList } from './bondDetector';
 import {
   velocityVerletStep,
@@ -82,14 +81,6 @@ function debugWater(): void {
         const lj = getLJParams(Z[i], Z[j]);
         pe += ljForce(p, f, i, j, lj.sigma, lj.epsilon, 10);
         pe += coulombForce(p, f, i, j, chg[i], chg[j], 10);
-      }
-    }
-    for (let i = 0; i < N; i++) {
-      for (let j = i + 1; j < N; j++) {
-        const ri = elements[Z[i]];
-        const rj = elements[Z[j]];
-        const rm = 0.5 * Math.min(ri.covalentRadius, rj.covalentRadius);
-        pe += pauliRepulsion(p, f, i, j, Math.max(rm, 0.15), 20);
       }
     }
     return pe;
