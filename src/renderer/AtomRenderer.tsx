@@ -92,14 +92,6 @@ export const AtomRenderer: React.FC = () => {
       depthWrite: true,
       // Disable back-face culling since quads face the camera
       side: THREE.DoubleSide,
-      // We write our own depth, so tell Three.js not to use the
-      // default depth from vertex position
-      extensions: {
-        fragDepth: true,
-        derivatives: false,
-        drawBuffers: false,
-        shaderTextureLOD: false,
-      },
     });
   }, []);
 

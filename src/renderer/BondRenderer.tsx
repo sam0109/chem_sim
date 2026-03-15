@@ -62,13 +62,6 @@ const _bondMaterial = new THREE.ShaderMaterial({
   depthTest: true,
   depthWrite: true,
   side: THREE.DoubleSide,
-  // Required for gl_FragDepth to work correctly in the fragment shader
-  extensions: {
-    fragDepth: true,
-    derivatives: false,
-    drawBuffers: false,
-    shaderTextureLOD: false,
-  },
 });
 
 export const BondRenderer: React.FC = () => {

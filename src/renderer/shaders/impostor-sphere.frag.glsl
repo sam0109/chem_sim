@@ -2,6 +2,11 @@
 // Ray-casts a perfect sphere from a billboarded quad
 // Writes correct depth for proper intersection with other geometry
 
+// Three.js injects projectionMatrix into the vertex shader prefix but NOT
+// the fragment shader prefix. We need it here for gl_FragDepth correction,
+// so declare it explicitly.
+uniform mat4 projectionMatrix;
+
 uniform vec3 uLightDir;
 uniform vec3 uAmbient;
 uniform float uShininess;
