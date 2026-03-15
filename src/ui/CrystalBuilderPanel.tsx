@@ -167,6 +167,9 @@ export const CrystalBuilderPanel: React.FC = () => {
         nz,
       );
       // Use the max dimension for a cubic box (simplest PBC approach)
+      // TODO: For non-cubic cells (HCP), this wastes space and gives
+      // incorrect periodicity. A future improvement should use the actual
+      // supercell dimensions as the box size, requiring non-cubic PBC support.
       const maxDim = Math.max(size[0], size[1], size[2]);
       setBox({ periodic: true, size: [maxDim, maxDim, maxDim] });
     }

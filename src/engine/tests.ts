@@ -58,6 +58,10 @@ import {
 import type { Atom, Bond, Hybridization } from '../data/types';
 import { findMolecules, computeMoleculeInfo } from './moleculeTracker';
 import { minimumImage, wrapPositions } from './pbc';
+import {
+  generateCrystalAtoms,
+  computeSupercellSize,
+} from '../data/crystalBuilder';
 import type { Vector3Tuple } from '../data/types';
 import {
   diffBonds,
@@ -3166,6 +3170,236 @@ function runBondPlacementTests(): void {
   }
 }
 
+// ========== CRYSTAL BUILDER TESTS ==========
+
+function runCrystalBuilderTests(): void {
+  console.log('\n--- Crystal Builder Tests ---');
+
+  // Helper: compute minimum distance between any two atoms
+  function minDistance(atoms: Atom[]): number {
+    let minDist = Infinity;
+    for (let i = 0; i < atoms.length; i++) {
+      for (let j = i + 1; j < atoms.length; j++) {
+        const dx = atoms[i].position[0] - atoms[j].position[0];
+        const dy = atoms[i].position[1] - atoms[j].position[1];
+        const dz = atoms[i].position[2] - atoms[j].position[2];
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist < minDist) minDist = dist;
+      }
+    }
+    return minDist;
+  }
+
+  // XTAL-01: FCC atom count — 4 atoms/cell × Nx×Ny×Nz cells
+  {
+    const atoms = generateCrystalAtoms({
+      structureType: 'fcc',
+      elementA: 29,
+      latticeConstant: 3.615,
+      nx: 2,
+      ny: 2,
+      nz: 2,
+    });
+    const passed = atoms.length === 32;
+    report(
+      'XTAL-01',
+      'FCC 2×2×2 atom count',
+      passed,
+      `${atoms.length}`,
+      '32 (4 atoms/cell × 8 cells)',
+    );
+  }
+
+  // XTAL-02: FCC nearest-neighbor distance = a/√2
+  {
+    const a = 3.615;
+    const atoms = generateCrystalAtoms({
+      structureType: 'fcc',
+      elementA: 29,
+      latticeConstant: a,
+      nx: 2,
+      ny: 2,
+      nz: 2,
+    });
+    const expected = a / Math.sqrt(2); // 2.556 Å
+    const measured = minDistance(atoms);
+    const err = Math.abs(measured - expected);
+    const passed = err < 0.001;
+    report(
+      'XTAL-02',
+      'FCC Cu nearest-neighbor distance = a/√2',
+      passed,
+      `${measured.toFixed(4)} Å`,
+      `${expected.toFixed(4)} Å (tolerance < 0.001)`,
+    );
+  }
+
+  // XTAL-03: BCC atom count — 2 atoms/cell × Nx×Ny×Nz cells
+  {
+    const atoms = generateCrystalAtoms({
+      structureType: 'bcc',
+      elementA: 26,
+      latticeConstant: 2.867,
+      nx: 3,
+      ny: 3,
+      nz: 3,
+    });
+    const passed = atoms.length === 54;
+    report(
+      'XTAL-03',
+      'BCC 3×3×3 atom count',
+      passed,
+      `${atoms.length}`,
+      '54 (2 atoms/cell × 27 cells)',
+    );
+  }
+
+  // XTAL-04: BCC nearest-neighbor distance = a√3/2
+  {
+    const a = 2.867;
+    const atoms = generateCrystalAtoms({
+      structureType: 'bcc',
+      elementA: 26,
+      latticeConstant: a,
+      nx: 2,
+      ny: 2,
+      nz: 2,
+    });
+    const expected = (a * Math.sqrt(3)) / 2; // 2.483 Å
+    const measured = minDistance(atoms);
+    const err = Math.abs(measured - expected);
+    const passed = err < 0.001;
+    report(
+      'XTAL-04',
+      'BCC Fe nearest-neighbor distance = a√3/2',
+      passed,
+      `${measured.toFixed(4)} Å`,
+      `${expected.toFixed(4)} Å (tolerance < 0.001)`,
+    );
+  }
+
+  // XTAL-05: Diamond atom count — 8 atoms/cell
+  {
+    const atoms = generateCrystalAtoms({
+      structureType: 'diamond',
+      elementA: 6,
+      latticeConstant: 3.567,
+      nx: 2,
+      ny: 2,
+      nz: 2,
+    });
+    const passed = atoms.length === 64;
+    report(
+      'XTAL-05',
+      'Diamond 2×2×2 atom count',
+      passed,
+      `${atoms.length}`,
+      '64 (8 atoms/cell × 8 cells)',
+    );
+  }
+
+  // XTAL-06: Diamond nearest-neighbor distance = a√3/4
+  {
+    const a = 3.567;
+    const atoms = generateCrystalAtoms({
+      structureType: 'diamond',
+      elementA: 6,
+      latticeConstant: a,
+      nx: 2,
+      ny: 2,
+      nz: 2,
+    });
+    const expected = (a * Math.sqrt(3)) / 4; // 1.545 Å (C-C bond)
+    const measured = minDistance(atoms);
+    const err = Math.abs(measured - expected);
+    const passed = err < 0.001;
+    report(
+      'XTAL-06',
+      'Diamond C nearest-neighbor distance = a√3/4',
+      passed,
+      `${measured.toFixed(4)} Å`,
+      `${expected.toFixed(4)} Å (tolerance < 0.001)`,
+    );
+  }
+
+  // XTAL-07: NaCl charge neutrality
+  {
+    const atoms = generateCrystalAtoms({
+      structureType: 'rocksalt',
+      elementA: 11,
+      elementB: 17,
+      latticeConstant: 5.64,
+      nx: 3,
+      ny: 3,
+      nz: 3,
+      chargeA: 1.0,
+      chargeB: -1.0,
+    });
+    const totalCharge = atoms.reduce((sum, a) => sum + a.charge, 0);
+    const nNa = atoms.filter((a) => a.elementNumber === 11).length;
+    const nCl = atoms.filter((a) => a.elementNumber === 17).length;
+    const passed =
+      Math.abs(totalCharge) < 1e-10 && nNa === nCl && atoms.length === 216;
+    report(
+      'XTAL-07',
+      'NaCl 3×3×3 charge neutrality and stoichiometry',
+      passed,
+      `Q=${totalCharge.toFixed(6)}, Na=${nNa}, Cl=${nCl}, total=${atoms.length}`,
+      'Q=0, Na=Cl=108, total=216',
+    );
+  }
+
+  // XTAL-08: Crystal is centered at origin
+  {
+    const atoms = generateCrystalAtoms({
+      structureType: 'fcc',
+      elementA: 29,
+      latticeConstant: 3.615,
+      nx: 3,
+      ny: 3,
+      nz: 3,
+    });
+    let cx = 0;
+    let cy = 0;
+    let cz = 0;
+    for (const a of atoms) {
+      cx += a.position[0];
+      cy += a.position[1];
+      cz += a.position[2];
+    }
+    cx /= atoms.length;
+    cy /= atoms.length;
+    cz /= atoms.length;
+    const dist = Math.sqrt(cx * cx + cy * cy + cz * cz);
+    const passed = dist < 1e-10;
+    report(
+      'XTAL-08',
+      'Crystal centered at origin',
+      passed,
+      `center offset = ${dist.toExponential(3)} Å`,
+      '< 1e-10 Å',
+    );
+  }
+
+  // XTAL-09: computeSupercellSize correctness
+  {
+    const size = computeSupercellSize('fcc', 3.615, 2, 2, 2);
+    const expected = 2 * 3.615; // = 7.230 Å for cubic FCC
+    const err = Math.abs(size[0] - expected);
+    const passed =
+      err < 1e-10 &&
+      Math.abs(size[1] - expected) < 1e-10 &&
+      Math.abs(size[2] - expected) < 1e-10;
+    report(
+      'XTAL-09',
+      'computeSupercellSize FCC 2×2×2',
+      passed,
+      `[${size[0].toFixed(3)}, ${size[1].toFixed(3)}, ${size[2].toFixed(3)}]`,
+      `[${expected.toFixed(3)}, ${expected.toFixed(3)}, ${expected.toFixed(3)}]`,
+    );
+  }
+}
+
 // ---- Main ----
 
 console.log('╔══════════════════════════════════════════════════╗');
@@ -3184,6 +3418,7 @@ runReactionTests();
 runBondDetectionTests();
 runOrbitalTests();
 runBondPlacementTests();
+runCrystalBuilderTests();
 
 // Summary
 console.log('\n' + '='.repeat(50));
