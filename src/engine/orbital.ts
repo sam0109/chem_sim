@@ -146,12 +146,12 @@ export function radialWavefunction(
   const rho = (2.0 * Zeff * r) / (n * a0);
 
   // Normalization constant:
-  // N_nl = sqrt[(2Z*/(n*a0))^3 * (n-l-1)! / (2n * ((n+l)!)^3)]
+  // N_nl = sqrt[(2Z/(n*a0))^3 * (n-l-1)! / (2n * (n+l)!)]
   // Using the textbook form from Griffiths Eq. 4.73.
   // We drop the overall sign (physically irrelevant for |psi|^2)
   const prefactor = Math.pow((2.0 * Zeff) / (n * a0), 1.5);
   const factRatio = Math.sqrt(
-    factorial(n - l - 1) / (2.0 * n * Math.pow(factorial(n + l), 3)),
+    factorial(n - l - 1) / (2.0 * n * factorial(n + l)),
   );
 
   const norm = prefactor * factRatio;

@@ -2212,113 +2212,279 @@ function runReactionTests(): void {
   }
 }
 
-// ---- Bond Detection Tests ----
+  }
+}
 
-function runBondDetectionTests(): void {
-  console.log('\n=== BOND DETECTION TESTS ===\n');
+// ==============================================================
+// ORBITAL AND MARCHING CUBES TESTS
+// ==============================================================
 
-  // BD-01: NaCl ionic bond detected with order 1
-  // Na (Z=11, EN=0.93) + Cl (Z=17, EN=3.16): EN diff = 2.23 > 1.7 → ionic
-  // Typical NaCl distance: 2.36 Å (gas phase, CRC Handbook 97th Ed.)
-  // covR(Na) + covR(Cl) = 1.66 + 1.02 = 2.68 Å
-  // ratio = 2.36/2.68 = 0.88 → would be double-bond range without ionic fix
+import {
+  realSphericalHarmonic,
+  radialWavefunction,
+  getEffectiveZ,
+  computeOrbitalGrid,
+} from '../data/orbital';
+import { marchingCubes } from '../data/marchingCubes';
+
+function runOrbitalTests(): void {
+  console.log('\n=== ORBITAL WAVEFUNCTION TESTS ===\n');
+
+  // ORB-01: Spherical harmonic Y_00 normalization
+  // Integral of |Y_00|^2 sin(theta) dtheta dphi over full sphere = 1
+  // Numerical integration using midpoint rule
   {
-    const pos = new Float64Array([0, 0, 0, 2.36, 0, 0]);
-    const Z = [11, 17]; // Na, Cl
-    const bonds = detectBonds(pos, Z);
-
-    const passed =
-      bonds.length === 1 && bonds[0].type === 'ionic' && bonds[0].order === 1;
-    report(
-      'BD-01',
-      'NaCl ionic bond detected at 2.36 Å with order=1',
-      passed,
-      `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}, order=${bonds[0]?.order ?? 'N/A'}`,
-      'exactly 1 ionic bond with order=1',
-    );
+    if (!isSkipped('ORB-01')) {
+      const nTheta = 100;
+      const nPhi = 200;
+      const dTheta = Math.PI / nTheta;
+      const dPhi = (2 * Math.PI) / nPhi;
+      let integral = 0;
+      for (let it = 0; it < nTheta; it++) {
+        const theta = (it + 0.5) * dTheta;
+        const sinTheta = Math.sin(theta);
+        for (let ip = 0; ip < nPhi; ip++) {
+          const phi = (ip + 0.5) * dPhi;
+          const Y = realSphericalHarmonic(0, 0, theta, phi);
+          integral += Y * Y * sinTheta * dTheta * dPhi;
+        }
+      }
+      const passed = Math.abs(integral - 1.0) < 0.01;
+      report(
+        'ORB-01',
+        'Y_00 normalization: integral |Y_00|^2 dOmega = 1',
+        passed,
+        `integral = ${integral.toFixed(6)}`,
+        '1.0 +/- 0.01',
+      );
+    }
   }
 
-  // BD-02: I₂ bond detected at typical distance
-  // I-I single bond: 2.67 Å (CRC Handbook 97th Ed.)
-  // covR(I) = 1.39 Å → sum = 2.78 Å → ratio = 2.67/2.78 = 0.96 → single bond
-  // I is a heavy element (Z=53 > 36), so tolerance scaling applies (1.10× for both heavy)
+  // ORB-02: Spherical harmonic Y_10 normalization
   {
-    const pos = new Float64Array([0, 0, 0, 2.67, 0, 0]);
-    const Z = [53, 53]; // I, I
-    const bonds = detectBonds(pos, Z);
-
-    const passed =
-      bonds.length === 1 &&
-      bonds[0].type === 'covalent' &&
-      bonds[0].order === 1;
-    report(
-      'BD-02',
-      'I₂ covalent bond detected at 2.67 Å',
-      passed,
-      `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}, order=${bonds[0]?.order ?? 'N/A'}`,
-      'exactly 1 covalent single bond',
-    );
+    if (!isSkipped('ORB-02')) {
+      const nTheta = 100;
+      const nPhi = 200;
+      const dTheta = Math.PI / nTheta;
+      const dPhi = (2 * Math.PI) / nPhi;
+      let integral = 0;
+      for (let it = 0; it < nTheta; it++) {
+        const theta = (it + 0.5) * dTheta;
+        const sinTheta = Math.sin(theta);
+        for (let ip = 0; ip < nPhi; ip++) {
+          const phi = (ip + 0.5) * dPhi;
+          const Y = realSphericalHarmonic(1, 0, theta, phi);
+          integral += Y * Y * sinTheta * dTheta * dPhi;
+        }
+      }
+      const passed = Math.abs(integral - 1.0) < 0.01;
+      report(
+        'ORB-02',
+        'Y_10 normalization: integral |Y_10|^2 dOmega = 1',
+        passed,
+        `integral = ${integral.toFixed(6)}`,
+        '1.0 +/- 0.01',
+      );
+    }
   }
 
-  // BD-03: Fe-O bond detected at typical distance
-  // Fe-O bond distance in iron oxides: ~2.0 Å (Wells, Structural Inorganic Chemistry)
-  // covR(Fe)=1.32 + covR(O)=0.66 = 1.98 Å → ratio = 2.0/1.98 ≈ 1.01
-  // At formTolerance=1.2, max = 1.98 * 1.2 * 1.05 (heavy+light) = 2.49 Å
-  // Fe is a transition metal → tolerance scaling applies
+  // ORB-03: Spherical harmonic Y_21 normalization (d orbital)
   {
-    const pos = new Float64Array([0, 0, 0, 2.0, 0, 0]);
-    const Z = [26, 8]; // Fe, O
-    const bonds = detectBonds(pos, Z);
-
-    const passed = bonds.length === 1;
-    report(
-      'BD-03',
-      'Fe-O bond detected at 2.0 Å',
-      passed,
-      `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}`,
-      'exactly 1 bond detected',
-    );
+    if (!isSkipped('ORB-03')) {
+      const nTheta = 100;
+      const nPhi = 200;
+      const dTheta = Math.PI / nTheta;
+      const dPhi = (2 * Math.PI) / nPhi;
+      let integral = 0;
+      for (let it = 0; it < nTheta; it++) {
+        const theta = (it + 0.5) * dTheta;
+        const sinTheta = Math.sin(theta);
+        for (let ip = 0; ip < nPhi; ip++) {
+          const phi = (ip + 0.5) * dPhi;
+          const Y = realSphericalHarmonic(2, 1, theta, phi);
+          integral += Y * Y * sinTheta * dTheta * dPhi;
+        }
+      }
+      const passed = Math.abs(integral - 1.0) < 0.01;
+      report(
+        'ORB-03',
+        'Y_21 normalization: integral |Y_21|^2 dOmega = 1',
+        passed,
+        `integral = ${integral.toFixed(6)}`,
+        '1.0 +/- 0.01',
+      );
+    }
   }
 
-  // BD-04: Fe-Fe metallic bond detected
-  // Fe-Fe distance in BCC iron: 2.48 Å (nearest neighbor, Kittel Solid State Physics)
-  // covR(Fe)=1.32 → sum = 2.64 Å → ratio = 2.48/2.64 = 0.94
-  // Both transition metals → tolerance scale = 1.10
-  // max = 2.64 * 1.2 * 1.10 = 3.48 Å (well above 2.48)
+  // ORB-04: Radial wavefunction R_10 (1s) normalization
+  // integral_0^inf |R_10|^2 r^2 dr = 1 for Z=1
   {
-    const pos = new Float64Array([0, 0, 0, 2.48, 0, 0]);
-    const Z = [26, 26]; // Fe, Fe
-    const bonds = detectBonds(pos, Z);
-
-    const passed = bonds.length === 1 && bonds[0].type === 'metallic';
-    report(
-      'BD-04',
-      'Fe-Fe metallic bond detected at 2.48 Å',
-      passed,
-      `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}`,
-      'exactly 1 metallic bond',
-    );
+    if (!isSkipped('ORB-04')) {
+      const Zeff = 1.0;
+      const dr = 0.001; // Angstrom
+      const rMax = 10.0; // Angstrom
+      let integral = 0;
+      for (let ir = 0; ir < rMax / dr; ir++) {
+        const r = (ir + 0.5) * dr;
+        const R = radialWavefunction(1, 0, r, Zeff);
+        integral += R * R * r * r * dr;
+      }
+      const passed = Math.abs(integral - 1.0) < 0.02;
+      report(
+        'ORB-04',
+        'R_10 (1s) normalization: integral |R_10|^2 r^2 dr = 1',
+        passed,
+        `integral = ${integral.toFixed(6)}`,
+        '1.0 +/- 0.02',
+      );
+    }
   }
 
-  // BD-05: Ionic bonds always have order 1, even when distance ratio
-  // would suggest higher order for covalent bonds
-  // KF: K (EN=0.82), F (EN=3.98), diff=3.16 → ionic
-  // KF distance ~2.17 Å (gas phase), covR(K)+covR(F) = 2.03+0.57 = 2.60
-  // ratio = 2.17/2.60 = 0.83 → would be double-bond in covalent range
+  // ORB-05: Radial wavefunction R_20 (2s) normalization for Z=1
   {
-    const pos = new Float64Array([0, 0, 0, 2.17, 0, 0]);
-    const Z = [19, 9]; // K, F
-    const bonds = detectBonds(pos, Z);
+    if (!isSkipped('ORB-05')) {
+      const Zeff = 1.0;
+      const dr = 0.002;
+      const rMax = 30.0; // 2s extends further than 1s
+      let integral = 0;
+      for (let ir = 0; ir < rMax / dr; ir++) {
+        const r = (ir + 0.5) * dr;
+        const R = radialWavefunction(2, 0, r, Zeff);
+        integral += R * R * r * r * dr;
+      }
+      const passed = Math.abs(integral - 1.0) < 0.02;
+      report(
+        'ORB-05',
+        'R_20 (2s) normalization: integral |R_20|^2 r^2 dr = 1',
+        passed,
+        `integral = ${integral.toFixed(6)}`,
+        '1.0 +/- 0.02',
+      );
+    }
+  }
 
-    const passed =
-      bonds.length === 1 && bonds[0].type === 'ionic' && bonds[0].order === 1;
-    report(
-      'BD-05',
-      'KF ionic bond has order=1 despite short distance ratio',
-      passed,
-      `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}, order=${bonds[0]?.order ?? 'N/A'}`,
-      'exactly 1 ionic bond with order=1',
-    );
+  // ORB-06: 2s orbital has 1 radial node (R_20 changes sign)
+  {
+    if (!isSkipped('ORB-06')) {
+      const Zeff = 1.0;
+      const dr = 0.01;
+      const rMax = 15.0;
+      let signChanges = 0;
+      let prevSign = Math.sign(radialWavefunction(2, 0, dr, Zeff));
+      for (let ir = 1; ir < rMax / dr; ir++) {
+        const r = (ir + 0.5) * dr;
+        const R = radialWavefunction(2, 0, r, Zeff);
+        const s = Math.sign(R);
+        if (s !== 0 && s !== prevSign && prevSign !== 0) {
+          signChanges++;
+        }
+        if (s !== 0) prevSign = s;
+      }
+      const passed = signChanges === 1;
+      report(
+        'ORB-06',
+        '2s orbital: exactly 1 radial node (sign change)',
+        passed,
+        `sign changes = ${signChanges}`,
+        '1',
+      );
+    }
+  }
+
+  // ORB-07: Clementi-Raimondi Z* for He(1s) = 1.6875
+  {
+    if (!isSkipped('ORB-07')) {
+      const Zeff = getEffectiveZ(2, 1, 0);
+      const passed = Math.abs(Zeff - 1.6875) < 0.001;
+      report(
+        'ORB-07',
+        'Clementi-Raimondi Z* for He(1s) = 1.6875',
+        passed,
+        `Z* = ${Zeff.toFixed(4)}`,
+        '1.6875',
+      );
+    }
+  }
+
+  // ORB-08: Clementi-Raimondi Z* for C(2p) = 3.1358
+  {
+    if (!isSkipped('ORB-08')) {
+      const Zeff = getEffectiveZ(6, 2, 1);
+      const passed = Math.abs(Zeff - 3.1358) < 0.001;
+      report(
+        'ORB-08',
+        'Clementi-Raimondi Z* for C(2p) = 3.1358',
+        passed,
+        `Z* = ${Zeff.toFixed(4)}`,
+        '3.1358',
+      );
+    }
+  }
+
+  // ORB-09: Marching cubes on a sphere produces non-degenerate mesh
+  {
+    if (!isSkipped('ORB-09')) {
+      // Create a 3D field representing a sphere of radius 1.5 centered at origin
+      const gridRes = 20;
+      const halfWidth = 3.0;
+      const cs = (2 * halfWidth) / (gridRes - 1);
+      const field = new Float32Array(gridRes * gridRes * gridRes);
+      for (let iz = 0; iz < gridRes; iz++) {
+        for (let iy = 0; iy < gridRes; iy++) {
+          for (let ix = 0; ix < gridRes; ix++) {
+            const x = -halfWidth + ix * cs;
+            const y = -halfWidth + iy * cs;
+            const z = -halfWidth + iz * cs;
+            const r2 = x * x + y * y + z * z;
+            // Field value: 1.5^2 - r^2 (positive inside sphere, negative outside)
+            field[iz * gridRes * gridRes + iy * gridRes + ix] = 2.25 - r2;
+          }
+        }
+      }
+
+      const mesh = marchingCubes(
+        field,
+        [gridRes, gridRes, gridRes],
+        [-halfWidth, -halfWidth, -halfWidth],
+        cs,
+        0.0,
+      );
+
+      const hasTriangles = mesh.indices.length > 0;
+      const hasPositions = mesh.positions.length > 0;
+      const hasNormals = mesh.normals.length > 0;
+      const passed = hasTriangles && hasPositions && hasNormals;
+      report(
+        'ORB-09',
+        'Marching cubes: sphere produces non-degenerate mesh',
+        passed,
+        `triangles=${mesh.indices.length / 3}, vertices=${mesh.positions.length / 3}`,
+        'triangles > 0, vertices > 0, normals > 0',
+      );
+    }
+  }
+
+  // ORB-10: computeOrbitalGrid produces non-trivial field
+  {
+    if (!isSkipped('ORB-10')) {
+      const grid = computeOrbitalGrid(2, 1, 0, 3.1358, [0, 0, 0], 16);
+      let hasPositive = false;
+      let hasNegative = false;
+      for (let i = 0; i < grid.values.length; i++) {
+        if (grid.values[i] > 0.001) hasPositive = true;
+        if (grid.values[i] < -0.001) hasNegative = true;
+      }
+      // A 2p orbital should have both positive and negative lobes
+      const passed = hasPositive && hasNegative;
+      report(
+        'ORB-10',
+        '2p_z orbital grid has positive and negative lobes',
+        passed,
+        `hasPositive=${hasPositive}, hasNegative=${hasNegative}`,
+        'both true',
+      );
+    }
+>>>>>>> 39270e4 (Add orbital wavefunction and marching cubes physics tests (#11))
   }
 }
 
@@ -2338,6 +2504,7 @@ runPBCTests();
 runWolfTests();
 runReactionTests();
 runBondDetectionTests();
+runOrbitalTests();
 
 // Summary
 console.log('\n' + '='.repeat(50));
