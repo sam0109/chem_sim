@@ -1510,6 +1510,22 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
     case 'neb-cancel':
       nebCancelled = true;
       break;
+
+    case 'calm':
+      // Zero all velocities to stop all motion (translational + rotational)
+      cachedEnergiesValid = false;
+      velocities.fill(0);
+      // Reset Nosé-Hoover chain state so thermostat doesn't immediately
+      // re-inject energy from stale chain variables
+      if (nhChainState && nAtoms > 0) {
+        nhChainState = createNoseHooverChainState(
+          nAtoms,
+          config.temperature,
+          config.thermostatTau,
+        );
+      }
+      sendState();
+      break;
   }
 };
 

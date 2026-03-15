@@ -456,6 +456,11 @@ export interface WorkerNEBCancelMessage {
   type: 'neb-cancel';
 }
 
+/** Zero all velocities and reset thermostat state */
+export interface WorkerCalmMessage {
+  type: 'calm';
+}
+
 export type WorkerInMessage =
   | WorkerInitMessage
   | WorkerStepMessage
@@ -468,7 +473,8 @@ export type WorkerInMessage =
   | WorkerBoxMessage
   | WorkerTransmuteAtomMessage
   | WorkerNEBMessage
-  | WorkerNEBCancelMessage;
+  | WorkerNEBCancelMessage
+  | WorkerCalmMessage;
 
 /** Per-force-type potential energy decomposition (all values in eV) */
 export interface EnergyBreakdown {
