@@ -20,6 +20,8 @@
 // sin(ω) expression.
 // ==============================================================
 
+import type { Vector3Tuple } from '../../data/types';
+
 /**
  * Compute inversion force and energy for center j with i out-of-plane.
  *
@@ -33,6 +35,7 @@
  * @param C0         cosine expansion coefficient 0
  * @param C1         cosine expansion coefficient 1
  * @param C2         cosine expansion coefficient 2
+ * @param boxSize    box dimensions for PBC minimum image (undefined = no PBC)
  * @returns potential energy in eV
  */
 export function inversionForce(
@@ -46,6 +49,7 @@ export function inversionForce(
   C0: number,
   C1: number,
   C2: number,
+  boxSize?: Vector3Tuple,
 ): number {
   if (K === 0) return 0;
 
@@ -55,17 +59,33 @@ export function inversionForce(
   const l3 = l * 3;
 
   // Vectors from center j to neighbors
-  const rji_x = positions[i3] - positions[j3];
-  const rji_y = positions[i3 + 1] - positions[j3 + 1];
-  const rji_z = positions[i3 + 2] - positions[j3 + 2];
+  let rji_x = positions[i3] - positions[j3];
+  let rji_y = positions[i3 + 1] - positions[j3 + 1];
+  let rji_z = positions[i3 + 2] - positions[j3 + 2];
 
-  const rjk_x = positions[k3] - positions[j3];
-  const rjk_y = positions[k3 + 1] - positions[j3 + 1];
-  const rjk_z = positions[k3 + 2] - positions[j3 + 2];
+  let rjk_x = positions[k3] - positions[j3];
+  let rjk_y = positions[k3 + 1] - positions[j3 + 1];
+  let rjk_z = positions[k3 + 2] - positions[j3 + 2];
 
-  const rjl_x = positions[l3] - positions[j3];
-  const rjl_y = positions[l3 + 1] - positions[j3 + 1];
-  const rjl_z = positions[l3 + 2] - positions[j3 + 2];
+  let rjl_x = positions[l3] - positions[j3];
+  let rjl_y = positions[l3 + 1] - positions[j3 + 1];
+  let rjl_z = positions[l3 + 2] - positions[j3 + 2];
+
+  // Apply minimum image convention for periodic boundaries
+  // Reference: Allen & Tildesley, "Computer Simulation of Liquids", Ch. 1.5.2
+  if (boxSize) {
+    rji_x -= boxSize[0] * Math.round(rji_x / boxSize[0]);
+    rji_y -= boxSize[1] * Math.round(rji_y / boxSize[1]);
+    rji_z -= boxSize[2] * Math.round(rji_z / boxSize[2]);
+
+    rjk_x -= boxSize[0] * Math.round(rjk_x / boxSize[0]);
+    rjk_y -= boxSize[1] * Math.round(rjk_y / boxSize[1]);
+    rjk_z -= boxSize[2] * Math.round(rjk_z / boxSize[2]);
+
+    rjl_x -= boxSize[0] * Math.round(rjl_x / boxSize[0]);
+    rjl_y -= boxSize[1] * Math.round(rjl_y / boxSize[1]);
+    rjl_z -= boxSize[2] * Math.round(rjl_z / boxSize[2]);
+  }
 
   // Normal to plane j-k-l: n = rjk × rjl
   const nx = rjk_y * rjl_z - rjk_z * rjl_y;

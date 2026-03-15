@@ -26,6 +26,7 @@ import { ReactionLog } from './ui/ReactionLog';
 import { EventLog } from './ui/EventLog';
 import { QuantityDashboard } from './ui/QuantityDashboard';
 import { TimelineControls } from './ui/TimelineControls';
+import { CrystalBuilderPanel } from './ui/CrystalBuilderPanel';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
 import { parseXYZ } from './io/xyz';
@@ -697,6 +698,7 @@ const App: React.FC = () => {
         <EventLog />
         <QuantityDashboard />
         <TimelineControls />
+        <CrystalBuilderPanel />
 
         <div
           data-testid="status-bar"

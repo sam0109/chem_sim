@@ -65,6 +65,9 @@ export interface SimulationStoreState {
   config: SimulationConfig;
   box: SimulationBox;
 
+  /** Whether GPU acceleration is active for non-bonded forces */
+  gpuAccelerated: boolean;
+
   // ---- Energy history for plotting ----
   energyHistory: Array<{
     step: number;
@@ -243,6 +246,7 @@ function buildStoreSlice(
     temperature: 0,
     config: { ...DEFAULT_CONFIG },
     box: { ...DEFAULT_BOX },
+    gpuAccelerated: false,
     energyHistory: [],
     trajectory: {
       recording: true,
@@ -392,6 +396,7 @@ function buildStoreSlice(
               ].slice(-MAX_REACTION_LOG),
             }
           : {}),
+        gpuAccelerated: state.gpuAccelerated ?? false,
         ...(newEvents.length > 0
           ? {
               eventLog: [...get().eventLog, ...newEvents].slice(-MAX_EVENT_LOG),

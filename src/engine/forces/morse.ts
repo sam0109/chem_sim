@@ -4,6 +4,8 @@
 // F(r) = 2 * De * a * [1 - exp(-a*(r - re))] * exp(-a*(r - re)) * (r_vec/r)
 // ==============================================================
 
+import type { Vector3Tuple } from '../../data/types';
+
 /**
  * Compute Morse bond force between two atoms and add to force arrays.
  * Returns the potential energy contribution (eV).
@@ -15,6 +17,7 @@
  * @param De        dissociation energy (eV)
  * @param alpha     Morse width parameter (1/Å)
  * @param re        equilibrium bond length (Å)
+ * @param boxSize   box dimensions for PBC minimum image (undefined = no PBC)
  */
 export function morseBondForce(
   positions: Float64Array,
@@ -24,13 +27,22 @@ export function morseBondForce(
   De: number,
   alpha: number,
   re: number,
+  boxSize?: Vector3Tuple,
 ): number {
   const i3 = i * 3;
   const j3 = j * 3;
 
-  const dx = positions[j3] - positions[i3];
-  const dy = positions[j3 + 1] - positions[i3 + 1];
-  const dz = positions[j3 + 2] - positions[i3 + 2];
+  let dx = positions[j3] - positions[i3];
+  let dy = positions[j3 + 1] - positions[i3 + 1];
+  let dz = positions[j3 + 2] - positions[i3 + 2];
+
+  // Apply minimum image convention for periodic boundaries
+  // Reference: Allen & Tildesley, "Computer Simulation of Liquids", Ch. 1.5.2
+  if (boxSize) {
+    dx -= boxSize[0] * Math.round(dx / boxSize[0]);
+    dy -= boxSize[1] * Math.round(dy / boxSize[1]);
+    dz -= boxSize[2] * Math.round(dz / boxSize[2]);
+  }
 
   const r = Math.sqrt(dx * dx + dy * dy + dz * dz);
   if (r < 1e-10) return 0;
