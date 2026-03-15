@@ -16,6 +16,7 @@ import {
 import type { SimulationStoreState } from './store/simulationStore';
 import { EnergyPlot } from './ui/EnergyPlot';
 import { PropertyPanel } from './ui/PropertyPanel';
+import { QuantityDashboard } from './ui/QuantityDashboard';
 import { exampleMolecules } from './io/examples';
 
 // Shared dropdown styles (matching App header)
@@ -269,6 +270,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
         {/* Per-panel components provided via context */}
         <PropertyPanel />
         <EnergyPlot />
+        <QuantityDashboard />
       </div>
     </SimulationContext.Provider>
   );
