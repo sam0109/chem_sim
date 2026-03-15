@@ -86,6 +86,12 @@ export class SimulationWorker {
     this.send({ type: 'minimize', maxSteps, tolerance });
   }
 
+  setVelocities(
+    entries: Array<{ atomIndex: number; velocity: [number, number, number] }>,
+  ): void {
+    this.send({ type: 'set-velocities', entries });
+  }
+
   terminate(): void {
     this.worker.terminate();
   }
