@@ -53,6 +53,40 @@ const ToolButton: React.FC<{
   </button>
 );
 
+/** Small checkbox-style toggle for individual annotation types */
+const AnnotationCheckbox: React.FC<{
+  label: string;
+  title: string;
+  checked: boolean;
+  onChange: () => void;
+  color: string;
+}> = ({ label, title, checked, onChange, color }) => (
+  <button
+    onClick={onChange}
+    title={title}
+    style={{
+      width: 40,
+      height: 18,
+      borderRadius: 3,
+      border: checked
+        ? `1px solid ${color}`
+        : '1px solid rgba(255,255,255,0.1)',
+      background: checked ? `${color}22` : 'rgba(30,30,50,0.6)',
+      color: checked ? color : '#666',
+      cursor: 'pointer',
+      fontSize: 8,
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+      padding: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}
+  >
+    {label}
+  </button>
+);
+
 export const Toolbar: React.FC = () => {
   const activeTool = useUIStore((s) => s.activeTool);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
@@ -85,6 +119,16 @@ export const Toolbar: React.FC = () => {
   const toggleTimeline = useUIStore((s) => s.toggleTimeline);
   const showCrystalBuilder = useUIStore((s) => s.showCrystalBuilder);
   const toggleCrystalBuilder = useUIStore((s) => s.toggleCrystalBuilder);
+  const showAnnotations = useUIStore((s) => s.showAnnotations);
+  const toggleAnnotations = useUIStore((s) => s.toggleAnnotations);
+  const annotationCharges = useUIStore((s) => s.annotationCharges);
+  const annotationBondEnergy = useUIStore((s) => s.annotationBondEnergy);
+  const annotationDipole = useUIStore((s) => s.annotationDipole);
+  const toggleAnnotationCharges = useUIStore((s) => s.toggleAnnotationCharges);
+  const toggleAnnotationBondEnergy = useUIStore(
+    (s) => s.toggleAnnotationBondEnergy,
+  );
+  const toggleAnnotationDipole = useUIStore((s) => s.toggleAnnotationDipole);
 
   // When selecting the place-molecule tool, show the encounter panel
   const handleToolSelect = useCallback(
@@ -392,6 +436,65 @@ export const Toolbar: React.FC = () => {
       >
         Bnd
       </button>
+
+      {/* Concept annotations toggle */}
+      <button
+        data-testid="toggle-annotations"
+        onClick={toggleAnnotations}
+        title="Concept Annotations (partial charges, bond energies, dipoles)"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showAnnotations
+            ? '2px solid #cc88ff'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showAnnotations
+            ? 'rgba(180,100,255,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        {'\u03B4\u00B1'}
+      </button>
+
+      {/* Annotation sub-toggles — visible when annotations are on */}
+      {showAnnotations && (
+        <div
+          data-testid="annotation-subtypes"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            padding: '2px 0',
+          }}
+        >
+          <AnnotationCheckbox
+            label="q"
+            title="Partial charges"
+            checked={annotationCharges}
+            onChange={toggleAnnotationCharges}
+            color="#6699ff"
+          />
+          <AnnotationCheckbox
+            label="De"
+            title="Bond energies (Morse De)"
+            checked={annotationBondEnergy}
+            onChange={toggleAnnotationBondEnergy}
+            color="#ffcc44"
+          />
+          <AnnotationCheckbox
+            label="dip"
+            title="Dipole moment arrows"
+            checked={annotationDipole}
+            onChange={toggleAnnotationDipole}
+            color="#44ddff"
+          />
+        </div>
+      )}
 
       {/* Separator */}
       <div
