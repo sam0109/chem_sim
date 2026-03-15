@@ -1,11 +1,17 @@
 // ==============================================================
 // Example molecules for quick loading
+//
+// Partial charges are set to 0 — they are computed dynamically
+// by Gasteiger charge equilibration in the simulation worker.
+// Exceptions: NaCl (ionic, ±1.0) and CO2 (bonds not detected
+// by bond detector — needs issues #2/#3 resolved first).
 // ==============================================================
 
 import type { Atom } from '../data/types';
 
 /**
  * Create a water molecule (H2O).
+ * Charges computed by Gasteiger: O ≈ -0.51, H ≈ +0.25
  */
 export function waterMolecule(): Atom[] {
   // UFF equilibrium: O-H re=0.990 Å, H-O-H θ=104.51°
@@ -20,7 +26,7 @@ export function waterMolecule(): Atom[] {
       position: [0, 0, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: -0.8476,
+      charge: 0,
       hybridization: 'sp3',
       fixed: false,
     },
@@ -30,7 +36,7 @@ export function waterMolecule(): Atom[] {
       position: [hx, hy, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.4238,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -40,7 +46,7 @@ export function waterMolecule(): Atom[] {
       position: [-hx, hy, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.4238,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -49,6 +55,7 @@ export function waterMolecule(): Atom[] {
 
 /**
  * Create a methane molecule (CH4).
+ * Charges computed by Gasteiger: C ≈ -0.09, H ≈ +0.02
  */
 export function methaneMolecule(): Atom[] {
   // Tetrahedral geometry
@@ -61,7 +68,7 @@ export function methaneMolecule(): Atom[] {
       position: [0, 0, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: -0.24,
+      charge: 0,
       hybridization: 'sp3',
       fixed: false,
     },
@@ -71,7 +78,7 @@ export function methaneMolecule(): Atom[] {
       position: [r, 0, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.06,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -85,7 +92,7 @@ export function methaneMolecule(): Atom[] {
       ],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.06,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -99,7 +106,7 @@ export function methaneMolecule(): Atom[] {
       ],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.06,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -109,7 +116,7 @@ export function methaneMolecule(): Atom[] {
       position: [0, -r, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.06,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -118,6 +125,7 @@ export function methaneMolecule(): Atom[] {
 
 /**
  * Create an ethanol molecule (C2H5OH).
+ * Charges computed by Gasteiger: O ≈ -0.44, H(O) ≈ +0.27
  */
 export function ethanolMolecule(): Atom[] {
   return [
@@ -128,7 +136,7 @@ export function ethanolMolecule(): Atom[] {
       position: [0, 0, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: -0.18,
+      charge: 0,
       hybridization: 'sp3',
       fixed: false,
     },
@@ -139,7 +147,7 @@ export function ethanolMolecule(): Atom[] {
       position: [1.52, 0, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.145,
+      charge: 0,
       hybridization: 'sp3',
       fixed: false,
     },
@@ -150,7 +158,7 @@ export function ethanolMolecule(): Atom[] {
       position: [2.14, 1.21, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: -0.683,
+      charge: 0,
       hybridization: 'sp3',
       fixed: false,
     },
@@ -161,7 +169,7 @@ export function ethanolMolecule(): Atom[] {
       position: [3.1, 1.21, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.418,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -172,7 +180,7 @@ export function ethanolMolecule(): Atom[] {
       position: [-0.36, 1.02, 0],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.06,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -183,7 +191,7 @@ export function ethanolMolecule(): Atom[] {
       position: [-0.36, -0.51, 0.88],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.06,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -194,7 +202,7 @@ export function ethanolMolecule(): Atom[] {
       position: [-0.36, -0.51, -0.88],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.06,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -205,7 +213,7 @@ export function ethanolMolecule(): Atom[] {
       position: [1.88, -0.51, 0.88],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.06,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -216,7 +224,7 @@ export function ethanolMolecule(): Atom[] {
       position: [1.88, -0.51, -0.88],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
-      charge: 0.06,
+      charge: 0,
       hybridization: 'none',
       fixed: false,
     },
@@ -225,6 +233,9 @@ export function ethanolMolecule(): Atom[] {
 
 /**
  * Create a sodium chloride ion pair.
+ * NaCl uses formal ionic charges (±1.0) — Gasteiger is not
+ * appropriate for ionic compounds. These are preserved because
+ * the bond detector classifies Na-Cl as ionic.
  */
 export function naclPair(): Atom[] {
   return [
@@ -253,6 +264,10 @@ export function naclPair(): Atom[] {
 
 /**
  * Create a CO2 molecule.
+ * CO2 retains hardcoded charges because C=O double bonds are not
+ * detected by the bond detector at this distance (needs issues
+ * #2 linear angle handling and #3 double bond params). Once those
+ * are resolved, these can be set to 0 like the other molecules.
  */
 export function co2Molecule(): Atom[] {
   return [
