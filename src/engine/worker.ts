@@ -6,6 +6,7 @@ import type {
   Atom,
   Bond,
   Hybridization,
+  MoleculeInfo,
   SimulationBox,
   SimulationConfig,
   WorkerInMessage,
@@ -33,6 +34,7 @@ import {
 import { CellList } from './neighborList';
 import { computeGasteigerCharges, buildCovalentAtomSet } from './gasteiger';
 import { detectHybridization } from './hybridization';
+import { findMolecules, computeMoleculeInfo } from './moleculeTracker';
 
 // ---- Simulation state ----
 let nAtoms = 0;
@@ -82,6 +84,10 @@ const exclusionSet: Set<string> = new Set();
 let dragAtomId = -1;
 let dragTarget: [number, number, number] = [0, 0, 0];
 const DRAG_SPRING_K = 5.0; // eV/ų
+
+// Molecule tracking state (updated each topology rebuild)
+let moleculeIds: Int32Array = new Int32Array(0);
+let moleculeInfo: MoleculeInfo[] = [];
 
 // ---- Force field parameter setup ----
 function rebuildTopology(): void {
@@ -152,6 +158,16 @@ function rebuildTopology(): void {
   if (!cellList) {
     cellList = new CellList(config.cutoff, Math.max(nAtoms, 100));
   }
+
+  // Identify molecules (connected components of the bond graph)
+  moleculeIds = findMolecules(bonds, nAtoms);
+  moleculeInfo = computeMoleculeInfo(
+    moleculeIds,
+    positions,
+    charges,
+    masses,
+    nAtoms,
+  );
 }
 
 function getLJCached(
@@ -531,6 +547,8 @@ function sendState(): void {
       total: kineticEnergy + potentialEnergy,
     },
     temperature,
+    moleculeIds: moleculeIds.slice(),
+    molecules: [...moleculeInfo],
   };
 
   self.postMessage(msg);
