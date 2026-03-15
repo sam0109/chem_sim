@@ -53,17 +53,19 @@ export function parseXYZ(content: string): Atom[] {
 /**
  * Write atoms to XYZ format string.
  */
-export function writeXYZ(atoms: Atom[], comment: string = 'chem_sim export'): string {
-  const lines: string[] = [
-    String(atoms.length),
-    comment,
-  ];
+export function writeXYZ(
+  atoms: Atom[],
+  comment: string = 'chem_sim export',
+): string {
+  const lines: string[] = [String(atoms.length), comment];
 
   for (const atom of atoms) {
     const el = getElementBySymbol(String(atom.elementNumber));
     const sym = el?.symbol ?? 'X';
     const [x, y, z] = atom.position;
-    lines.push(`${sym.padEnd(4)} ${x.toFixed(6).padStart(12)} ${y.toFixed(6).padStart(12)} ${z.toFixed(6).padStart(12)}`);
+    lines.push(
+      `${sym.padEnd(4)} ${x.toFixed(6).padStart(12)} ${y.toFixed(6).padStart(12)} ${z.toFixed(6).padStart(12)}`,
+    );
   }
 
   return lines.join('\n') + '\n';

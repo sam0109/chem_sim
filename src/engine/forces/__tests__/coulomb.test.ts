@@ -4,7 +4,10 @@ import { coulombForce, KE } from '../coulomb.ts';
 /**
  * Helper: create a two-atom system along the x-axis.
  */
-function makePair(r: number): { positions: Float64Array; forces: Float64Array } {
+function makePair(r: number): {
+  positions: Float64Array;
+  forces: Float64Array;
+} {
   const positions = new Float64Array([0, 0, 0, r, 0, 0]);
   const forces = new Float64Array(6);
   return { positions, forces };
@@ -14,8 +17,11 @@ function makePair(r: number): { positions: Float64Array; forces: Float64Array } 
  * Central finite-difference gradient check.
  */
 function checkGradient(
-  qi: number, qj: number, cutoff: number,
-  r: number, h = 1e-5,
+  qi: number,
+  qj: number,
+  cutoff: number,
+  r: number,
+  h = 1e-5,
 ): void {
   const { positions } = makePair(r);
   const analyticalForces = new Float64Array(6);
@@ -92,7 +98,7 @@ describe('coulombForce', () => {
     expect(energy).toBe(0);
   });
 
-  it('obeys Newton\'s 3rd law', () => {
+  it("obeys Newton's 3rd law", () => {
     const r = 4.0;
     const { positions, forces } = makePair(r);
     coulombForce(positions, forces, 0, 1, 0.5, -0.8, cutoff);
@@ -153,7 +159,15 @@ describe('coulombForce', () => {
     coulombForce(positions, forces, 0, 1, 1.0, 1.0, cutoff);
 
     const forcesClean = new Float64Array(6);
-    coulombForce(new Float64Array(positions), forcesClean, 0, 1, 1.0, 1.0, cutoff);
+    coulombForce(
+      new Float64Array(positions),
+      forcesClean,
+      0,
+      1,
+      1.0,
+      1.0,
+      cutoff,
+    );
 
     expect(forces[0]).toBeCloseTo(1.0 + forcesClean[0], 10);
     expect(forces[3]).toBeCloseTo(4.0 + forcesClean[3], 10);

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { velocityVerletStep, computeTemperature, initializeVelocities } from '../integrator.ts';
+import {
+  velocityVerletStep,
+  computeTemperature,
+  initializeVelocities,
+} from '../integrator.ts';
 
 describe('computeTemperature', () => {
   it('returns 0 for zero kinetic energy', () => {
@@ -56,13 +60,22 @@ describe('velocityVerletStep', () => {
     computeForces(positions, forces);
 
     // Run for 100 steps and check energy conservation
-    const { kineticEnergy: ke0, potentialEnergy: pe0 } = { kineticEnergy: 0, potentialEnergy: 0.5 * k * 1.0 };
+    const { kineticEnergy: ke0, potentialEnergy: pe0 } = {
+      kineticEnergy: 0,
+      potentialEnergy: 0.5 * k * 1.0,
+    };
     const E0 = ke0 + pe0;
 
     let maxDrift = 0;
     for (let step = 0; step < 100; step++) {
       const { kineticEnergy, potentialEnergy } = velocityVerletStep(
-        positions, velocities, forces, masses, fixed, dt, computeForces
+        positions,
+        velocities,
+        forces,
+        masses,
+        fixed,
+        dt,
+        computeForces,
       );
       const Etot = kineticEnergy + potentialEnergy;
       const drift = Math.abs(Etot - E0) / E0;
@@ -81,9 +94,21 @@ describe('velocityVerletStep', () => {
     const fixed = new Uint8Array([1]); // fixed
     const dt = 1.0;
 
-    const computeForces = (_pos: Float64Array, _frc: Float64Array): number => 0;
+    const computeForces = (_pos: Float64Array, _frc: Float64Array): number => {
+      void _pos;
+      void _frc;
+      return 0;
+    };
 
-    velocityVerletStep(positions, velocities, forces, masses, fixed, dt, computeForces);
+    velocityVerletStep(
+      positions,
+      velocities,
+      forces,
+      masses,
+      fixed,
+      dt,
+      computeForces,
+    );
 
     expect(positions[0]).toBe(1.0);
     expect(positions[1]).toBe(2.0);
@@ -98,9 +123,21 @@ describe('velocityVerletStep', () => {
     const fixed = new Uint8Array([0]);
     const dt = 1.0;
 
-    const computeForces = (_pos: Float64Array, _frc: Float64Array): number => 0;
+    const computeForces = (_pos: Float64Array, _frc: Float64Array): number => {
+      void _pos;
+      void _frc;
+      return 0;
+    };
 
-    velocityVerletStep(positions, velocities, forces, masses, fixed, dt, computeForces);
+    velocityVerletStep(
+      positions,
+      velocities,
+      forces,
+      masses,
+      fixed,
+      dt,
+      computeForces,
+    );
 
     // Position should have moved in +x direction
     expect(positions[0]).toBeGreaterThan(0);
@@ -114,9 +151,21 @@ describe('velocityVerletStep', () => {
     const fixed = new Uint8Array([0]);
     const dt = 0.1;
 
-    const computeForces = (_pos: Float64Array, _frc: Float64Array): number => 0.5;
+    const computeForces = (_pos: Float64Array, _frc: Float64Array): number => {
+      void _pos;
+      void _frc;
+      return 0.5;
+    };
 
-    const result = velocityVerletStep(positions, velocities, forces, masses, fixed, dt, computeForces);
+    const result = velocityVerletStep(
+      positions,
+      velocities,
+      forces,
+      masses,
+      fixed,
+      dt,
+      computeForces,
+    );
 
     expect(result.potentialEnergy).toBe(0.5);
     expect(result.kineticEnergy).toBeGreaterThanOrEqual(0);
@@ -160,7 +209,9 @@ describe('initializeVelocities', () => {
 
     // Center of mass velocity should be ~0
     let totalMass = 0;
-    let vcomX = 0, vcomY = 0, vcomZ = 0;
+    let vcomX = 0,
+      vcomY = 0,
+      vcomZ = 0;
     for (let i = 0; i < 3; i++) {
       totalMass += masses[i];
       vcomX += masses[i] * velocities[i * 3];

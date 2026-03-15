@@ -20,6 +20,7 @@ This document defines the process by which an AI agent claims, plans, implements
 ### Procedure
 
 1. **List unclaimed issues:**
+
    ```bash
    gh issue list --assignee "" --limit 20 --json number,title,labels
    ```
@@ -27,20 +28,24 @@ This document defines the process by which an AI agent claims, plans, implements
 2. **Pick an issue based on priority.** Priority order: `guardrails > P1 > P2 > P3 > P4 > P6 > P5`. If multiple issues share the same highest priority, **pick one at random** (do not always pick the first).
 
 3. **Assign the issue to yourself:**
+
    ```bash
    gh issue edit <NUMBER> --add-assignee "@me"
    ```
 
 4. **Post a claim comment with a unique hash.** Generate a short random hex string (8+ characters) and post it as a comment:
+
    ```bash
    CLAIM_HASH=$(python3 -c "import secrets; print(secrets.token_hex(4))")
    gh issue comment <NUMBER> --body "CLAIM: $CLAIM_HASH"
    ```
 
 5. **Verify your claim won the race.** Re-read the issue comments and check whether your `CLAIM: <hash>` comment is the **first** comment on the issue:
+
    ```bash
    FIRST_COMMENT=$(gh issue view <NUMBER> --json comments --jq '.comments[0].body')
    ```
+
    - If the first comment is `CLAIM: <your-hash>` → you own the issue. Proceed.
    - If the first comment is a different `CLAIM:` → another agent claimed it first. Leave the assignment and your comment in place (removing the assignee would disrupt the winning agent), and go back to step 1 to pick a different issue.
 
@@ -60,6 +65,7 @@ Assignment alone is not atomic — two agents can assign themselves to the same 
 **Goal:** Break the issue into small, concrete, verifiable steps. Post the plan to the issue as a comment before writing any code.
 
 ### Plan requirements:
+
 - Each step must be completable in isolation (no step depends on uncommitted work from another step)
 - Each step must have a **verification criterion** — how you'll know it's done
 - Steps should be ordered: data/types first, engine logic second, tests third, UI last
@@ -77,26 +83,27 @@ Assignment alone is not atomic — two agents can assign themselves to the same 
 ### Steps
 
 - [ ] **Step 0 — Context gathering**
-  Read: <list of files to understand>
-  Verify: Can describe the current behavior and what needs to change
+      Read: <list of files to understand>
+      Verify: Can describe the current behavior and what needs to change
 
 - [ ] **Step 1 — <concrete change>**
-  Files: <which files are created or modified>
-  Verify: <how to check this step worked — a specific test, a command, or an assertion>
+      Files: <which files are created or modified>
+      Verify: <how to check this step worked — a specific test, a command, or an assertion>
 
 - [ ] **Step 2 — <concrete change>**
-  Files: ...
-  Verify: ...
+      Files: ...
+      Verify: ...
 
 ...
 
 - [ ] **Step N — Run full test suite**
-  Command: `npx tsx src/engine/tests.ts`
-  Verify: No regressions — passing count >= previous count
-  Command: `npx vite build`
-  Verify: Clean build, no errors
+      Command: `npx tsx src/engine/tests.ts`
+      Verify: No regressions — passing count >= previous count
+      Command: `npx vite build`
+      Verify: Clean build, no errors
 
 ### Risks / Open Questions
+
 - <anything uncertain that might change the plan>
 ```
 
@@ -133,6 +140,7 @@ npm install
 ```
 
 When done (after merge), clean up the worktree:
+
 ```bash
 cd ../chem_sim
 git worktree remove ../chem_sim-<NUMBER>
@@ -169,6 +177,7 @@ For each step in the plan:
 5. **Mark the step complete**
 
 ### Rules during implementation:
+
 - **One concern per commit.** Don't mix refactoring with new features.
 - **Run physics tests after every engine change:** `npx tsx src/engine/tests.ts`
 - **Run type check after every change:** `npx tsc --noEmit`
@@ -244,6 +253,7 @@ Spawn a sub-agent to review the PR. The reviewer agent must:
 ### Review process:
 
 1. **Read the diff:**
+
    ```bash
    gh pr diff <PR-NUMBER>
    ```
@@ -264,6 +274,7 @@ Spawn a sub-agent to review the PR. The reviewer agent must:
    - Is there duplicated logic? (request refactor)
 
 5. **Run the tests locally:**
+
    ```bash
    git checkout <branch>
    npx tsx src/engine/tests.ts
@@ -278,6 +289,7 @@ Spawn a sub-agent to review the PR. The reviewer agent must:
    ```
 
 ### If changes requested:
+
 - The implementing agent addresses each comment
 - Pushes fixes as new commits
 - Re-requests review
@@ -293,6 +305,7 @@ gh pr merge <PR-NUMBER> --squash --delete-branch
 ```
 
 Use squash merge to keep `main` history clean. The squash message should be:
+
 ```
 <Issue title> (#<NUMBER>)
 ```
@@ -309,24 +322,29 @@ Use squash merge to keep `main` history clean. The squash message should be:
 ## Reflection
 
 ### What went well
+
 - <bullet points — e.g., "Plan was accurate, no steps needed to be added mid-implementation">
 - <e.g., "Gradient test caught a sign error before it reached main">
 
 ### What went poorly
+
 - <bullet points — e.g., "Step 3 was too large — should have been split into two steps">
 - <e.g., "Spent 30 minutes debugging a unit conversion that should have been caught by reading the existing code more carefully in Step 0">
 
 ### Lessons for future agents
+
 - <actionable advice — e.g., "Always run the debug harness (npx tsx src/engine/debug.ts) before and after engine changes, not just the test suite">
 - <e.g., "When adding a new force function, write the gradient test FIRST, then implement the force">
 
 ### Metrics
+
 - **Plan accuracy:** X of Y steps completed as written (Z added, W removed)
 - **Test impact:** Physics tests went from A/B to C/D passing
 - **Review rounds:** N (1 = approved first time)
 - **Follow-up issues created:** <list issue numbers or "none">
 
 ### Time estimate vs actual
+
 - Estimated: <X steps, roughly Y complexity>
 - Actual: <what happened>
 ```
@@ -353,6 +371,7 @@ gh issue create --title "<follow-up title>" --label "<appropriate label>" --body
 ```
 
 **Rules for follow-up issues:**
+
 - Search existing issues by keyword before creating. If in doubt, don't create — comment on the closest existing issue instead.
 - Never create an issue that is a subset of an existing issue. Add a comment to the existing issue noting the new detail.
 - If the follow-up overlaps partially with an existing issue, reference both in the new issue body and explain what is distinct.
@@ -411,13 +430,13 @@ gh issue create --title "<follow-up title>" --label "<appropriate label>" --body
 
 ## Labels Reference
 
-| Label | Meaning |
-|-------|---------|
-| `in progress` | An agent has claimed and is actively working on this |
-| `P1: critical physics` | Missing physics causing incorrect behavior |
-| `P2: accuracy` | Accuracy improvements to existing physics |
-| `P3: feature` | New feature additions |
-| `P4: tech debt` | Known bugs and technical debt |
-| `P5: ambitious` | Big-dream features |
-| `P6: education` | Educational features (physically grounded) |
-| `guardrails` | CI, testing, process infrastructure |
+| Label                  | Meaning                                              |
+| ---------------------- | ---------------------------------------------------- |
+| `in progress`          | An agent has claimed and is actively working on this |
+| `P1: critical physics` | Missing physics causing incorrect behavior           |
+| `P2: accuracy`         | Accuracy improvements to existing physics            |
+| `P3: feature`          | New feature additions                                |
+| `P4: tech debt`        | Known bugs and technical debt                        |
+| `P5: ambitious`        | Big-dream features                                   |
+| `P6: education`        | Educational features (physically grounded)           |
+| `guardrails`           | CI, testing, process infrastructure                  |

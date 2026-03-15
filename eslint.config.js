@@ -1,10 +1,11 @@
-import js from '@eslint/js'
-import globals from 'globals'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
-import boundaries from 'eslint-plugin-boundaries'
-import tseslint from 'typescript-eslint'
-import { defineConfig, globalIgnores } from 'eslint/config'
+import js from '@eslint/js';
+import globals from 'globals';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import boundaries from 'eslint-plugin-boundaries';
+import tseslint from 'typescript-eslint';
+import prettierConfig from 'eslint-config-prettier/flat';
+import { defineConfig, globalIgnores } from 'eslint/config';
 
 export default defineConfig([
   globalIgnores(['dist']),
@@ -59,18 +60,25 @@ export default defineConfig([
       //   root     → data, io, store, renderer, ui (App.tsx wires everything)
       //
       // Each layer may always import from itself (intra-layer).
-      'boundaries/element-types': [2, {
-        default: 'disallow',
-        rules: [
-          { from: ['data'], allow: ['data'] },
-          { from: ['engine'], allow: ['engine', 'data', 'io'] },
-          { from: ['io'], allow: ['io', 'data'] },
-          { from: ['store'], allow: ['store', 'data', 'root'] },
-          { from: ['renderer'], allow: ['renderer', 'data', 'store'] },
-          { from: ['ui'], allow: ['ui', 'data', 'store'] },
-          { from: ['root'], allow: ['root', 'data', 'io', 'store', 'renderer', 'ui'] },
-        ],
-      }],
+      'boundaries/element-types': [
+        2,
+        {
+          default: 'disallow',
+          rules: [
+            { from: ['data'], allow: ['data'] },
+            { from: ['engine'], allow: ['engine', 'data', 'io'] },
+            { from: ['io'], allow: ['io', 'data'] },
+            { from: ['store'], allow: ['store', 'data', 'root'] },
+            { from: ['renderer'], allow: ['renderer', 'data', 'store'] },
+            { from: ['ui'], allow: ['ui', 'data', 'store'] },
+            {
+              from: ['root'],
+              allow: ['root', 'data', 'io', 'store', 'renderer', 'ui'],
+            },
+          ],
+        },
+      ],
     },
   },
-])
+  prettierConfig,
+]);

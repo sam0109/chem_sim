@@ -108,13 +108,13 @@ src/
 
 ### Potentials
 
-| Interaction         | Potential                                                                     | Parameters from         |
-|---------------------|-------------------------------------------------------------------------------|-------------------------|
-| Covalent bonds      | Morse: V = Dₑ[1 − e^(−α(r−rₑ))]²                                           | UFF bond radii + Z*     |
-| Angle bending       | Cosine harmonic: V = (k_c/2)(cosθ − cosθ₀)²                                 | UFF Eq. 13              |
-| Van der Waals       | LJ 12-6: V = 4ε[(σ/r)¹² − (σ/r)⁶]                                          | UFF xᵢ, Dᵢ             |
-| Electrostatics      | Shifted Coulomb: V = kₑ qᵢqⱼ (1/r − 1/rₓ)                                  | Partial charges          |
-| Short-range overlap | Pauli: V = A·exp(−b(r − rₘᵢₙ))                                              | Covalent radii           |
+| Interaction         | Potential                                   | Parameters from      |
+| ------------------- | ------------------------------------------- | -------------------- |
+| Covalent bonds      | Morse: V = Dₑ[1 − e^(−α(r−rₑ))]²            | UFF bond radii + Z\* |
+| Angle bending       | Cosine harmonic: V = (k_c/2)(cosθ − cosθ₀)² | UFF Eq. 13           |
+| Van der Waals       | LJ 12-6: V = 4ε[(σ/r)¹² − (σ/r)⁶]           | UFF xᵢ, Dᵢ           |
+| Electrostatics      | Shifted Coulomb: V = kₑ qᵢqⱼ (1/r − 1/rₓ)   | Partial charges      |
+| Short-range overlap | Pauli: V = A·exp(−b(r − rₘᵢₙ))              | Covalent radii       |
 
 ### Exclusion Rules
 
@@ -151,7 +151,7 @@ Berendsen thermostat: λ = √(1 + Δt/τ · (T_target/T − 1)), clamped to [0.
 ## UI Controls
 
 | Key | Action          |
-|-----|-----------------|
+| --- | --------------- |
 | S   | Select tool     |
 | A   | Place atom tool |
 | D   | Delete tool     |
@@ -161,13 +161,13 @@ Berendsen thermostat: λ = √(1 + Δt/τ · (T_target/T − 1)), clamped to [0.
 
 ## Built-in Molecules
 
-| Name               | Atoms | Formula    | Key properties                           |
-|--------------------|-------|------------|------------------------------------------|
-| Water              | 3     | H₂O       | O-H 0.990 Å, ∠HOH 104.51°, SPC charges |
-| Methane            | 5     | CH₄       | Tetrahedral, C-H 1.09 Å                 |
-| Ethanol            | 9     | C₂H₅OH   | C-C 1.52 Å, C-O + O-H bonds             |
-| Sodium Chloride    | 2     | NaCl      | Ionic, 2.36 Å separation, ±1.0 e        |
-| Carbon Dioxide     | 3     | CO₂       | Linear, C=O 1.16 Å                      |
+| Name            | Atoms | Formula | Key properties                         |
+| --------------- | ----- | ------- | -------------------------------------- |
+| Water           | 3     | H₂O     | O-H 0.990 Å, ∠HOH 104.51°, SPC charges |
+| Methane         | 5     | CH₄     | Tetrahedral, C-H 1.09 Å                |
+| Ethanol         | 9     | C₂H₅OH  | C-C 1.52 Å, C-O + O-H bonds            |
+| Sodium Chloride | 2     | NaCl    | Ionic, 2.36 Å separation, ±1.0 e       |
+| Carbon Dioxide  | 3     | CO₂     | Linear, C=O 1.16 Å                     |
 
 ## Running Tests
 
@@ -180,20 +180,20 @@ See [GitHub Issues](https://github.com/sam0109/chem_sim/issues) for the full roa
 
 ## Dependencies
 
-| Package                    | Purpose                                |
-|----------------------------|----------------------------------------|
-| three                      | 3D rendering engine                    |
-| @react-three/fiber         | React renderer for Three.js            |
-| @react-three/drei          | R3F helpers (OrbitControls, Html, Grid) |
-| @react-three/postprocessing| Post-processing effects (future)       |
-| zustand                    | Lightweight state management           |
-| react / react-dom          | UI framework                           |
-| vite                       | Build tool + HMR                       |
-| vite-plugin-glsl           | GLSL shader imports                    |
+| Package                     | Purpose                                 |
+| --------------------------- | --------------------------------------- |
+| three                       | 3D rendering engine                     |
+| @react-three/fiber          | React renderer for Three.js             |
+| @react-three/drei           | R3F helpers (OrbitControls, Html, Grid) |
+| @react-three/postprocessing | Post-processing effects (future)        |
+| zustand                     | Lightweight state management            |
+| react / react-dom           | UI framework                            |
+| vite                        | Build tool + HMR                        |
+| vite-plugin-glsl            | GLSL shader imports                     |
 
 ## References
 
-- Rappé, A.K. *et al.* "UFF, a Full Periodic Table Force Field." *J. Am. Chem. Soc.* **114**, 10024–10035 (1992).
+- Rappé, A.K. _et al._ "UFF, a Full Periodic Table Force Field." _J. Am. Chem. Soc._ **114**, 10024–10035 (1992).
 - Blue Obelisk Data Repository — atomic radii, CPK colors, electronegativities
 - NIST CCCBDB — experimental bond lengths and angles for validation
 
@@ -204,6 +204,7 @@ ChemSim uses AI agents to implement features from GitHub Issues. See [AGENTS.md]
 ### Launching an agent
 
 **Option A — Dev container (recommended):**
+
 ```bash
 # 1. Copy .env.example to .env and add your GitHub PAT
 cp .env.example .env
@@ -218,6 +219,7 @@ docker compose run --rm agent
 The container clones the repo, installs dependencies, and launches Claude Code with `--dangerously-skip-permissions`. Claude Code follows AGENTS.md autonomously — it selects an unclaimed issue, claims it, creates a branch, implements the fix, opens a PR, reviews it, and merges.
 
 **Option B — Git worktree (no Docker needed):**
+
 ```bash
 cd chem_sim
 git worktree add ../chem_sim-42 -b 42-my-feature main

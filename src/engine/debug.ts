@@ -7,13 +7,17 @@ import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
 import { pauliRepulsion } from './forces/pauli';
 import { detectBonds, buildAngleList } from './bondDetector';
-import { velocityVerletStep, initializeVelocities, computeTemperature } from './integrator';
+import {
+  velocityVerletStep,
+  initializeVelocities,
+  computeTemperature,
+} from './integrator';
 import { berendsenThermostat } from './thermostat';
 
 function debugWater(): void {
   console.log('=== WATER SIMULATION TEST ===\n');
-  const re = 0.990;
-  const ha = (104.51 / 2) * Math.PI / 180;
+  const re = 0.99;
+  const ha = ((104.51 / 2) * Math.PI) / 180;
   const hx = re * Math.sin(ha);
   const hy = re * Math.cos(ha);
   const Z = [8, 1, 1];
@@ -34,8 +38,15 @@ function debugWater(): void {
   let bonds: ReturnType<typeof detectBonds> = [];
   let angs: Array<[number, number, number]> = [];
   const excl = new Set<string>();
-  let bp: Array<{ i: number; j: number; De: number; alpha: number; re: number }> = [];
-  let ap: Array<{ i: number; j: number; k: number; kA: number; t0: number }> = [];
+  let bp: Array<{
+    i: number;
+    j: number;
+    De: number;
+    alpha: number;
+    re: number;
+  }> = [];
+  let ap: Array<{ i: number; j: number; k: number; kA: number; t0: number }> =
+    [];
 
   function rebuildTopo(): void {
     bonds = detectBonds(pos, Z, 1.2, bonds, 1.5);
@@ -61,8 +72,10 @@ function debugWater(): void {
   // Force function (topology is FIXED during integration)
   function calcForces(p: Float64Array, f: Float64Array): number {
     let pe = 0;
-    for (const b of bp) pe += morseBondForce(p, f, b.i, b.j, b.De, b.alpha, b.re);
-    for (const a of ap) pe += harmonicAngleForce(p, f, a.i, a.j, a.k, a.kA, a.t0);
+    for (const b of bp)
+      pe += morseBondForce(p, f, b.i, b.j, b.De, b.alpha, b.re);
+    for (const a of ap)
+      pe += harmonicAngleForce(p, f, a.i, a.j, a.k, a.kA, a.t0);
     for (let i = 0; i < N; i++) {
       for (let j = i + 1; j < N; j++) {
         if (excl.has(i + '-' + j)) continue;
@@ -93,27 +106,57 @@ function debugWater(): void {
   calcForces(new Float64Array(pos), testFrc);
   console.log('Analytical forces:');
   for (let ai = 0; ai < N; ai++) {
-    console.log('  ' + elements[Z[ai]].symbol + ': [' + testFrc[ai*3].toFixed(6) + ', ' + testFrc[ai*3+1].toFixed(6) + ', ' + testFrc[ai*3+2].toFixed(6) + ']');
+    console.log(
+      '  ' +
+        elements[Z[ai]].symbol +
+        ': [' +
+        testFrc[ai * 3].toFixed(6) +
+        ', ' +
+        testFrc[ai * 3 + 1].toFixed(6) +
+        ', ' +
+        testFrc[ai * 3 + 2].toFixed(6) +
+        ']',
+    );
   }
   console.log('Numerical forces (-dE/dx central diff):');
   for (let ai = 0; ai < N; ai++) {
     const numF = [0, 0, 0];
     for (let d = 0; d < 3; d++) {
-      const p1 = new Float64Array(pos); p1[ai*3+d] += h;
-      const p2 = new Float64Array(pos); p2[ai*3+d] -= h;
-      const f1 = new Float64Array(9); const f2 = new Float64Array(9);
+      const p1 = new Float64Array(pos);
+      p1[ai * 3 + d] += h;
+      const p2 = new Float64Array(pos);
+      p2[ai * 3 + d] -= h;
+      const f1 = new Float64Array(9);
+      const f2 = new Float64Array(9);
       const e1 = calcForces(p1, f1);
       const e2 = calcForces(p2, f2);
       numF[d] = -(e1 - e2) / (2 * h);
     }
-    const err = Math.sqrt((numF[0]-testFrc[ai*3])**2 + (numF[1]-testFrc[ai*3+1])**2 + (numF[2]-testFrc[ai*3+2])**2);
-    console.log('  ' + elements[Z[ai]].symbol + ': [' + numF[0].toFixed(6) + ', ' + numF[1].toFixed(6) + ', ' + numF[2].toFixed(6) + '] err=' + err.toExponential(3));
+    const err = Math.sqrt(
+      (numF[0] - testFrc[ai * 3]) ** 2 +
+        (numF[1] - testFrc[ai * 3 + 1]) ** 2 +
+        (numF[2] - testFrc[ai * 3 + 2]) ** 2,
+    );
+    console.log(
+      '  ' +
+        elements[Z[ai]].symbol +
+        ': [' +
+        numF[0].toFixed(6) +
+        ', ' +
+        numF[1].toFixed(6) +
+        ', ' +
+        numF[2].toFixed(6) +
+        '] err=' +
+        err.toExponential(3),
+    );
   }
 
   frc.fill(0);
   calcForces(pos, frc);
 
-  let minAng = 999, maxAng = 0, minHH = 999;
+  let minAng = 999,
+    maxAng = 0,
+    minHH = 999;
   let hhDetected = false;
   const STEPS_PER_FRAME = 5;
   const TOTAL_STEPS = 6000;
@@ -131,38 +174,55 @@ function debugWater(): void {
     }
 
     // Measure
-    const dx1 = pos[3] - pos[0], dy1 = pos[4] - pos[1], dz1 = pos[5] - pos[2];
-    const dx2 = pos[6] - pos[0], dy2 = pos[7] - pos[1], dz2 = pos[8] - pos[2];
+    const dx1 = pos[3] - pos[0],
+      dy1 = pos[4] - pos[1],
+      dz1 = pos[5] - pos[2];
+    const dx2 = pos[6] - pos[0],
+      dy2 = pos[7] - pos[1],
+      dz2 = pos[8] - pos[2];
     const r1 = Math.sqrt(dx1 * dx1 + dy1 * dy1 + dz1 * dz1);
     const r2 = Math.sqrt(dx2 * dx2 + dy2 * dy2 + dz2 * dz2);
     const ct = (dx1 * dx2 + dy1 * dy2 + dz1 * dz2) / (r1 * r2);
-    const ang = Math.acos(Math.max(-1, Math.min(1, ct))) * 180 / Math.PI;
-    const dHH = Math.sqrt((pos[6] - pos[3]) ** 2 + (pos[7] - pos[4]) ** 2 + (pos[8] - pos[5]) ** 2);
+    const ang = (Math.acos(Math.max(-1, Math.min(1, ct))) * 180) / Math.PI;
+    const dHH = Math.sqrt(
+      (pos[6] - pos[3]) ** 2 + (pos[7] - pos[4]) ** 2 + (pos[8] - pos[5]) ** 2,
+    );
     const T = computeTemperature(r.kineticEnergy, N);
 
     minAng = Math.min(minAng, ang);
     maxAng = Math.max(maxAng, ang);
     minHH = Math.min(minHH, dHH);
 
-    const hh = bonds.find(b => Z[b.atomA] === 1 && Z[b.atomB] === 1);
+    const hh = bonds.find((b) => Z[b.atomA] === 1 && Z[b.atomB] === 1);
     if (hh) hhDetected = true;
 
     if (s < 10 || s % 300 === 0) {
       console.log(
-        '  ' + String(s).padStart(4) +
-        ': ang=' + ang.toFixed(1) +
-        ' HH=' + dHH.toFixed(3) +
-        ' OH1=' + r1.toFixed(3) +
-        ' OH2=' + r2.toFixed(3) +
-        ' T=' + T.toFixed(0) + 'K' +
-        ' E=' + (r.kineticEnergy + r.potentialEnergy).toFixed(4) +
-        ' bonds=' + bonds.length +
-        (hh ? ' HH!' : '')
+        '  ' +
+          String(s).padStart(4) +
+          ': ang=' +
+          ang.toFixed(1) +
+          ' HH=' +
+          dHH.toFixed(3) +
+          ' OH1=' +
+          r1.toFixed(3) +
+          ' OH2=' +
+          r2.toFixed(3) +
+          ' T=' +
+          T.toFixed(0) +
+          'K' +
+          ' E=' +
+          (r.kineticEnergy + r.potentialEnergy).toFixed(4) +
+          ' bonds=' +
+          bonds.length +
+          (hh ? ' HH!' : ''),
       );
     }
   }
 
-  console.log('\n  Angle: ' + minAng.toFixed(1) + '-' + maxAng.toFixed(1) + ' deg');
+  console.log(
+    '\n  Angle: ' + minAng.toFixed(1) + '-' + maxAng.toFixed(1) + ' deg',
+  );
   console.log('  Min H-H: ' + minHH.toFixed(3) + ' A');
   console.log('  H-H bond: ' + (hhDetected ? 'YES BUG' : 'NO OK'));
 }

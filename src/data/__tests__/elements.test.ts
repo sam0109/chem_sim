@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import elements, { getElement, getElementBySymbol, allElementNumbers } from '../elements.ts';
+import elements, {
+  getElement,
+  getElementBySymbol,
+  allElementNumbers,
+} from '../elements.ts';
 
 describe('elements data', () => {
   it('contains hydrogen (Z=1)', () => {
@@ -26,7 +30,7 @@ describe('elements data', () => {
   });
 
   it('has valid data for all entries', () => {
-    for (const [_key, el] of Object.entries(elements)) {
+    for (const [, el] of Object.entries(elements)) {
       expect(el.number).toBeGreaterThan(0);
       expect(el.symbol.length).toBeGreaterThan(0);
       expect(el.mass).toBeGreaterThan(0);

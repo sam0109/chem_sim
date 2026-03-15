@@ -21,103 +21,123 @@ const Interaction: React.FC = () => {
   const mouseRef = useRef(new THREE.Vector2());
   const intersectPoint = useRef(new THREE.Vector3());
 
-  const handleClick = useCallback((event: MouseEvent) => {
-    const activeTool = useUIStore.getState().activeTool;
-    const rect = gl.domElement.getBoundingClientRect();
-    mouseRef.current.set(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1
-    );
+  const handleClick = useCallback(
+    (event: MouseEvent) => {
+      const activeTool = useUIStore.getState().activeTool;
+      const rect = gl.domElement.getBoundingClientRect();
+      mouseRef.current.set(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      );
 
-    raycaster.setFromCamera(mouseRef.current, camera);
+      raycaster.setFromCamera(mouseRef.current, camera);
 
-    if (activeTool === 'place-atom') {
-      // Intersect with ground plane (y=0)
-      const hit = raycaster.ray.intersectPlane(planeRef.current, intersectPoint.current);
-      if (hit) {
-        const selectedElement = useUIStore.getState().selectedElement;
-        const newAtom: Atom = {
-          id: Date.now(),
-          elementNumber: selectedElement,
-          position: [hit.x, hit.y, hit.z],
-          velocity: [0, 0, 0],
-          force: [0, 0, 0],
-          charge: 0,
-          hybridization: 'sp3',
-          fixed: false,
-        };
-        useSimulationStore.getState().addAtom(newAtom);
-      }
-    } else if (activeTool === 'select') {
-      // Try to pick an atom — simple proximity check
-      const { atoms, positions } = useSimulationStore.getState();
-      let closest = -1;
-      let closestDist = Infinity;
-
-      for (let i = 0; i < atoms.length; i++) {
-        const x = positions.length > i * 3 ? positions[i * 3] : atoms[i].position[0];
-        const y = positions.length > i * 3 + 1 ? positions[i * 3 + 1] : atoms[i].position[1];
-        const z = positions.length > i * 3 + 2 ? positions[i * 3 + 2] : atoms[i].position[2];
-        const atomPos = new THREE.Vector3(x, y, z);
-
-        const el = elements[atoms[i].elementNumber];
-        const radius = el ? el.covalentRadius * 0.5 : 0.3;
-
-        // Ray-sphere test
-        const toAtom = atomPos.clone().sub(raycaster.ray.origin);
-        const proj = toAtom.dot(raycaster.ray.direction);
-        if (proj < 0) continue;
-
-        const closest_point = raycaster.ray.origin.clone().add(
-          raycaster.ray.direction.clone().multiplyScalar(proj)
+      if (activeTool === 'place-atom') {
+        // Intersect with ground plane (y=0)
+        const hit = raycaster.ray.intersectPlane(
+          planeRef.current,
+          intersectPoint.current,
         );
-        const dist = closest_point.distanceTo(atomPos);
+        if (hit) {
+          const selectedElement = useUIStore.getState().selectedElement;
+          const newAtom: Atom = {
+            id: Date.now(),
+            elementNumber: selectedElement,
+            position: [hit.x, hit.y, hit.z],
+            velocity: [0, 0, 0],
+            force: [0, 0, 0],
+            charge: 0,
+            hybridization: 'sp3',
+            fixed: false,
+          };
+          useSimulationStore.getState().addAtom(newAtom);
+        }
+      } else if (activeTool === 'select') {
+        // Try to pick an atom — simple proximity check
+        const { atoms, positions } = useSimulationStore.getState();
+        let closest = -1;
+        let closestDist = Infinity;
 
-        if (dist < radius && proj < closestDist) {
-          closest = i;
-          closestDist = proj;
+        for (let i = 0; i < atoms.length; i++) {
+          const x =
+            positions.length > i * 3 ? positions[i * 3] : atoms[i].position[0];
+          const y =
+            positions.length > i * 3 + 1
+              ? positions[i * 3 + 1]
+              : atoms[i].position[1];
+          const z =
+            positions.length > i * 3 + 2
+              ? positions[i * 3 + 2]
+              : atoms[i].position[2];
+          const atomPos = new THREE.Vector3(x, y, z);
+
+          const el = elements[atoms[i].elementNumber];
+          const radius = el ? el.covalentRadius * 0.5 : 0.3;
+
+          // Ray-sphere test
+          const toAtom = atomPos.clone().sub(raycaster.ray.origin);
+          const proj = toAtom.dot(raycaster.ray.direction);
+          if (proj < 0) continue;
+
+          const closest_point = raycaster.ray.origin
+            .clone()
+            .add(raycaster.ray.direction.clone().multiplyScalar(proj));
+          const dist = closest_point.distanceTo(atomPos);
+
+          if (dist < radius && proj < closestDist) {
+            closest = i;
+            closestDist = proj;
+          }
+        }
+
+        if (closest >= 0) {
+          useUIStore.getState().selectAtom(closest, event.shiftKey);
+        } else {
+          useUIStore.getState().clearSelection();
+        }
+      } else if (activeTool === 'delete') {
+        // Pick nearest atom and delete
+        const { atoms, positions } = useSimulationStore.getState();
+        let closest = -1;
+        let closestDist = Infinity;
+
+        for (let i = 0; i < atoms.length; i++) {
+          const x =
+            positions.length > i * 3 ? positions[i * 3] : atoms[i].position[0];
+          const y =
+            positions.length > i * 3 + 1
+              ? positions[i * 3 + 1]
+              : atoms[i].position[1];
+          const z =
+            positions.length > i * 3 + 2
+              ? positions[i * 3 + 2]
+              : atoms[i].position[2];
+          const atomPos = new THREE.Vector3(x, y, z);
+
+          const toAtom = atomPos.clone().sub(raycaster.ray.origin);
+          const proj = toAtom.dot(raycaster.ray.direction);
+          if (proj < 0) continue;
+
+          const closest_point = raycaster.ray.origin
+            .clone()
+            .add(raycaster.ray.direction.clone().multiplyScalar(proj));
+          const el = elements[atoms[i].elementNumber];
+          const radius = el ? el.covalentRadius * 0.5 : 0.3;
+          const dist = closest_point.distanceTo(atomPos);
+
+          if (dist < radius && proj < closestDist) {
+            closest = i;
+            closestDist = proj;
+          }
+        }
+
+        if (closest >= 0) {
+          useSimulationStore.getState().removeAtom(closest);
         }
       }
-
-      if (closest >= 0) {
-        useUIStore.getState().selectAtom(closest, event.shiftKey);
-      } else {
-        useUIStore.getState().clearSelection();
-      }
-    } else if (activeTool === 'delete') {
-      // Pick nearest atom and delete
-      const { atoms, positions } = useSimulationStore.getState();
-      let closest = -1;
-      let closestDist = Infinity;
-
-      for (let i = 0; i < atoms.length; i++) {
-        const x = positions.length > i * 3 ? positions[i * 3] : atoms[i].position[0];
-        const y = positions.length > i * 3 + 1 ? positions[i * 3 + 1] : atoms[i].position[1];
-        const z = positions.length > i * 3 + 2 ? positions[i * 3 + 2] : atoms[i].position[2];
-        const atomPos = new THREE.Vector3(x, y, z);
-
-        const toAtom = atomPos.clone().sub(raycaster.ray.origin);
-        const proj = toAtom.dot(raycaster.ray.direction);
-        if (proj < 0) continue;
-
-        const closest_point = raycaster.ray.origin.clone().add(
-          raycaster.ray.direction.clone().multiplyScalar(proj)
-        );
-        const el = elements[atoms[i].elementNumber];
-        const radius = el ? el.covalentRadius * 0.5 : 0.3;
-        const dist = closest_point.distanceTo(atomPos);
-
-        if (dist < radius && proj < closestDist) {
-          closest = i;
-          closestDist = proj;
-        }
-      }
-
-      if (closest >= 0) {
-        useSimulationStore.getState().removeAtom(closest);
-      }
-    }
-  }, [camera, raycaster, gl]);
+    },
+    [camera, raycaster, gl],
+  );
 
   useEffect(() => {
     gl.domElement.addEventListener('click', handleClick);

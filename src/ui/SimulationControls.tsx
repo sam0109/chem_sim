@@ -17,22 +17,31 @@ export const SimulationControls: React.FC = () => {
   const bonds = useSimulationStore((s) => s.bonds);
 
   return (
-    <div style={{
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      background: 'rgba(20, 20, 40, 0.95)',
-      borderRadius: 8,
-      padding: '12px 16px',
-      border: '1px solid rgba(255,255,255,0.1)',
-      backdropFilter: 'blur(10px)',
-      color: '#ddd',
-      fontFamily: 'monospace',
-      fontSize: 12,
-      minWidth: 220,
-      zIndex: 100,
-    }}>
-      <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 13, color: '#aaccff' }}>
+    <div
+      style={{
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        background: 'rgba(20, 20, 40, 0.95)',
+        borderRadius: 8,
+        padding: '12px 16px',
+        border: '1px solid rgba(255,255,255,0.1)',
+        backdropFilter: 'blur(10px)',
+        color: '#ddd',
+        fontFamily: 'monospace',
+        fontSize: 12,
+        minWidth: 220,
+        zIndex: 100,
+      }}
+    >
+      <div
+        style={{
+          fontWeight: 'bold',
+          marginBottom: 8,
+          fontSize: 13,
+          color: '#aaccff',
+        }}
+      >
         Simulation
       </div>
 
@@ -75,7 +84,13 @@ export const SimulationControls: React.FC = () => {
 
       {/* Temperature slider */}
       <div style={{ marginBottom: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: 2,
+          }}
+        >
           <span>Temperature</span>
           <span style={{ color: '#ffaa44' }}>{config.temperature} K</span>
         </div>
@@ -92,9 +107,17 @@ export const SimulationControls: React.FC = () => {
 
       {/* Timestep slider */}
       <div style={{ marginBottom: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: 2,
+          }}
+        >
           <span>Timestep</span>
-          <span style={{ color: '#88ccff' }}>{config.timestep.toFixed(1)} fs</span>
+          <span style={{ color: '#88ccff' }}>
+            {config.timestep.toFixed(1)} fs
+          </span>
         </div>
         <input
           type="range"
@@ -112,7 +135,14 @@ export const SimulationControls: React.FC = () => {
         <div style={{ marginBottom: 2 }}>Thermostat</div>
         <select
           value={config.thermostat}
-          onChange={(e) => setConfig({ thermostat: e.target.value as 'none' | 'berendsen' | 'nose-hoover' })}
+          onChange={(e) =>
+            setConfig({
+              thermostat: e.target.value as
+                | 'none'
+                | 'berendsen'
+                | 'nose-hoover',
+            })
+          }
           style={{
             width: '100%',
             padding: '4px 8px',
@@ -130,14 +160,16 @@ export const SimulationControls: React.FC = () => {
       </div>
 
       {/* Stats */}
-      <div style={{
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        paddingTop: 8,
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '4px 12px',
-        fontSize: 11,
-      }}>
+      <div
+        style={{
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          paddingTop: 8,
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '4px 12px',
+          fontSize: 11,
+        }}
+      >
         <span style={{ color: '#888' }}>Step</span>
         <span style={{ textAlign: 'right' }}>{step}</span>
 
@@ -148,16 +180,24 @@ export const SimulationControls: React.FC = () => {
         <span style={{ textAlign: 'right' }}>{bonds.length}</span>
 
         <span style={{ color: '#888' }}>Temp</span>
-        <span style={{ textAlign: 'right', color: '#ffaa44' }}>{temperature.toFixed(0)} K</span>
+        <span style={{ textAlign: 'right', color: '#ffaa44' }}>
+          {temperature.toFixed(0)} K
+        </span>
 
         <span style={{ color: '#888' }}>KE</span>
-        <span style={{ textAlign: 'right', color: '#ff6666' }}>{energy.kinetic.toFixed(3)} eV</span>
+        <span style={{ textAlign: 'right', color: '#ff6666' }}>
+          {energy.kinetic.toFixed(3)} eV
+        </span>
 
         <span style={{ color: '#888' }}>PE</span>
-        <span style={{ textAlign: 'right', color: '#66aaff' }}>{energy.potential.toFixed(3)} eV</span>
+        <span style={{ textAlign: 'right', color: '#66aaff' }}>
+          {energy.potential.toFixed(3)} eV
+        </span>
 
         <span style={{ color: '#888' }}>Total E</span>
-        <span style={{ textAlign: 'right', color: '#66ff66' }}>{energy.total.toFixed(3)} eV</span>
+        <span style={{ textAlign: 'right', color: '#66ff66' }}>
+          {energy.total.toFixed(3)} eV
+        </span>
       </div>
     </div>
   );
