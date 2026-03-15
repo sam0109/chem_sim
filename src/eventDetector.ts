@@ -16,9 +16,9 @@ import type {
   TemperatureSpikeMetadata,
   EnergyDriftMetadata,
   BondStrainMetadata,
-} from '../data/types';
-import elements from '../data/elements';
-import { getMorseBondParams } from '../data/uff';
+} from './data/types';
+import elements from './data/elements';
+import { getMorseBondParams } from './data/uff';
 
 // ---- Thresholds ----
 
