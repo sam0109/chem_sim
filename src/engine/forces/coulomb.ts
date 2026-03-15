@@ -22,9 +22,8 @@ const TWO_OVER_SQRT_PI = 2.0 / Math.sqrt(Math.PI);
 /**
  * Compute the Wolf damping parameter α from the cutoff distance.
  *
- * A common heuristic is α = π/rc (Zhu & Wolf, 2002), but for
- * small cutoffs this over-damps. We use α = 0.2 Å⁻¹ for rc ≥ 8 Å,
- * scaling up for smaller cutoffs to maintain erfc(α·rc) ≈ 0.046.
+ * Uses α = 2/rc, giving erfc(α·rc) = erfc(2) ≈ 0.0047, which
+ * balances accuracy vs. minimal damping for molecular simulations.
  *
  * Reference: Fennell & Gezelter, J. Chem. Phys. 124, 234104 (2006),
  *            recommend α such that erfc(α·rc) ~ 10⁻² to 10⁻⁵
