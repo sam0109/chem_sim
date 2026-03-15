@@ -172,11 +172,63 @@ Berendsen thermostat: λ = √(1 + Δt/τ · (T_target/T − 1)), clamped to [0.
 ## Running Tests
 
 ```bash
-npx tsx src/engine/tests.ts       # Physics invariant test suite
+npx tsx src/engine/tests.ts       # Physics invariant tests
+npx vitest run                    # Unit tests (force functions)
+npm run test                      # All test suites
 npx tsx src/engine/debug.ts       # Interactive water molecule debug harness
 ```
 
-See [GitHub Issues](https://github.com/sam0109/chem_sim/issues) for the full roadmap and test suite details.
+### Physics Test Suite
+
+The physics tests (`src/engine/tests.ts`) run the simulation for N steps on known molecules and check physically meaningful invariants. The test count must **never decrease** on `main` (ratchet).
+
+**Current status: 17/22 passing.** 5 pre-existing failures in methane/CO₂ (tracked in issues #1–#4).
+
+| Category                    | Tests                   | What they check                                           |
+| --------------------------- | ----------------------- | --------------------------------------------------------- |
+| NVE (energy conservation)   | NVE-01 through NVE-06   | \|ΔE/E₀\| stays within tolerance without thermostat       |
+| GEO (structural invariants) | GEO-01 through GEO-15   | Bond lengths, angles, and dihedrals at 300K NVT           |
+| THERMO (temperature)        | THERMO-01, THERMO-02    | Thermostat convergence and ensemble correctness           |
+| GRAD (gradient consistency) | GRAD-01 through GRAD-06 | Analytical force = −dE/dr via numerical finite difference |
+| RXN (reactions)             | RXN-01 through RXN-05   | Bond formation/breaking under controlled conditions       |
+| MOL (molecule tracking)     | MOL-01, MOL-02          | Connected component identification                        |
+
+**Rule:** Physics tests must NEVER be weakened to make a change pass. If a change breaks a test, fix the change.
+
+See [GitHub Issues](https://github.com/sam0109/chem_sim/issues) for the full roadmap.
+
+## Architecture Rules
+
+These rules prevent structural decay. They are enforced by ESLint (`eslint-plugin-boundaries`) and CI.
+
+### Layer Dependencies
+
+| Layer           | Allowed imports                            | Forbidden                         |
+| --------------- | ------------------------------------------ | --------------------------------- |
+| `src/data/`     | Standard library only                      | engine, renderer, store, ui       |
+| `src/engine/`   | `src/data/` only                           | React, Three.js, DOM APIs         |
+| `src/renderer/` | `src/data/`, `src/store/`, Three.js, React | Direct engine imports (use store) |
+| `src/store/`    | `src/data/`, `src/worker-comms.ts`         | renderer, engine, ui              |
+| `src/ui/`       | `src/data/`, `src/store/`, React           | Three.js, direct engine imports   |
+| `src/io/`       | `src/data/` only                           | engine, renderer                  |
+
+### Worker Boundary
+
+The engine runs in a Web Worker and must NOT import React, Three.js, DOM APIs, or the store. All communication goes through `postMessage` with typed messages in `types.ts`.
+
+### Force Function Purity
+
+Every function in `src/engine/forces/` must:
+
+- Take positions and forces arrays as arguments (no global state)
+- Accumulate forces additively (not overwrite)
+- Return potential energy
+- Be deterministic (no randomness)
+- Have analytically correct gradients (verified by GRAD tests)
+
+### No Magic Numbers
+
+Every numerical constant in the engine must cite its source (paper, database, or derivation). No hardcoded values without comments.
 
 ## Dependencies
 
