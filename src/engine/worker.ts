@@ -5,6 +5,7 @@
 import type {
   Atom,
   Bond,
+  EnergyBreakdown,
   Hybridization,
   MoleculeInfo,
   ReactionEvent,
@@ -428,28 +429,39 @@ function getLJCached(
   return cached;
 }
 
+/** Cached per-force-type energy breakdown from the last computeAllForces call */
+let cachedEnergyBreakdown: EnergyBreakdown = {
+  morse: 0,
+  angle: 0,
+  torsion: 0,
+  inversion: 0,
+  lj: 0,
+  coulomb: 0,
+};
+
 /**
  * Compute all forces and return potential energy.
+ * Also populates cachedEnergyBreakdown with per-force-type contributions.
  */
 function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   let potentialEnergy = 0;
+  let morseE = 0;
+  let angleE = 0;
+  let torsionE = 0;
+  let inversionE = 0;
+  let ljE = 0;
+  let coulombE = 0;
 
   // 1. Bonded forces (Morse)
   for (const bp of bondParams) {
-    potentialEnergy += morseBondForce(
-      pos,
-      frc,
-      bp.i,
-      bp.j,
-      bp.De,
-      bp.alpha,
-      bp.re,
-    );
+    const e = morseBondForce(pos, frc, bp.i, bp.j, bp.De, bp.alpha, bp.re);
+    morseE += e;
+    potentialEnergy += e;
   }
 
   // 2. Angle forces (harmonic) — using precomputed params
   for (const ap of angleParams) {
-    potentialEnergy += harmonicAngleForce(
+    const e = harmonicAngleForce(
       pos,
       frc,
       ap.i,
@@ -458,11 +470,13 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       ap.kAngle,
       ap.theta0,
     );
+    angleE += e;
+    potentialEnergy += e;
   }
 
   // 2.5. Torsion forces — using precomputed params
   for (const tp of torsionParams) {
-    potentialEnergy += torsionForce(
+    const e = torsionForce(
       pos,
       frc,
       tp.i,
@@ -473,11 +487,13 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       tp.n,
       tp.phi0,
     );
+    torsionE += e;
+    potentialEnergy += e;
   }
 
   // 2.75. Inversion (out-of-plane) forces — using precomputed params
   for (const ip of inversionParams) {
-    potentialEnergy += inversionForce(
+    const e = inversionForce(
       pos,
       frc,
       ip.i,
@@ -489,6 +505,8 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       ip.C1,
       ip.C2,
     );
+    inversionE += e;
+    potentialEnergy += e;
   }
 
   // 3. Non-bonded forces (LJ + Coulomb) using cell list or brute force
@@ -507,7 +525,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
     const scaleFactor = is14 ? SCALE_14 : 1.0;
 
     const { sigma, epsilon } = getLJCached(atomicNumbers[i], atomicNumbers[j]);
-    potentialEnergy += ljForce(
+    const eLJ = ljForce(
       pos,
       frc,
       i,
@@ -517,7 +535,9 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       cutoff,
       pbcBoxSize,
     );
-    potentialEnergy += coulombForce(
+    ljE += eLJ;
+    potentialEnergy += eLJ;
+    const eCoul = coulombForce(
       pos,
       frc,
       i,
@@ -527,6 +547,8 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       wc,
       pbcBoxSize,
     );
+    coulombE += eCoul;
+    potentialEnergy += eCoul;
   };
 
   if (nAtoms < 50) {
@@ -543,7 +565,9 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   // 3.5. Wolf self-energy correction (position-independent, affects PE only)
   // Uses actual (unscaled) charges — the 1-4 scaling only applies to pair terms.
   // Reference: Wolf et al., J. Chem. Phys. 110, 8254 (1999), Eq. 2.
-  potentialEnergy += wolfSelfEnergy(charges, nAtoms, wc);
+  const wolfSelf = wolfSelfEnergy(charges, nAtoms, wc);
+  coulombE += wolfSelf;
+  potentialEnergy += wolfSelf;
 
   // 4. Drag force (spring to target position)
   if (dragAtomId >= 0 && dragAtomId < nAtoms) {
@@ -556,6 +580,16 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
     frc[i3 + 2] += DRAG_SPRING_K * dz;
     potentialEnergy += 0.5 * DRAG_SPRING_K * (dx * dx + dy * dy + dz * dz);
   }
+
+  // Cache per-force-type breakdown for the quantity dashboard
+  cachedEnergyBreakdown = {
+    morse: morseE,
+    angle: angleE,
+    torsion: torsionE,
+    inversion: inversionE,
+    lj: ljE,
+    coulomb: coulombE,
+  };
 
   return potentialEnergy;
 }
@@ -962,6 +996,7 @@ function sendState(): void {
       total: kineticEnergy + potentialEnergy,
       thermostat: thermostatEnergy,
     },
+    energyBreakdown: { ...cachedEnergyBreakdown },
     temperature,
     moleculeIds: moleculeIds.slice(),
     molecules: [...moleculeInfo],
