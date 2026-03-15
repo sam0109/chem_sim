@@ -81,15 +81,30 @@ export function velocityVerletStep(
 
 /**
  * Compute instantaneous temperature from kinetic energy.
- * T = 2 * KE / (3 * N * k_B)   (k_B in eV/K)
+ *
+ * T = 2 * KE / (Nf * k_B)   where Nf = 3N - 3 for N > 1, Nf = 3 for N ≤ 1.
+ *
+ * The 3N - 3 DOF correction accounts for the removal of center-of-mass
+ * translational momentum (3 conserved components → 3 fewer DOF).
+ * This is consistent with the Nosé-Hoover thermostat DOF (see thermostat.ts).
+ *
+ * DOF correction: Allen & Tildesley, "Computer Simulation of Liquids",
+ *   2nd ed., Section 2.6 — subtract 3 for conserved COM momentum.
+ *
+ * @param kineticEnergy kinetic energy in eV
+ * @param nAtoms number of atoms
+ * @returns temperature in K
  */
 export function computeTemperature(
   kineticEnergy: number,
   nAtoms: number,
 ): number {
-  const kB = 8.617333262e-5; // eV/K
+  const kB = 8.617333262e-5; // eV/K — CODATA 2018
   if (nAtoms <= 0) return 0;
-  return (2.0 * kineticEnergy) / (3.0 * nAtoms * kB);
+  // Subtract 3 translational DOF for conserved COM momentum.
+  // Guard: for a single atom (N = 1) use Nf = 3 to avoid zero/negative DOF.
+  const Nf = nAtoms > 1 ? 3 * nAtoms - 3 : 3;
+  return (2.0 * kineticEnergy) / (Nf * kB);
 }
 
 /**

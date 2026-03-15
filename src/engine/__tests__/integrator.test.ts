@@ -15,11 +15,12 @@ describe('computeTemperature', () => {
   });
 
   it('computes correct temperature from kinetic energy', () => {
-    // T = 2 * KE / (3 * N * kB)
+    // T = 2 * KE / (Nf * kB) where Nf = 3N - 3 for N > 1
     const kB = 8.617333262e-5; // eV/K
     const N = 3;
+    const Nf = 3 * N - 3; // 6 DOF after COM removal
     const targetT = 300; // K
-    const KE = (3.0 * N * kB * targetT) / 2.0;
+    const KE = (Nf * kB * targetT) / 2.0;
     const T = computeTemperature(KE, N);
     expect(T).toBeCloseTo(targetT, 6);
   });
@@ -30,10 +31,21 @@ describe('computeTemperature', () => {
     expect(T2).toBeCloseTo(2 * T1, 6);
   });
 
-  it('scales inversely with number of atoms', () => {
+  it('uses 3 DOF for single atom (N=1 guard)', () => {
+    // For N=1, Nf=3 (not 3*1-3=0) to avoid division by zero
+    const kB = 8.617333262e-5; // eV/K
+    const targetT = 300;
+    const KE = (3 * kB * targetT) / 2.0;
+    const T = computeTemperature(KE, 1);
+    expect(T).toBeCloseTo(targetT, 6);
+  });
+
+  it('scales inversely with degrees of freedom', () => {
+    // Nf(10) = 27, Nf(20) = 57; ratio = 57/27
     const T1 = computeTemperature(0.01, 10);
     const T2 = computeTemperature(0.01, 20);
-    expect(T1).toBeCloseTo(2 * T2, 6);
+    const expectedRatio = (3 * 20 - 3) / (3 * 10 - 3); // 57/27
+    expect(T1 / T2).toBeCloseTo(expectedRatio, 6);
   });
 });
 
