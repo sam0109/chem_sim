@@ -72,7 +72,9 @@ test.describe('Periodic table', () => {
     ).toBeVisible();
 
     // Count element buttons by their data-testid pattern (element-{Symbol})
-    const elementButtons = periodicTable.locator('button[data-testid^="element-"]');
+    const elementButtons = periodicTable.locator(
+      'button[data-testid^="element-"]',
+    );
     const count = await elementButtons.count();
     expect(count).toBeGreaterThanOrEqual(36);
   });
