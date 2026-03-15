@@ -233,10 +233,11 @@ export function ethanolMolecule(): Atom[] {
  * Charges computed by Gasteiger: N ≈ -0.80, H ≈ +0.27
  */
 export function ammoniaMolecule(): Atom[] {
-  // Experimental geometry: N-H = 1.012 Å, H-N-H = 107.8°
+  // Experimental geometry: N-H = 1.012 Å, H-N-H = 106.67°
   // Source: NIST CCCBDB experimental geometry for NH3
+  // (Herzberg, Electronic Spectra of Polyatomic Molecules, 1966)
   const re = 1.012; // N-H bond length in Å
-  const angle = (107.8 * Math.PI) / 180; // H-N-H angle
+  const angle = (106.67 * Math.PI) / 180; // H-N-H angle
   // Place N at origin; 3 H atoms in pyramidal arrangement
   // The H atoms sit on a cone at angle α from the C3 axis,
   // where cos(angle) = cos²(α) - sin²(α)·cos(120°)
@@ -375,11 +376,11 @@ export function h2sMolecule(): Atom[] {
  * (same approach as CO₂). C: sp hybridization.
  */
 export function acetyleneMolecule(): Atom[] {
-  // Experimental geometry: C≡C = 1.203 Å, C-H = 1.060 Å, linear
+  // Experimental geometry: C≡C = 1.203 Å, C-H = 1.063 Å, linear
   // Source: NIST CCCBDB experimental geometry for C2H2
   // Charges: Gasteiger sp C with H gives roughly ±0.25
   const cc = 1.203; // C≡C bond length in Å
-  const ch = 1.06; // C-H bond length in Å
+  const ch = 1.063; // C-H bond length in Å
   return [
     // C1
     {
@@ -435,19 +436,21 @@ export function acetyleneMolecule(): Atom[] {
  */
 export function h2o2Molecule(): Atom[] {
   // Experimental geometry: O-O = 1.475 Å, O-H = 0.950 Å,
-  // H-O-O angle = 94.8°, H-O-O-H dihedral = 111.5°
+  // H-O-O angle = 94.8°, H-O-O-H dihedral = 119.8°
   // Source: NIST CCCBDB experimental geometry for H2O2
+  // (Redington, Olson, Cross, J. Chem. Phys. 36, 1311, 1962)
   const oo = 1.475; // O-O bond length in Å
   const oh = 0.95; // O-H bond length in Å
   const hooAngle = (94.8 * Math.PI) / 180; // H-O-O angle
-  const dihedral = (111.5 * Math.PI) / 180; // H-O-O-H dihedral
+  const dihedral = (119.8 * Math.PI) / 180; // H-O-O-H dihedral
 
   // O1 at origin, O2 along +x
-  // H1 in the xz-plane (dihedral reference), H2 rotated by dihedral
-  const h1x = -oh * Math.cos(hooAngle);
+  // H1 bonded to O1: angle H1-O1-O2 = 94.8°, in the xz-plane
+  const h1x = oh * Math.cos(hooAngle);
   const h1z = oh * Math.sin(hooAngle);
 
-  const h2x = oo + oh * Math.cos(hooAngle);
+  // H2 bonded to O2: angle H2-O2-O1 = 94.8°, rotated by dihedral about O-O axis
+  const h2x = oo - oh * Math.cos(hooAngle);
   const h2y = -oh * Math.sin(hooAngle) * Math.sin(dihedral);
   const h2z = -oh * Math.sin(hooAngle) * Math.cos(dihedral);
 
