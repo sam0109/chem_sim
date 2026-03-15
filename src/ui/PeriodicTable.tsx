@@ -184,12 +184,15 @@ const COLOR_MODES: PeriodicTableColorMode[] = [
 const ColorModeSelector: React.FC<{
   active: PeriodicTableColorMode;
   onSelect: (mode: PeriodicTableColorMode) => void;
-}> = ({ active, onSelect }) => (
+  showTrends: boolean;
+  onToggleTrends: () => void;
+}> = ({ active, onSelect, showTrends, onToggleTrends }) => (
   <div
     style={{
       display: 'flex',
       gap: 4,
       justifyContent: 'center',
+      alignItems: 'center',
       marginBottom: 4,
     }}
   >
@@ -218,6 +221,28 @@ const ColorModeSelector: React.FC<{
         {colorModeLabels[mode]}
       </button>
     ))}
+    {/* Trend annotations toggle */}
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 3,
+        marginLeft: 8,
+        fontSize: 9,
+        color: '#888',
+        fontFamily: 'sans-serif',
+        cursor: 'pointer',
+        userSelect: 'none',
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={showTrends}
+        onChange={onToggleTrends}
+        style={{ width: 10, height: 10, cursor: 'pointer' }}
+      />
+      Trends
+    </label>
   </div>
 );
 
@@ -256,6 +281,88 @@ const ColorLegend: React.FC<{
         {range.max.toFixed(1)} {colorModeUnits[mode]}
       </span>
     </div>
+  );
+};
+
+// ---- Trend Annotations ----
+
+/**
+ * Overlay arrows showing periodic trends.
+ * Electronegativity increases left→right (and bottom→top).
+ * Atomic radius increases top→bottom (and right→left).
+ */
+const TrendAnnotations: React.FC = () => {
+  /** Total grid width: 18 cells + 17 gaps */
+  const gridW = 18 * CELL_W + 17 * CELL_GAP;
+  /** Total grid height: 4 rows + 3 gaps */
+  const gridH = 4 * CELL_H + 3 * CELL_GAP;
+
+  return (
+    <>
+      {/* Horizontal arrow — "Electronegativity increases →" */}
+      <div
+        style={{
+          position: 'absolute',
+          top: -16,
+          left: 0,
+          width: gridW,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 4,
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            flex: 1,
+            height: 1,
+            background:
+              'linear-gradient(to right, transparent, rgba(170,204,255,0.5))',
+          }}
+        />
+        <span
+          style={{
+            fontSize: 8,
+            color: '#aaccff',
+            fontFamily: 'sans-serif',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Electronegativity increases →
+        </span>
+      </div>
+
+      {/* Vertical arrow — "Atomic radius increases ↓" */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: -14,
+          height: gridH,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 4,
+          pointerEvents: 'none',
+          writingMode: 'vertical-rl',
+          textOrientation: 'mixed',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 8,
+            color: '#aaccff',
+            fontFamily: 'sans-serif',
+            whiteSpace: 'nowrap',
+            transform: 'rotate(180deg)',
+          }}
+        >
+          Atomic radius increases ↓
+        </span>
+      </div>
+    </>
   );
 };
 
@@ -445,6 +552,8 @@ export const PeriodicTable: React.FC = () => {
   const setHoveredElement = useUIStore((s) => s.setHoveredElement);
   const ptColorMode = useUIStore((s) => s.periodicTableColorMode);
   const setPtColorMode = useUIStore((s) => s.setPeriodicTableColorMode);
+  const showTrends = useUIStore((s) => s.showTrendAnnotations);
+  const toggleTrends = useUIStore((s) => s.toggleTrendAnnotations);
 
   // Compute property range for current color mode (memoized)
   const propertyRange = useMemo(
@@ -501,10 +610,25 @@ export const PeriodicTable: React.FC = () => {
       </div>
 
       {/* Color mode selector */}
-      <ColorModeSelector active={ptColorMode} onSelect={setPtColorMode} />
+      <ColorModeSelector
+        active={ptColorMode}
+        onSelect={setPtColorMode}
+        showTrends={showTrends}
+        onToggleTrends={toggleTrends}
+      />
 
-      {/* Grid container — relative for tooltip positioning */}
-      <div style={{ position: 'relative' }}>
+      {/* Grid container — relative for tooltip and trend positioning */}
+      <div
+        style={{
+          position: 'relative',
+          paddingLeft: showTrends ? 16 : 0,
+          paddingTop: showTrends ? 18 : 0,
+          transition: 'padding 0.15s',
+        }}
+      >
+        {/* Trend annotation overlays */}
+        {showTrends && <TrendAnnotations />}
+
         <div
           style={{ display: 'flex', flexDirection: 'column', gap: CELL_GAP }}
         >
