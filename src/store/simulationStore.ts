@@ -65,6 +65,7 @@ export interface SimulationStoreState {
   addAtom: (atom: Atom) => void;
   addMolecule: (atoms: Atom[]) => void;
   removeAtom: (atomId: number) => void;
+  transmuteAtom: (atomId: number, newElementNumber: number) => void;
   initSimulation: (atoms: Atom[], bonds?: Bond[]) => void;
   toggleRunning: () => void;
   minimize: () => void;
@@ -237,6 +238,15 @@ function buildStoreSlice(
       const atoms = get().atoms.filter((_, i) => i !== atomId);
       set({ atoms });
       get().worker?.removeAtom(atomId);
+    },
+
+    transmuteAtom(atomId: number, newElementNumber: number) {
+      // Optimistically update store-side atom element before worker confirms
+      const atoms = get().atoms.map((atom, i) =>
+        i === atomId ? { ...atom, elementNumber: newElementNumber } : atom,
+      );
+      set({ atoms });
+      get().worker?.transmuteAtom(atomId, newElementNumber);
     },
 
     initSimulation(atoms: Atom[], bonds: Bond[] = []) {
