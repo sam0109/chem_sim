@@ -87,7 +87,12 @@ export function detectBonds(
         }
 
         const singleDist = elI.covalentRadius + elJ.covalentRadius;
-        const order = estimateBondOrder(dist, singleDist);
+        // Ionic bonds are always order 1 — bond order estimation based on
+        // distance ratios is only meaningful for covalent bonds.
+        // Without this, e.g. NaCl (ratio 2.36/2.68 = 0.88) falls in the
+        // double-bond range, causing slotsNeeded=2 > Na maxValence=1.
+        const order =
+          type === 'ionic' ? 1 : estimateBondOrder(dist, singleDist);
 
         candidates.push({ i, j, dist, type, order });
       }
