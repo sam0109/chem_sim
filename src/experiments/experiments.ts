@@ -54,6 +54,8 @@ function twoHeliumAtoms(): Atom[] {
 /**
  * H₂ molecule for the ionic vs covalent experiment.
  * H-H bond length: 0.74 Å (NIST CCCBDB)
+ * Note: duplicates private h2Molecule in io/examples.ts —
+ * not exported there, kept local to avoid unrelated API change.
  */
 function h2Molecule(): Atom[] {
   return [
@@ -105,7 +107,7 @@ function naclAndH2(): Atom[] {
  * H₂O, NH₃, and CH₄ placed side by side for VSEPR comparison.
  * Water at origin, NH₃ offset 5 Å, CH₄ offset 10 Å.
  */
-function vsperMolecules(): Atom[] {
+function vseprMolecules(): Atom[] {
   const water = waterMolecule(); // 3 atoms: O(0), H(1), H(2)
   const nh3 = ammoniaMolecule(); // 4 atoms: N(0), H(1), H(2), H(3)
   const ch4 = methaneMolecule(); // 5 atoms: C(0), H(1), H(2), H(3), H(4)
@@ -166,7 +168,7 @@ const molecularShapeExperiment: Experiment = {
         orderingCriterion: 'bond angle, smallest to largest',
       },
       simulation: {
-        atoms: vsperMolecules,
+        atoms: vseprMolecules,
         minimizeFirst: true,
         stepsToRun: 0,
       },
