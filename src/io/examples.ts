@@ -228,6 +228,147 @@ export function ethanolMolecule(): Atom[] {
 }
 
 /**
+ * Create an ammonia molecule (NH3).
+ * Pyramidal geometry with lone pair on nitrogen.
+ * Charges computed by Gasteiger: N ≈ -0.80, H ≈ +0.27
+ */
+export function ammoniaMolecule(): Atom[] {
+  // Experimental geometry: N-H = 1.012 Å, H-N-H = 107.8°
+  // Source: NIST CCCBDB experimental geometry for NH3
+  const re = 1.012; // N-H bond length in Å
+  const angle = (107.8 * Math.PI) / 180; // H-N-H angle
+  // Place N at origin; 3 H atoms in pyramidal arrangement
+  // The H atoms sit on a cone at angle α from the C3 axis,
+  // where cos(angle) = cos²(α) - sin²(α)·cos(120°)
+  // Solving: cos(α) = √((1 + 2·cos(angle)) / 3)
+  const cosAlpha = Math.sqrt((1 + 2 * Math.cos(angle)) / 3);
+  const sinAlpha = Math.sqrt(1 - cosAlpha * cosAlpha);
+  const hz = re * cosAlpha; // height of H atoms above the N-plane
+  const hr = re * sinAlpha; // radial distance from C3 axis
+  return [
+    {
+      id: 0,
+      elementNumber: 7,
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'sp3',
+      fixed: false,
+    },
+    {
+      id: 1,
+      elementNumber: 1,
+      position: [hr, 0, hz],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+    {
+      id: 2,
+      elementNumber: 1,
+      position: [-hr / 2, (hr * Math.sqrt(3)) / 2, hz],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+    {
+      id: 3,
+      elementNumber: 1,
+      position: [-hr / 2, (-hr * Math.sqrt(3)) / 2, hz],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+  ];
+}
+
+/**
+ * Create a hydrogen fluoride molecule (HF).
+ * Strongest hydrogen bond donor among simple molecules.
+ * Charges computed by Gasteiger: H ≈ +0.35, F ≈ -0.35
+ */
+export function hfMolecule(): Atom[] {
+  // Experimental geometry: H-F = 0.917 Å
+  // Source: NIST CCCBDB experimental geometry for HF
+  return [
+    {
+      id: 0,
+      elementNumber: 9,
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'sp3',
+      fixed: false,
+    },
+    {
+      id: 1,
+      elementNumber: 1,
+      position: [0.917, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+  ];
+}
+
+/**
+ * Create a hydrogen sulfide molecule (H2S).
+ * Comparison to water: smaller bond angle (~92°) due to
+ * less s-p mixing in the larger sulfur atom.
+ * Charges computed by Gasteiger: S ≈ -0.24, H ≈ +0.12
+ */
+export function h2sMolecule(): Atom[] {
+  // Experimental geometry: S-H = 1.336 Å, H-S-H = 92.1°
+  // Source: NIST CCCBDB experimental geometry for H2S
+  const re = 1.336; // S-H bond length in Å
+  const halfAngle = ((92.1 / 2) * Math.PI) / 180;
+  const hx = re * Math.sin(halfAngle);
+  const hy = re * Math.cos(halfAngle);
+  return [
+    {
+      id: 0,
+      elementNumber: 16,
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'sp3',
+      fixed: false,
+    },
+    {
+      id: 1,
+      elementNumber: 1,
+      position: [hx, hy, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+    {
+      id: 2,
+      elementNumber: 1,
+      position: [-hx, hy, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+  ];
+}
+
+/**
  * Create a sodium chloride ion pair.
  * NaCl uses formal ionic charges (±1.0) — Gasteiger is not
  * appropriate for ionic compounds. These are preserved because
