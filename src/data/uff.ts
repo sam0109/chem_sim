@@ -593,6 +593,15 @@ export function getLJParams(
   return { sigma, epsilon };
 }
 
+// Safety clamp for angle force constants.
+// Range [0.05, 15.0] eV/rad² covers all UFF atom combinations:
+//   - Lower bound: very soft angles like H-S-H (~1.3 eV/rad²) plus margin
+//   - Upper bound: stiff bridges like C-O-C (~7 eV/rad²) plus margin
+// Previous [0.5, 5.0] range was too tight and masked correct results.
+function clampK(k: number): number {
+  return Math.max(0.05, Math.min(15.0, k));
+}
+
 /**
  * Compute UFF angle bending force constant for angle I-J-K.
  * Uses the UFF formula from Rappé et al. JACS 1992, Eq. 13.
@@ -637,7 +646,7 @@ export function getUFFAngleK(
     const K_kcal = (664.12 / (rIJ * rJK)) * ((tI.Z * tK.Z) / rIK3);
     const kAngle = Math.abs(K_kcal) * KCAL_TO_EV;
     return {
-      kAngle: Math.max(0.5, Math.min(5.0, kAngle)),
+      kAngle: clampK(kAngle),
       theta0,
     };
   }
@@ -664,10 +673,8 @@ export function getUFFAngleK(
   // Convert to eV/rad² (no sin²θ₀ division here — harmonicAngleForce does that)
   const kAngle = Math.abs(K_kcal) * KCAL_TO_EV;
 
-  // Clamp to reasonable range: 0.5 - 5.0 eV/rad²
-  // (5 eV/rad² \u2248 115 kcal/(mol\u00b7rad²), typical maximum for angle bending)
   return {
-    kAngle: Math.max(0.5, Math.min(5.0, kAngle)),
+    kAngle: clampK(kAngle),
     theta0,
   };
 }
