@@ -9,6 +9,10 @@ import type {
   Atom,
   Bond,
   EnergyBreakdown,
+  FEPConfig,
+  FEPProgress,
+  FEPResult,
+  FEPSample,
   MoleculeInfo,
   NEBConfig,
   NEBResult,
@@ -21,6 +25,7 @@ import type {
   WorkerStateUpdate,
 } from '../data/types';
 import { DEFAULT_NEB_CONFIG } from '../data/types';
+import { DEFAULT_FEP_CONFIG } from '../data/types';
 import elements from '../data/elements';
 import { SimulationWorker } from '../worker-comms';
 import {
@@ -139,6 +144,18 @@ export interface SimulationStoreState {
   runNEB: (config?: Partial<NEBConfig>) => void;
   cancelNEB: () => void;
   clearNEBResult: () => void;
+
+  // ---- FEP (Free Energy Perturbation) ----
+  fepConfig: FEPConfig;
+  fepSamples: FEPSample[];
+  fepResult: FEPResult | null;
+  fepProgress: FEPProgress | null;
+  fepRunning: boolean;
+  configureFEP: (config: Partial<FEPConfig>) => void;
+  setFEPLambda: (lambda: number) => void;
+  startFEPScan: () => void;
+  cancelFEP: () => void;
+  clearFEPResult: () => void;
 }
 
 const DEFAULT_CONFIG: SimulationConfig = {
@@ -284,6 +301,13 @@ function buildStoreSlice(
     nebReactantPositions: null,
     nebProductPositions: null,
 
+    // FEP state
+    fepConfig: { ...DEFAULT_FEP_CONFIG },
+    fepSamples: [],
+    fepResult: null,
+    fepProgress: null,
+    fepRunning: false,
+
     async initWorker() {
       const worker = new SimulationWorker();
       await worker.waitReady();
@@ -301,6 +325,19 @@ function buildStoreSlice(
           nebRunning: false,
           nebProgress: null,
         });
+      });
+      worker.onFEPSamplesUpdate((samples) => {
+        const existing = get().fepSamples;
+        set({ fepSamples: [...existing, ...samples] });
+      });
+      worker.onFEPProgressUpdate((progress) => {
+        set({ fepProgress: progress });
+        if (progress.phase === 'complete') {
+          set({ fepRunning: false });
+        }
+      });
+      worker.onFEPResultUpdate((result) => {
+        set({ fepResult: result });
       });
       set({ worker });
     },
@@ -843,6 +880,62 @@ function buildStoreSlice(
         nebProgress: null,
         nebReactantPositions: null,
         nebProductPositions: null,
+      });
+    },
+
+    // ---- FEP actions ----
+
+    configureFEP(partialConfig: Partial<FEPConfig>) {
+      const current = get().fepConfig;
+      const merged = { ...current, ...partialConfig };
+      set({ fepConfig: merged });
+      const worker = get().worker;
+      if (worker) {
+        worker.configureFEP(merged);
+      }
+    },
+
+    setFEPLambda(lambda: number) {
+      const fepConfig = get().fepConfig;
+      set({ fepConfig: { ...fepConfig, lambda } });
+      const worker = get().worker;
+      if (worker) {
+        worker.setFEPLambda(lambda);
+      }
+    },
+
+    startFEPScan() {
+      const worker = get().worker;
+      if (!worker) return;
+
+      // First, send the current FEP config to make sure worker is in sync
+      const fepConfig = get().fepConfig;
+      worker.configureFEP(fepConfig);
+
+      // Clear previous results
+      set({
+        fepRunning: true,
+        fepSamples: [],
+        fepResult: null,
+        fepProgress: null,
+      });
+
+      worker.startFEPScan();
+    },
+
+    cancelFEP() {
+      const worker = get().worker;
+      if (worker) {
+        worker.cancelFEP();
+      }
+      set({ fepRunning: false });
+    },
+
+    clearFEPResult() {
+      set({
+        fepResult: null,
+        fepProgress: null,
+        fepSamples: [],
       });
     },
   };

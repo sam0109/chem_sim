@@ -6,6 +6,10 @@
 import type {
   Atom,
   Bond,
+  FEPConfig,
+  FEPProgress,
+  FEPResult,
+  FEPSample,
   NEBConfig,
   NEBResult,
   SimulationBox,
@@ -22,12 +26,18 @@ export type NEBProgressCallback = (
   maxForce: number,
 ) => void;
 export type NEBResultCallback = (result: NEBResult) => void;
+export type FEPSamplesCallback = (samples: FEPSample[]) => void;
+export type FEPProgressCallback = (progress: FEPProgress) => void;
+export type FEPResultCallback = (result: FEPResult) => void;
 
 export class SimulationWorker {
   private worker: Worker;
   private onState: StateCallback | null = null;
   private onNEBProgress: NEBProgressCallback | null = null;
   private onNEBResult: NEBResultCallback | null = null;
+  private onFEPSamples: FEPSamplesCallback | null = null;
+  private onFEPProgress: FEPProgressCallback | null = null;
+  private onFEPResult: FEPResultCallback | null = null;
   private readyPromise: Promise<void>;
 
   constructor() {
@@ -55,6 +65,12 @@ export class SimulationWorker {
         );
       } else if (e.data.type === 'neb-result' && this.onNEBResult) {
         this.onNEBResult(e.data.result);
+      } else if (e.data.type === 'fep-samples' && this.onFEPSamples) {
+        this.onFEPSamples(e.data.samples);
+      } else if (e.data.type === 'fep-progress' && this.onFEPProgress) {
+        this.onFEPProgress(e.data.progress);
+      } else if (e.data.type === 'fep-result' && this.onFEPResult) {
+        this.onFEPResult(e.data.result);
       }
     };
   }
@@ -140,6 +156,36 @@ export class SimulationWorker {
 
   calm(): void {
     this.send({ type: 'calm' });
+  }
+
+  // ---- FEP methods ----
+
+  configureFEP(config: FEPConfig): void {
+    this.send({ type: 'fep-config', config });
+  }
+
+  setFEPLambda(lambda: number): void {
+    this.send({ type: 'fep-set-lambda', lambda });
+  }
+
+  startFEPScan(): void {
+    this.send({ type: 'fep-start-scan' });
+  }
+
+  cancelFEP(): void {
+    this.send({ type: 'fep-cancel' });
+  }
+
+  onFEPSamplesUpdate(callback: FEPSamplesCallback): void {
+    this.onFEPSamples = callback;
+  }
+
+  onFEPProgressUpdate(callback: FEPProgressCallback): void {
+    this.onFEPProgress = callback;
+  }
+
+  onFEPResultUpdate(callback: FEPResultCallback): void {
+    this.onFEPResult = callback;
   }
 
   terminate(): void {
