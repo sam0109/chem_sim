@@ -781,4 +781,110 @@ export function getUFFTorsionParams(
   return { V: 0, n: 1, phi0: 0 };
 }
 
+/**
+ * Compute UFF inversion (out-of-plane) parameters for a center atom.
+ *
+ * The UFF inversion potential (Eq. 17 of Rappé et al.) is:
+ *   V(ω) = K · [C0 + C1·cos(ω) + C2·cos(2ω)]
+ *
+ * where ω is the Wilson angle — the angle between a bond to the
+ * out-of-plane atom and the plane defined by the center and two
+ * in-plane atoms. For sp2 planarity, ω₀ = 0°.
+ *
+ * For an atom with 3 neighbors, 3 OOP terms are generated (one per
+ * choice of the out-of-plane atom), each with K/3. For 4 neighbors,
+ * C(4,1)=4 choices of OOP atom × 3 permutations = 12 terms, each
+ * with K/12.
+ *
+ * Source: Rappé et al., JACS 114, 10024 (1992), Eq. 17.
+ * Values: RDKit ForceField/UFF/Utils.cpp, Open Babel forcefielduff.cpp.
+ *
+ * @param zJ atomic number of the central atom
+ * @param hybJ hybridization of the central atom
+ * @param hasONeighbor whether the center has an sp2 oxygen neighbor
+ *                     (for C sp2 bonded to O, K increases from 6→50)
+ * @returns { K: number (eV), C0, C1, C2 } or null if no inversion
+ */
+export function getUFFInversionParams(
+  zJ: number,
+  hybJ: Hybridization,
+  hasONeighbor: boolean = false,
+): { K: number; C0: number; C1: number; C2: number } | null {
+  // Carbon sp2 / aromatic
+  if (zJ === 6 && hybJ === 'sp2') {
+    // K = 6 kcal/mol for general sp2 C; 50 kcal/mol when bonded to O_2
+    // Source: Rappé et al. Table I; RDKit Utils.cpp
+    const K_kcal = hasONeighbor ? 50.0 : 6.0;
+    return { K: K_kcal * KCAL_TO_EV, C0: 1.0, C1: -1.0, C2: 0.0 };
+  }
+
+  // Carbon sp3 (e.g., methane) — enforce tetrahedral geometry
+  // The out-of-plane angle for a perfect tetrahedron is:
+  //   ω₀ = arcsin(1/√3) ≈ 35.264° → sin(ω₀) ≈ 0.57735
+  // Using the general cosine expansion V(ω) = K(C0 + C1·cos(ω) + C2·cos(2ω))
+  // with the constraint that V'(ω₀) = 0 and V(ω₀) = 0:
+  //   C2 = 1, C1 = -4·cos(ω₀) = -4·√(2/3) ≈ -3.2660
+  //   C0 = -(C1·cos(ω₀) + C2·cos(2ω₀))
+  // K = 6 kcal/mol (same as sp2 C, provides stiffness without being too rigid)
+  // Source: analogy with Rappé Eq. 17 for group-15 sp3 parameterization.
+  if (zJ === 6 && hybJ === 'sp3') {
+    const w0 = Math.asin(1 / Math.sqrt(3)); // ≈ 0.6155 rad ≈ 35.26°
+    const cosW0 = Math.cos(w0);
+    const C2 = 1.0;
+    const C1 = -4.0 * cosW0;
+    const C0 = -(C1 * cosW0 + C2 * Math.cos(2 * w0));
+    const K_kcal = 6.0;
+    return { K: K_kcal * KCAL_TO_EV, C0, C1, C2 };
+  }
+
+  // Nitrogen sp2 / aromatic
+  if (zJ === 7 && hybJ === 'sp2') {
+    return { K: 6.0 * KCAL_TO_EV, C0: 1.0, C1: -1.0, C2: 0.0 };
+  }
+
+  // Nitrogen sp3 (e.g., NH3) — pyramidal equilibrium
+  // ω₀ ≈ asin(cos(106.7°) / cos(106.7°/2)) ≈ 25.5° (approximate)
+  // Use same approach as group 15
+  if (zJ === 7 && hybJ === 'sp3') {
+    const theta0_rad = (106.7 * Math.PI) / 180.0;
+    // For sp3 N, the OOP angle relates to the bond angle by:
+    // sin(ω₀) = cos(θ₀) / cos(θ₀/2) ... but for simplicity use the
+    // standard UFF parameterization for N_3 which is similar to C sp3
+    const w0 = Math.asin(
+      Math.abs(Math.cos(theta0_rad)) / Math.cos(theta0_rad / 2),
+    );
+    const cosW0 = Math.cos(w0);
+    const C2 = 1.0;
+    const C1 = -4.0 * cosW0;
+    const C0 = -(C1 * cosW0 + C2 * Math.cos(2 * w0));
+    return { K: 6.0 * KCAL_TO_EV, C0, C1, C2 };
+  }
+
+  // Oxygen sp2
+  if (zJ === 8 && hybJ === 'sp2') {
+    return { K: 6.0 * KCAL_TO_EV, C0: 1.0, C1: -1.0, C2: 0.0 };
+  }
+
+  // Group 15 sp3: P, As, Sb, Bi
+  // Source: Rappé et al., JACS 114, 10024 (1992), Table I
+  const group15Angles: Record<number, number> = {
+    15: 84.4339, // P
+    33: 86.9735, // As
+    51: 87.7047, // Sb
+    83: 90.0, // Bi
+  };
+  const w0Deg = group15Angles[zJ];
+  if (w0Deg !== undefined) {
+    const w0 = (w0Deg * Math.PI) / 180.0;
+    const cosW0 = Math.cos(w0);
+    const C2 = 1.0;
+    const C1 = -4.0 * cosW0;
+    const C0 = -(C1 * cosW0 + C2 * Math.cos(2 * w0));
+    const K_kcal = 22.0;
+    return { K: K_kcal * KCAL_TO_EV, C0, C1, C2 };
+  }
+
+  return null;
+}
+
 export { uffAtomTypes, KCAL_TO_EV };
