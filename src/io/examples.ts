@@ -369,6 +369,137 @@ export function h2sMolecule(): Atom[] {
 }
 
 /**
+ * Create an acetylene molecule (C2H2).
+ * Linear geometry with C≡C triple bond.
+ * Hardcoded charges because triple bond detection may be unreliable
+ * (same approach as CO₂). C: sp hybridization.
+ */
+export function acetyleneMolecule(): Atom[] {
+  // Experimental geometry: C≡C = 1.203 Å, C-H = 1.060 Å, linear
+  // Source: NIST CCCBDB experimental geometry for C2H2
+  // Charges: Gasteiger sp C with H gives roughly ±0.25
+  const cc = 1.203; // C≡C bond length in Å
+  const ch = 1.06; // C-H bond length in Å
+  return [
+    // C1
+    {
+      id: 0,
+      elementNumber: 6,
+      position: [-cc / 2, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: -0.25,
+      hybridization: 'sp',
+      fixed: false,
+    },
+    // C2
+    {
+      id: 1,
+      elementNumber: 6,
+      position: [cc / 2, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: -0.25,
+      hybridization: 'sp',
+      fixed: false,
+    },
+    // H1
+    {
+      id: 2,
+      elementNumber: 1,
+      position: [-cc / 2 - ch, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0.25,
+      hybridization: 'none',
+      fixed: false,
+    },
+    // H2
+    {
+      id: 3,
+      elementNumber: 1,
+      position: [cc / 2 + ch, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0.25,
+      hybridization: 'none',
+      fixed: false,
+    },
+  ];
+}
+
+/**
+ * Create a hydrogen peroxide molecule (H2O2).
+ * Non-planar: the H-O-O-H dihedral demonstrates torsional geometry.
+ * Charges computed by Gasteiger: O ≈ -0.28, H ≈ +0.28
+ */
+export function h2o2Molecule(): Atom[] {
+  // Experimental geometry: O-O = 1.475 Å, O-H = 0.950 Å,
+  // H-O-O angle = 94.8°, H-O-O-H dihedral = 111.5°
+  // Source: NIST CCCBDB experimental geometry for H2O2
+  const oo = 1.475; // O-O bond length in Å
+  const oh = 0.95; // O-H bond length in Å
+  const hooAngle = (94.8 * Math.PI) / 180; // H-O-O angle
+  const dihedral = (111.5 * Math.PI) / 180; // H-O-O-H dihedral
+
+  // O1 at origin, O2 along +x
+  // H1 in the xz-plane (dihedral reference), H2 rotated by dihedral
+  const h1x = -oh * Math.cos(hooAngle);
+  const h1z = oh * Math.sin(hooAngle);
+
+  const h2x = oo + oh * Math.cos(hooAngle);
+  const h2y = -oh * Math.sin(hooAngle) * Math.sin(dihedral);
+  const h2z = -oh * Math.sin(hooAngle) * Math.cos(dihedral);
+
+  return [
+    // O1
+    {
+      id: 0,
+      elementNumber: 8,
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'sp3',
+      fixed: false,
+    },
+    // O2
+    {
+      id: 1,
+      elementNumber: 8,
+      position: [oo, 0, 0],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'sp3',
+      fixed: false,
+    },
+    // H1
+    {
+      id: 2,
+      elementNumber: 1,
+      position: [h1x, 0, h1z],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+    // H2
+    {
+      id: 3,
+      elementNumber: 1,
+      position: [h2x, h2y, h2z],
+      velocity: [0, 0, 0],
+      force: [0, 0, 0],
+      charge: 0,
+      hybridization: 'none',
+      fixed: false,
+    },
+  ];
+}
+
+/**
  * Create a sodium chloride ion pair.
  * NaCl uses formal ionic charges (±1.0) — Gasteiger is not
  * appropriate for ionic compounds. These are preserved because
