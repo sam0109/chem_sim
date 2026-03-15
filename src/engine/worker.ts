@@ -166,11 +166,15 @@ function rebuildTopology(): void {
   // Detect bonds with hysteresis (existing bonds get wider break tolerance)
   bonds = detectBonds(positions, Array.from(atomicNumbers), 1.2, bonds, 1.5);
 
-  // Add hydrogen bonds
+  // Extract previous H-bonds for hysteresis (before stripping)
+  const previousHBonds = bonds.filter((b) => b.type === 'hydrogen');
+
+  // Add hydrogen bonds (with hysteresis from previous frame)
   const hBonds = detectHydrogenBonds(
     positions,
     Array.from(atomicNumbers),
     bonds,
+    previousHBonds,
   );
   bonds = [...bonds.filter((b) => b.type !== 'hydrogen'), ...hBonds];
 
