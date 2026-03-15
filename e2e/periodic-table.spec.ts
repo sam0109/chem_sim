@@ -66,10 +66,13 @@ test.describe('Periodic table', () => {
     const periodicTable = page.getByTestId('periodic-table');
     await periodicTable.getByRole('button', { name: /Expand/ }).click();
 
-    // The periodic table should show elements from H (1) through Kr (36)
-    const elementButtons = periodicTable
-      .locator('button')
-      .filter({ hasText: /^[A-Z][a-z]?$/ });
+    // Wait for expansion to complete
+    await expect(
+      periodicTable.getByRole('button', { name: /Collapse/ }),
+    ).toBeVisible();
+
+    // Count element buttons by their data-testid pattern (element-{Symbol})
+    const elementButtons = periodicTable.locator('button[data-testid^="element-"]');
     const count = await elementButtons.count();
     expect(count).toBeGreaterThanOrEqual(36);
   });
