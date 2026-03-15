@@ -42,13 +42,13 @@ let step = 0;
 
 // Cached force-field parameters
 let bondParams: Array<{ i: number; j: number; De: number; alpha: number; re: number }> = [];
-let ljCache: Map<string, { sigma: number; epsilon: number }> = new Map();
+const ljCache: Map<string, { sigma: number; epsilon: number }> = new Map();
 let cellList: CellList | null = null;
 // Cached angle parameters (precomputed once per topology rebuild)
 let angleParams: Array<{ i: number; j: number; k: number; kAngle: number; theta0: number }> = [];
 
 // --- Exclusion set: skip 1-2 (bonded) AND 1-3 (angle) pairs from LJ/Coulomb ---
-let exclusionSet: Set<string> = new Set();
+const exclusionSet: Set<string> = new Set();
 
 // Drag force target
 let dragAtomId = -1;
@@ -126,7 +126,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
 
   // 3. Non-bonded forces (LJ + Coulomb) using cell list or brute force
   const cutoff = config.cutoff;
-  const pairCallback = (i: number, j: number, _r2: number): void => {
+  const pairCallback = (i: number, j: number): void => {
     // Skip 1-2 (bonded) and 1-3 (angle) pairs
     const key = `${Math.min(i, j)}-${Math.max(i, j)}`;
     if (exclusionSet.has(key)) return;
@@ -447,12 +447,13 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
       runSteps(msg.steps);
       break;
 
-    case 'config':
+    case 'config': {
       const wasRunning = config.running;
       Object.assign(config, msg.config);
       if (config.running && !wasRunning) startLoop();
       if (!config.running && wasRunning) stopLoop();
       break;
+    }
 
     case 'add-atom':
       addAtom(msg.atom);
