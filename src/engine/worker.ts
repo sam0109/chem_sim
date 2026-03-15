@@ -40,6 +40,7 @@ import {
   velocityVerletStep,
   computeTemperature,
   initializeVelocities,
+  removeAngularMomentum,
 } from './integrator';
 import {
   berendsenThermostat,
@@ -977,6 +978,21 @@ function runSteps(nSteps: number): void {
   // Valence constraints in detectBonds prevent spurious bonds.
   // LJ repulsion on 1-3 pairs prevents angle collapse.
   rebuildTopology();
+
+  // Remove angular momentum from each molecule periodically to prevent
+  // unphysical rotational energy buildup. Applied every 10 steps (~2 frames)
+  // as a gentle correction that doesn't over-damp genuine rotational dynamics.
+  // Source: Allen & Tildesley, "Computer Simulation of Liquids", §2.6
+  const ANGULAR_MOMENTUM_REMOVAL_INTERVAL = 10;
+  if (
+    step % ANGULAR_MOMENTUM_REMOVAL_INTERVAL === 0 &&
+    moleculeInfo.length > 0
+  ) {
+    const groups = moleculeInfo.map((m) => m.atomIndices);
+    removeAngularMomentum(positions, velocities, masses, fixed, groups);
+    // Invalidate cached KE since velocities changed
+    cachedKE = computeKineticEnergy();
+  }
 
   sendState();
 }
