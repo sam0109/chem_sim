@@ -212,3 +212,11 @@ function buildStoreSlice(
 export const useSimulationStore = create<SimulationStoreState>((set, get) =>
   buildStoreSlice(set, get),
 );
+
+/**
+ * Get the global store as a vanilla StoreApi for use with context providers.
+ * Zustand's `create()` hook IS a StoreApi but TypeScript needs an explicit cast.
+ */
+export function getGlobalSimulationStore(): StoreApi<SimulationStoreState> {
+  return useSimulationStore as unknown as StoreApi<SimulationStoreState>;
+}

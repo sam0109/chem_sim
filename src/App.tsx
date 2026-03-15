@@ -2,7 +2,7 @@
 // App — main application shell
 // ==============================================================
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import type { StoreApi } from 'zustand';
 import { Scene } from './renderer/Scene';
 import { PeriodicTable } from './ui/PeriodicTable';
@@ -16,6 +16,7 @@ import { ComparisonTable } from './ui/ComparisonTable';
 import {
   useSimulationStore,
   createSimulationStoreInstance,
+  getGlobalSimulationStore,
 } from './store/simulationStore';
 import type { SimulationStoreState } from './store/simulationStore';
 import { SimulationContext } from './store/SimulationContext';
@@ -254,16 +255,14 @@ const App: React.FC = () => {
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
 
-  // Secondary simulation store for comparison mode
-  // Created once and reused; its worker is initialized lazily
-  const secondaryStoreRef = useRef<StoreApi<SimulationStoreState> | null>(null);
-  const secondaryStore = useMemo(() => {
-    if (!comparisonMode) return null;
-    if (!secondaryStoreRef.current) {
-      secondaryStoreRef.current = createSimulationStoreInstance();
-    }
-    return secondaryStoreRef.current;
-  }, [comparisonMode]);
+  // Secondary simulation store for comparison mode.
+  // Created once when comparison mode is first activated, then persists.
+  // useMemo ensures the store instance is stable across re-renders.
+  const activeSecondaryStore = useMemo(
+    () => (comparisonMode ? createSimulationStoreInstance() : null),
+
+    [comparisonMode],
+  );
 
   /** Apply a deserialized .chemsim state to both stores */
   const applyChemSimState = useCallback(
@@ -397,8 +396,7 @@ const App: React.FC = () => {
 
   // ---- Comparison mode: two panels side-by-side ----
   if (comparisonMode) {
-    const primaryStore =
-      useSimulationStore as unknown as StoreApi<SimulationStoreState>;
+    const primaryStore = getGlobalSimulationStore();
 
     return (
       <div
@@ -414,19 +412,23 @@ const App: React.FC = () => {
       >
         {/* Shared controls bar — uses primary store via context */}
         <SimulationContext.Provider value={primaryStore}>
-          <SharedControlsBar secondaryStore={secondaryStore} />
+          <SharedControlsBar secondaryStore={activeSecondaryStore} />
         </SimulationContext.Provider>
 
         {/* Two simulation panels side-by-side */}
         <div style={{ flex: 1, display: 'flex', position: 'relative' }}>
           <SimulationPanel role="primary" label="Panel A" />
-          <SimulationPanel role="secondary" label="Panel B" />
+          <SimulationPanel
+            role="secondary"
+            label="Panel B"
+            externalStore={activeSecondaryStore ?? undefined}
+          />
 
           {/* Comparison table at bottom center */}
-          {secondaryStore && (
+          {activeSecondaryStore && (
             <ComparisonTable
               leftStore={primaryStore}
-              rightStore={secondaryStore}
+              rightStore={activeSecondaryStore}
             />
           )}
         </div>
@@ -461,7 +463,7 @@ const App: React.FC = () => {
 
   // ---- Single-panel mode (default) ----
   return (
-    <SimulationContext.Provider value={useSimulationStore}>
+    <SimulationContext.Provider value={getGlobalSimulationStore()}>
       <div
         data-testid="app-container"
         style={{

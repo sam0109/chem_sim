@@ -11,7 +11,7 @@ import { Scene } from './renderer/Scene';
 import { SimulationContext } from './store/SimulationContext';
 import {
   createSimulationStoreInstance,
-  useSimulationStore,
+  getGlobalSimulationStore,
 } from './store/simulationStore';
 import type { SimulationStoreState } from './store/simulationStore';
 import { EnergyPlot } from './ui/EnergyPlot';
@@ -38,6 +38,8 @@ interface SimulationPanelProps {
   role: 'primary' | 'secondary';
   /** Label shown at the top of the panel */
   label: string;
+  /** Optional external store — when provided, panel uses this instead of creating its own */
+  externalStore?: StoreApi<SimulationStoreState>;
 }
 
 /**
@@ -93,17 +95,20 @@ const PanelStats: React.FC<{ store: StoreApi<SimulationStoreState> }> = ({
 export const SimulationPanel: React.FC<SimulationPanelProps> = ({
   role,
   label,
+  externalStore,
 }) => {
   const [loading, setLoading] = useState(role === 'secondary');
   const [showMoleculeMenu, setShowMoleculeMenu] = useState(false);
 
-  // Primary reuses the global store; secondary gets a fresh instance
+  // Use external store if provided; otherwise primary reuses global,
+  // secondary creates a fresh instance
   const store = useMemo<StoreApi<SimulationStoreState>>(() => {
+    if (externalStore) return externalStore;
     if (role === 'primary') {
-      return useSimulationStore as unknown as StoreApi<SimulationStoreState>;
+      return getGlobalSimulationStore();
     }
     return createSimulationStoreInstance();
-  }, [role]);
+  }, [role, externalStore]);
 
   // Initialize the secondary worker + default molecule
   useEffect(() => {
@@ -112,7 +117,7 @@ export const SimulationPanel: React.FC<SimulationPanelProps> = ({
     (async () => {
       await store.getState().initWorker();
       if (cancelled) return;
-      // Default: load H₂S for comparison with the default H₂O
+      // Default: load Water for the secondary panel
       const atoms = exampleMolecules['Water (H₂O)']();
       store.getState().initSimulation(atoms);
       setLoading(false);
