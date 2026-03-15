@@ -11,6 +11,7 @@ import { PropertyPanel } from './ui/PropertyPanel';
 import { Toolbar } from './ui/Toolbar';
 import { EnergyPlot } from './ui/EnergyPlot';
 import { ChallengePanel } from './ui/ChallengePanel';
+import { ExperimentPanel } from './ui/ExperimentPanel';
 import { SimulationPanel } from './SimulationPanel';
 import { ComparisonTable } from './ui/ComparisonTable';
 import { EncounterPanel } from './ui/EncounterPanel';
@@ -688,6 +689,7 @@ const App: React.FC = () => {
         <PeriodicTable />
         <EnergyPlot />
         <ChallengePanel />
+        <ExperimentPanel />
         <EncounterPanel />
         <ReactionLog />
         <QuantityDashboard />
