@@ -12,11 +12,13 @@ import type { OrbitalInfo } from '../data/orbitalData';
 export const PropertyPanel: React.FC = () => {
   const showPropertyPanel = useUIStore((s) => s.showPropertyPanel);
   const selectedAtomIds = useUIStore((s) => s.selectedAtomIds);
+  const selectedElement = useUIStore((s) => s.selectedElement);
   const atoms = useSimContextStore((s) => s.atoms);
   const bonds = useSimContextStore((s) => s.bonds);
   const positions = useSimContextStore((s) => s.positions);
   const moleculeIds = useSimContextStore((s) => s.moleculeIds);
   const molecules = useSimContextStore((s) => s.molecules);
+  const transmuteAtom = useSimContextStore((s) => s.transmuteAtom);
 
   if (!showPropertyPanel || selectedAtomIds.length === 0) return null;
 
@@ -146,6 +148,31 @@ export const PropertyPanel: React.FC = () => {
                 {moleculeIds.length > i ? `#${moleculeIds[i]}` : 'N/A'}
               </span>
             </div>
+            {selectedElement !== atom.elementNumber &&
+              (() => {
+                const targetEl = elements[selectedElement];
+                if (!targetEl) return null;
+                return (
+                  <button
+                    onClick={() => transmuteAtom(i, selectedElement)}
+                    style={{
+                      marginTop: 6,
+                      width: '100%',
+                      padding: '4px 8px',
+                      background: 'rgba(100,180,255,0.2)',
+                      border: '1px solid rgba(100,180,255,0.4)',
+                      borderRadius: 4,
+                      color: '#88ccff',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                    }}
+                    title={`Change this atom from ${el?.symbol ?? '?'} to ${targetEl.symbol}`}
+                  >
+                    Transmute to {targetEl.symbol} ({targetEl.name})
+                  </button>
+                );
+              })()}
           </div>
         );
       })}
