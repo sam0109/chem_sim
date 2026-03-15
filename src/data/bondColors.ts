@@ -10,7 +10,7 @@
 //
 // Sources:
 // - General chemistry textbook conventions (Zumdahl, Silberberg)
-// - Consistent with PeriodicTable.tsx predictBondType() color scheme
+// - Material Design color palette for accessibility and visual clarity
 // ==============================================================
 
 import type { BondType } from './types';

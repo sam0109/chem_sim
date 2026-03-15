@@ -283,7 +283,7 @@ export const Toolbar: React.FC = () => {
       <button
         data-testid="toggle-bond-type-colors"
         onClick={toggleBondColorMode}
-        title="Toggle Bond Type Coloring (color bonds by type: covalent, ionic, metallic, hydrogen)"
+        title="Toggle Bond Type Coloring (color bonds by type: covalent, ionic, metallic, hydrogen, van der Waals)"
         style={{
           width: 40,
           height: 30,
