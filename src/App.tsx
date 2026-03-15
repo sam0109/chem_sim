@@ -16,6 +16,7 @@ import { SimulationPanel } from './SimulationPanel';
 import { ComparisonTable } from './ui/ComparisonTable';
 import { EncounterPanel } from './ui/EncounterPanel';
 import { NEBPanel } from './ui/NEBPanel';
+import { FEPPanel } from './ui/FEPPanel';
 import {
   useSimulationStore,
   createSimulationStoreInstance,
@@ -696,6 +697,7 @@ const App: React.FC = () => {
         <ExperimentPanel />
         <EncounterPanel />
         <NEBPanel />
+        <FEPPanel />
         <ReactionLog />
         <EventLog />
         <QuantityDashboard />

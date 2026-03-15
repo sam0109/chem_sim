@@ -461,6 +461,28 @@ export interface WorkerCalmMessage {
   type: 'calm';
 }
 
+/** Configure FEP calculation parameters */
+export interface WorkerFEPConfigMessage {
+  type: 'fep-config';
+  config: FEPConfig;
+}
+
+/** Update the λ parameter for the current FEP calculation */
+export interface WorkerFEPSetLambdaMessage {
+  type: 'fep-set-lambda';
+  lambda: number;
+}
+
+/** Start a full FEP scan across all λ windows */
+export interface WorkerFEPStartScanMessage {
+  type: 'fep-start-scan';
+}
+
+/** Cancel an in-progress FEP scan */
+export interface WorkerFEPCancelMessage {
+  type: 'fep-cancel';
+}
+
 export type WorkerInMessage =
   | WorkerInitMessage
   | WorkerStepMessage
@@ -474,7 +496,11 @@ export type WorkerInMessage =
   | WorkerTransmuteAtomMessage
   | WorkerNEBMessage
   | WorkerNEBCancelMessage
-  | WorkerCalmMessage;
+  | WorkerCalmMessage
+  | WorkerFEPConfigMessage
+  | WorkerFEPSetLambdaMessage
+  | WorkerFEPStartScanMessage
+  | WorkerFEPCancelMessage;
 
 /** Per-force-type potential energy decomposition (all values in eV) */
 export interface EnergyBreakdown {
@@ -544,11 +570,160 @@ export interface WorkerNEBResultMessage {
   result: NEBResult;
 }
 
+/** FEP samples collected during production at one λ window */
+export interface WorkerFEPSamplesMessage {
+  type: 'fep-samples';
+  /** Samples from the most recent production run */
+  samples: FEPSample[];
+}
+
+/** FEP scan progress update */
+export interface WorkerFEPProgressMessage {
+  type: 'fep-progress';
+  progress: FEPProgress;
+}
+
+/** FEP scan complete — final free energy result */
+export interface WorkerFEPResultMessage {
+  type: 'fep-result';
+  result: FEPResult;
+}
+
 export type WorkerOutMessage =
   | WorkerStateUpdate
   | WorkerReadyMessage
   | WorkerNEBProgressMessage
-  | WorkerNEBResultMessage;
+  | WorkerNEBResultMessage
+  | WorkerFEPSamplesMessage
+  | WorkerFEPProgressMessage
+  | WorkerFEPResultMessage;
+
+// --------------- Free Energy Perturbation (FEP) ---------------
+
+/**
+ * Identifies an atom undergoing alchemical transformation between two states.
+ * State A represents the starting system, state B the target system.
+ * During an FEP calculation, the potential V(λ) = (1−λ)·V_A + λ·V_B
+ * smoothly interpolates between the two endpoints.
+ *
+ * Reference: Zwanzig, J. Chem. Phys. 22, 1420 (1954)
+ */
+export interface AlchemicalAtom {
+  /** Atom index in the simulation arrays */
+  atomIndex: number;
+  /** State A (λ=0) properties */
+  stateA: {
+    elementNumber: number;
+    charge: number;
+    hybridization: Hybridization;
+  };
+  /** State B (λ=1) properties */
+  stateB: {
+    elementNumber: number;
+    charge: number;
+    hybridization: Hybridization;
+  };
+}
+
+/**
+ * Configuration for a Free Energy Perturbation calculation.
+ *
+ * Two methods are supported:
+ * - Thermodynamic Integration (TI): ΔG = ∫₀¹ ⟨∂V/∂λ⟩_λ dλ
+ * - FEP (Zwanzig equation): ΔG = −kT ln⟨exp(−ΔV/kT)⟩
+ *
+ * Soft-core potentials (Beutler et al., Chem. Phys. Lett. 222, 529 (1994))
+ * prevent singularities when atoms appear or disappear.
+ */
+export interface FEPConfig {
+  /** Whether FEP is active */
+  enabled: boolean;
+  /** Current λ value [0, 1] — interpolation parameter */
+  lambda: number;
+  /** Atoms undergoing alchemical transformation */
+  alchemicalAtoms: AlchemicalAtom[];
+  /** Soft-core α parameter (default 0.5). Controls the smoothing radius.
+   *  Source: Beutler et al., Chem. Phys. Lett. 222, 529 (1994), Eq. 3 */
+  softCoreAlpha: number;
+  /** Soft-core power p (default 1). Exponent on the λ dependence.
+   *  Source: Beutler et al., Chem. Phys. Lett. 222, 529 (1994), Eq. 3 */
+  softCorePower: number;
+  /** Steps between ∂V/∂λ samples during production (default 1) */
+  collectInterval: number;
+  /** Number of equilibration steps per λ window before collecting samples */
+  equilibrationSteps: number;
+  /** Number of production steps per λ window for collecting samples */
+  productionSteps: number;
+  /** λ values defining the thermodynamic path (e.g. [0.0, 0.1, ..., 1.0]) */
+  lambdaSchedule: number[];
+}
+
+/** Default FEP configuration values */
+export const DEFAULT_FEP_CONFIG: FEPConfig = {
+  enabled: false,
+  lambda: 0,
+  alchemicalAtoms: [],
+  softCoreAlpha: 0.5, // Beutler et al., Chem. Phys. Lett. 222, 529 (1994)
+  softCorePower: 1, // Beutler et al., Chem. Phys. Lett. 222, 529 (1994)
+  collectInterval: 1,
+  equilibrationSteps: 1000,
+  productionSteps: 5000,
+  lambdaSchedule: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+};
+
+/**
+ * A single sample of the FEP thermodynamic estimator collected during
+ * production simulation at a given λ value.
+ */
+export interface FEPSample {
+  /** λ value at which this sample was collected */
+  lambda: number;
+  /** ∂V/∂λ = V_B − V_A at current configuration (eV), used for TI */
+  dVdLambda: number;
+  /** ΔV = V_B − V_A for the Zwanzig exponential average (eV) */
+  deltaV: number;
+  /** Simulation step when this sample was collected */
+  step: number;
+}
+
+/**
+ * Result of a completed FEP/TI free energy calculation.
+ */
+export interface FEPResult {
+  /** Free energy difference ΔG in eV */
+  deltaG: number;
+  /** Statistical error estimate in eV (from block averaging) */
+  error: number;
+  /** Method used: TI (trapezoidal integration) or Zwanzig (exponential average) */
+  method: 'TI' | 'Zwanzig';
+  /** Per-λ-window mean ⟨∂V/∂λ⟩ values (for TI curve plotting) */
+  dVdLambdaMeans: number[];
+  /** Per-λ-window standard errors of ⟨∂V/∂λ⟩ */
+  dVdLambdaErrors: number[];
+  /** λ schedule used */
+  lambdaSchedule: number[];
+}
+
+/** Phases of an FEP scan — tracks progress through the λ schedule */
+export type FEPPhase = 'idle' | 'equilibrating' | 'collecting' | 'complete';
+
+/**
+ * Progress state for an in-flight FEP scan, sent from worker to main thread.
+ */
+export interface FEPProgress {
+  /** Current phase of the FEP calculation */
+  phase: FEPPhase;
+  /** Index into the λ schedule (which window is active) */
+  currentWindowIndex: number;
+  /** Total number of λ windows */
+  totalWindows: number;
+  /** Steps completed in the current window */
+  stepsInWindow: number;
+  /** Total steps for the current window (equil + production) */
+  totalStepsInWindow: number;
+  /** Samples collected so far across all windows */
+  totalSamplesCollected: number;
+}
 
 // --------------- UI State ---------------
 

@@ -6,6 +6,9 @@ import type {
   Atom,
   Bond,
   EnergyBreakdown,
+  FEPConfig,
+  FEPProgress,
+  FEPSample,
   Hybridization,
   MoleculeInfo,
   NEBConfig,
@@ -50,6 +53,9 @@ import {
 } from './thermostat';
 import type { NoseHooverChainState } from './thermostat';
 import { steepestDescent } from './minimizer';
+import { softCoreLJForce } from './forces/softCoreLJ';
+import { computeTI, computeZwanzig } from './fep';
+import { DEFAULT_FEP_CONFIG } from '../data/types';
 import { runNEB } from './neb';
 import {
   detectBonds,
@@ -278,6 +284,33 @@ let hasPrevTopology = false;
 /** Reaction events detected in the most recent topology rebuild */
 let pendingReactionEvents: ReactionEvent[] = [];
 
+// ---- FEP (Free Energy Perturbation) state ----
+let fepConfig: FEPConfig = { ...DEFAULT_FEP_CONFIG };
+/** Set of atom indices undergoing alchemical transformation */
+const fepAlchemicalSet: Set<number> = new Set();
+/** State B bond parameters for alchemical atoms (indexed same as bondParams) */
+let bondParamsB: Array<{
+  i: number;
+  j: number;
+  De: number;
+  alpha: number;
+  re: number;
+}> = [];
+/** Whether each bond in bondParams involves an alchemical atom */
+let bondIsAlchemical: boolean[] = [];
+/** State B charges for alchemical atoms */
+let chargesB: Float64Array = new Float64Array(0);
+/** State B atomic numbers for alchemical atoms (others = 0) */
+let atomicNumbersB: Int32Array = new Int32Array(0);
+/** Accumulated FEP samples during a scan */
+let fepSamples: FEPSample[] = [];
+/** Whether an FEP scan is currently running */
+let fepScanActive = false;
+/** Whether the FEP scan has been cancelled */
+let fepScanCancelled = false;
+/** Accumulated dV/dλ for the current step (set during computeAllForces) */
+let cachedDVDLambda = 0;
+
 // ---- Force field parameter setup ----
 function rebuildTopology(): void {
   // Snapshot previous topology for reaction detection
@@ -384,6 +417,12 @@ function rebuildTopology(): void {
       charges[i] = gasteigerQ[i];
     }
   }
+
+  // --- FEP: Build state B parameters for alchemical atoms ---
+  // When FEP is active, we need a parallel set of force field parameters
+  // computed with state B element numbers/hybridizations for each alchemical atom.
+  // Non-alchemical interactions use state A parameters only.
+  rebuildFEPParams();
 
   // Rebuild cell list
   if (!cellList) {
@@ -534,6 +573,75 @@ function buildTorsionParams(): void {
   gpuDataDirty = true;
 }
 
+/**
+ * Rebuild FEP state B parameters when FEP is active.
+ * Computes state B Morse bond params and charges for alchemical atoms,
+ * so that computeAllForces() can interpolate between A and B.
+ */
+function rebuildFEPParams(): void {
+  // Build the set of alchemical atom indices for O(1) lookup
+  fepAlchemicalSet.clear();
+  bondParamsB = [];
+  bondIsAlchemical = [];
+  chargesB = new Float64Array(nAtoms);
+  atomicNumbersB = new Int32Array(nAtoms);
+
+  if (!fepConfig.enabled || fepConfig.alchemicalAtoms.length === 0) {
+    return;
+  }
+
+  // Map: atomIndex → stateB properties
+  const stateB = new Map<
+    number,
+    { elementNumber: number; charge: number; hybridization: Hybridization }
+  >();
+  for (const aa of fepConfig.alchemicalAtoms) {
+    fepAlchemicalSet.add(aa.atomIndex);
+    stateB.set(aa.atomIndex, aa.stateB);
+    atomicNumbersB[aa.atomIndex] = aa.stateB.elementNumber;
+    chargesB[aa.atomIndex] = aa.stateB.charge;
+  }
+
+  // Copy non-alchemical atom charges/numbers to B (they are the same as A)
+  for (let i = 0; i < nAtoms; i++) {
+    if (!fepAlchemicalSet.has(i)) {
+      chargesB[i] = charges[i];
+      atomicNumbersB[i] = atomicNumbers[i];
+    }
+  }
+
+  // Build state B bond parameters for each bond in bondParams
+  for (const bp of bondParams) {
+    const aIsAlch = fepAlchemicalSet.has(bp.i);
+    const bIsAlch = fepAlchemicalSet.has(bp.j);
+    const isAlch = aIsAlch || bIsAlch;
+    bondIsAlchemical.push(isAlch);
+
+    if (isAlch) {
+      // Get state B element numbers
+      const zA = aIsAlch
+        ? stateB.get(bp.i)!.elementNumber
+        : atomicNumbers[bp.i];
+      const zB = bIsAlch
+        ? stateB.get(bp.j)!.elementNumber
+        : atomicNumbers[bp.j];
+      const hybA = aIsAlch
+        ? stateB.get(bp.i)!.hybridization
+        : hybridizations[bp.i];
+      const hybB = bIsAlch
+        ? stateB.get(bp.j)!.hybridization
+        : hybridizations[bp.j];
+
+      // Compute state B Morse parameters with the new element numbers
+      const paramsB = getMorseBondParams(zA, zB, 1, hybA, hybB);
+      bondParamsB.push({ i: bp.i, j: bp.j, ...paramsB });
+    } else {
+      // Same as state A
+      bondParamsB.push({ ...bp });
+    }
+  }
+}
+
 function getLJCached(
   z1: number,
   z2: number,
@@ -574,25 +682,77 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   let inversionE = 0;
   let ljE = 0;
   let coulombE = 0;
+  let dVdLambdaTotal = 0;
 
   // PBC minimum image box size — used for both bonded and non-bonded forces.
   // Reference: Allen & Tildesley, "Computer Simulation of Liquids", Ch. 1.5.2
   const pbcBoxSize = box.periodic ? box.size : undefined;
 
-  // 1. Bonded forces (Morse)
-  for (const bp of bondParams) {
-    const e = morseBondForce(
-      pos,
-      frc,
-      bp.i,
-      bp.j,
-      bp.De,
-      bp.alpha,
-      bp.re,
-      pbcBoxSize,
-    );
-    morseE += e;
-    potentialEnergy += e;
+  // FEP parameters
+  const fepActive = fepConfig.enabled && fepAlchemicalSet.size > 0;
+  const lambda = fepConfig.lambda;
+
+  // 1. Bonded forces (Morse) — with FEP λ-interpolation for alchemical bonds
+  for (let bi = 0; bi < bondParams.length; bi++) {
+    const bp = bondParams[bi];
+
+    if (fepActive && bondIsAlchemical[bi]) {
+      // Alchemical bond: V(λ) = (1−λ)·V_A + λ·V_B
+      // Use temporary force arrays to compute A and B separately
+      const frcA = new Float64Array(frc.length);
+      const frcB = new Float64Array(frc.length);
+      const bpB = bondParamsB[bi];
+
+      const eA = morseBondForce(
+        pos,
+        frcA,
+        bp.i,
+        bp.j,
+        bp.De,
+        bp.alpha,
+        bp.re,
+        pbcBoxSize,
+      );
+      const eB = morseBondForce(
+        pos,
+        frcB,
+        bpB.i,
+        bpB.j,
+        bpB.De,
+        bpB.alpha,
+        bpB.re,
+        pbcBoxSize,
+      );
+
+      // Interpolated energy and forces
+      const e = (1 - lambda) * eA + lambda * eB;
+      const i3A = bp.i * 3;
+      const j3A = bp.j * 3;
+      frc[i3A] += (1 - lambda) * frcA[i3A] + lambda * frcB[i3A];
+      frc[i3A + 1] += (1 - lambda) * frcA[i3A + 1] + lambda * frcB[i3A + 1];
+      frc[i3A + 2] += (1 - lambda) * frcA[i3A + 2] + lambda * frcB[i3A + 2];
+      frc[j3A] += (1 - lambda) * frcA[j3A] + lambda * frcB[j3A];
+      frc[j3A + 1] += (1 - lambda) * frcA[j3A + 1] + lambda * frcB[j3A + 1];
+      frc[j3A + 2] += (1 - lambda) * frcA[j3A + 2] + lambda * frcB[j3A + 2];
+
+      morseE += e;
+      potentialEnergy += e;
+      dVdLambdaTotal += eB - eA; // ∂V/∂λ for bonded = V_B − V_A
+    } else {
+      // Normal (non-alchemical) bond
+      const e = morseBondForce(
+        pos,
+        frc,
+        bp.i,
+        bp.j,
+        bp.De,
+        bp.alpha,
+        bp.re,
+        pbcBoxSize,
+      );
+      morseE += e;
+      potentialEnergy += e;
+    }
   }
 
   // 2. Angle forces (harmonic) — using precomputed params
@@ -689,34 +849,118 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       const is14 = scale14Set.has(key);
       const scaleFactor = is14 ? SCALE_14 : 1.0;
 
-      const { sigma, epsilon } = getLJCached(
-        atomicNumbers[i],
-        atomicNumbers[j],
-      );
-      const eLJ = ljForce(
-        pos,
-        frc,
-        i,
-        j,
-        sigma,
-        epsilon * scaleFactor,
-        cutoff,
-        pbcBoxSize,
-      );
-      ljE += eLJ;
-      potentialEnergy += eLJ;
-      const eCoul = coulombForce(
-        pos,
-        frc,
-        i,
-        j,
-        charges[i] * scaleFactor,
-        charges[j],
-        wc,
-        pbcBoxSize,
-      );
-      coulombE += eCoul;
-      potentialEnergy += eCoul;
+      // FEP: use soft-core LJ for pairs involving alchemical atoms
+      const pairIsAlchemical =
+        fepActive && (fepAlchemicalSet.has(i) || fepAlchemicalSet.has(j));
+
+      if (pairIsAlchemical) {
+        // --- Soft-core LJ with λ-interpolation ---
+        // State A: standard LJ with state A params, scaled by (1−λ)
+        // State B: soft-core LJ with state B params, scaled by λ
+        // This ensures smooth decoupling/coupling of alchemical atoms.
+        // Reference: Beutler et al., Chem. Phys. Lett. 222, 529 (1994)
+
+        // State A LJ (scaled by 1−λ using soft-core with flipped λ)
+        const { sigma: sigA, epsilon: epsA } = getLJCached(
+          atomicNumbers[i],
+          atomicNumbers[j],
+        );
+        const [eLJ_A, dVdL_A] = softCoreLJForce(
+          pos,
+          frc,
+          i,
+          j,
+          sigA,
+          epsA * scaleFactor,
+          1 - lambda,
+          fepConfig.softCoreAlpha,
+          fepConfig.softCorePower,
+          cutoff,
+          pbcBoxSize,
+        );
+        ljE += eLJ_A;
+        potentialEnergy += eLJ_A;
+        dVdLambdaTotal -= dVdL_A; // negative because d(1−λ)/dλ = −1
+
+        // State B LJ (scaled by λ using soft-core)
+        const { sigma: sigB, epsilon: epsB } = getLJCached(
+          atomicNumbersB[i] || atomicNumbers[i],
+          atomicNumbersB[j] || atomicNumbers[j],
+        );
+        const [eLJ_B, dVdL_B] = softCoreLJForce(
+          pos,
+          frc,
+          i,
+          j,
+          sigB,
+          epsB * scaleFactor,
+          lambda,
+          fepConfig.softCoreAlpha,
+          fepConfig.softCorePower,
+          cutoff,
+          pbcBoxSize,
+        );
+        ljE += eLJ_B;
+        potentialEnergy += eLJ_B;
+        dVdLambdaTotal += dVdL_B;
+
+        // Coulomb: linear interpolation of charges
+        // q(λ) = (1−λ)·qA + λ·qB for alchemical atoms
+        const qiA = charges[i] * scaleFactor;
+        const qjA = charges[j];
+        const qiB = chargesB[i] * scaleFactor;
+        const qjB = chargesB[j];
+        const qi = (1 - lambda) * qiA + lambda * qiB;
+        const qj = (1 - lambda) * qjA + lambda * qjB;
+        const eCoul = coulombForce(pos, frc, i, j, qi, qj, wc, pbcBoxSize);
+        coulombE += eCoul;
+        potentialEnergy += eCoul;
+
+        // ∂V_coul/∂λ for Coulomb with bilinear charge interpolation:
+        // V = f(r) · qi(λ) · qj(λ) where qi = (1-λ)qiA + λqiB
+        // ∂V/∂λ = f(r) · [(qiB-qiA)·qj(λ) + qi(λ)·(qjB-qjA)]
+        // Since V = f(r)·qi·qj, we have f(r) = V/(qi·qj) when qi·qj ≠ 0.
+        // Alternatively, compute two Coulomb evaluations for the derivative
+        // terms directly using the charge derivatives.
+        const dqiDl = qiB - qiA;
+        const dqjDl = qjB - qjA;
+        if (Math.abs(qi * qj) > 1e-30 && Math.abs(eCoul) > 1e-30) {
+          // f(r) = eCoul / (qi * qj), so:
+          // ∂V/∂λ = (eCoul / (qi*qj)) * (dqi*qj + qi*dqj)
+          const fr = eCoul / (qi * qj);
+          dVdLambdaTotal += fr * (dqiDl * qj + qi * dqjDl);
+        }
+      } else {
+        // Standard (non-alchemical) pair
+        const { sigma, epsilon } = getLJCached(
+          atomicNumbers[i],
+          atomicNumbers[j],
+        );
+        const eLJ = ljForce(
+          pos,
+          frc,
+          i,
+          j,
+          sigma,
+          epsilon * scaleFactor,
+          cutoff,
+          pbcBoxSize,
+        );
+        ljE += eLJ;
+        potentialEnergy += eLJ;
+        const eCoul = coulombForce(
+          pos,
+          frc,
+          i,
+          j,
+          charges[i] * scaleFactor,
+          charges[j],
+          wc,
+          pbcBoxSize,
+        );
+        coulombE += eCoul;
+        potentialEnergy += eCoul;
+      }
     };
 
     if (nAtoms < 50) {
@@ -759,6 +1003,9 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
     lj: ljE,
     coulomb: coulombE,
   };
+
+  // Cache FEP derivative for sample collection
+  cachedDVDLambda = dVdLambdaTotal;
 
   return potentialEnergy;
 }
@@ -1314,6 +1561,229 @@ function runNEBComputation(
   self.postMessage(resultMsg);
 }
 
+// ---- FEP Scan ----
+/**
+ * Run a complete FEP scan across all λ windows.
+ * For each λ: equilibrate, then collect production samples.
+ * Results are sent back as they accumulate, with a final FEPResult message.
+ *
+ * The scan runs synchronously within this function, yielding control
+ * back to the event loop between windows via setTimeout to allow
+ * cancellation messages to be processed.
+ */
+function runFEPScan(): void {
+  if (!fepConfig.enabled || fepConfig.alchemicalAtoms.length === 0) return;
+
+  fepScanActive = true;
+  fepScanCancelled = false;
+  fepSamples = [];
+
+  // Enforce Nosé-Hoover thermostat for canonical ensemble sampling
+  // Reference: Shirts & Chodera, J. Chem. Phys. 129, 124105 (2008)
+  if (config.thermostat !== 'nose-hoover') {
+    config.thermostat = 'nose-hoover';
+    nhChainState = createNoseHooverChainState(
+      nAtoms,
+      config.temperature,
+      config.thermostatTau,
+    );
+  }
+
+  const schedule = fepConfig.lambdaSchedule;
+  let windowIndex = 0;
+
+  function runNextWindow(): void {
+    if (fepScanCancelled || windowIndex >= schedule.length) {
+      // Scan complete or cancelled — compute final result
+      finishFEPScan();
+      return;
+    }
+
+    const currentLambda = schedule[windowIndex];
+    fepConfig.lambda = currentLambda;
+    rebuildFEPParams();
+
+    // --- Equilibration phase ---
+    const progress: FEPProgress = {
+      phase: 'equilibrating',
+      currentWindowIndex: windowIndex,
+      totalWindows: schedule.length,
+      stepsInWindow: 0,
+      totalStepsInWindow:
+        fepConfig.equilibrationSteps + fepConfig.productionSteps,
+      totalSamplesCollected: fepSamples.length,
+    };
+    self.postMessage({ type: 'fep-progress', progress });
+
+    // Run equilibration in chunks to allow cancellation
+    let eqStepsRemaining = fepConfig.equilibrationSteps;
+    const CHUNK_SIZE = 50;
+
+    function equilibrate(): void {
+      if (fepScanCancelled) {
+        finishFEPScan();
+        return;
+      }
+
+      const chunk = Math.min(CHUNK_SIZE, eqStepsRemaining);
+      if (chunk > 0) {
+        runSteps(chunk);
+        eqStepsRemaining -= chunk;
+        setTimeout(equilibrate, 0);
+      } else {
+        // Equilibration done — start production
+        startProduction();
+      }
+    }
+
+    function startProduction(): void {
+      const progressProd: FEPProgress = {
+        phase: 'collecting',
+        currentWindowIndex: windowIndex,
+        totalWindows: schedule.length,
+        stepsInWindow: fepConfig.equilibrationSteps,
+        totalStepsInWindow:
+          fepConfig.equilibrationSteps + fepConfig.productionSteps,
+        totalSamplesCollected: fepSamples.length,
+      };
+      self.postMessage({ type: 'fep-progress', progress: progressProd });
+
+      let prodStepsRemaining = fepConfig.productionSteps;
+      const windowSamples: FEPSample[] = [];
+
+      function collectProduction(): void {
+        if (fepScanCancelled) {
+          finishFEPScan();
+          return;
+        }
+
+        const chunk = Math.min(CHUNK_SIZE, prodStepsRemaining);
+        if (chunk > 0) {
+          // Run chunk and collect samples
+          for (let s = 0; s < chunk; s++) {
+            // Run one step manually (using the CPU path)
+            if (config.thermostat === 'nose-hoover' && nhChainState) {
+              const ke = computeKineticEnergy();
+              noseHooverChainStep(
+                velocities,
+                masses,
+                fixed,
+                ke,
+                config.temperature,
+                config.timestep * 0.5,
+                nhChainState,
+              );
+            }
+
+            velocityVerletStep(
+              positions,
+              velocities,
+              forces,
+              masses,
+              fixed,
+              config.timestep,
+              computeAllForces,
+            );
+
+            if (box.periodic) {
+              wrapPositions(positions, nAtoms, box.size);
+            }
+
+            const kineticEnergy = computeKineticEnergy();
+            if (config.thermostat === 'nose-hoover' && nhChainState) {
+              noseHooverChainStep(
+                velocities,
+                masses,
+                fixed,
+                kineticEnergy,
+                config.temperature,
+                config.timestep * 0.5,
+                nhChainState,
+              );
+            }
+
+            step++;
+
+            // Collect sample at specified interval
+            if (step % fepConfig.collectInterval === 0) {
+              windowSamples.push({
+                lambda: currentLambda,
+                dVdLambda: cachedDVDLambda,
+                deltaV: cachedDVDLambda, // Single-topology approximation: ΔV ≈ ∂V/∂λ · Δλ (first-order Taylor; the Zwanzig estimator applies Δλ scaling per window)
+                step,
+              });
+            }
+          }
+
+          prodStepsRemaining -= chunk;
+          setTimeout(collectProduction, 0);
+        } else {
+          // Production done for this window
+          fepSamples.push(...windowSamples);
+
+          // Send window samples
+          self.postMessage({
+            type: 'fep-samples',
+            samples: windowSamples,
+          });
+
+          // Move to next window
+          windowIndex++;
+          setTimeout(runNextWindow, 0);
+        }
+      }
+
+      collectProduction();
+    }
+
+    equilibrate();
+  }
+
+  runNextWindow();
+}
+
+/**
+ * Finish an FEP scan — compute the free energy result and send it.
+ */
+function finishFEPScan(): void {
+  fepScanActive = false;
+
+  if (fepSamples.length > 0) {
+    const tiResult = computeTI(fepSamples, fepConfig.lambdaSchedule);
+    const zwanzigResult = computeZwanzig(
+      fepSamples,
+      fepConfig.lambdaSchedule,
+      config.temperature,
+    );
+
+    // Use TI as the primary result (more robust for wide λ windows)
+    self.postMessage({
+      type: 'fep-result',
+      result: tiResult,
+    });
+
+    // Also send Zwanzig result for comparison
+    self.postMessage({
+      type: 'fep-result',
+      result: zwanzigResult,
+    });
+  }
+
+  const progressComplete: FEPProgress = {
+    phase: 'complete',
+    currentWindowIndex: fepConfig.lambdaSchedule.length,
+    totalWindows: fepConfig.lambdaSchedule.length,
+    stepsInWindow: 0,
+    totalStepsInWindow: 0,
+    totalSamplesCollected: fepSamples.length,
+  };
+  self.postMessage({ type: 'fep-progress', progress: progressComplete });
+
+  // Send final state update
+  rebuildTopology();
+  sendState();
+}
+
 // ---- Send state back to main thread ----
 function sendState(): void {
   let potentialEnergy: number;
@@ -1525,6 +1995,29 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         );
       }
       sendState();
+      break;
+
+    case 'fep-config':
+      fepConfig = { ...msg.config };
+      rebuildFEPParams();
+      sendState();
+      break;
+
+    case 'fep-set-lambda':
+      fepConfig.lambda = msg.lambda;
+      cachedEnergiesValid = false;
+      sendState();
+      break;
+
+    case 'fep-start-scan':
+      if (!fepScanActive) {
+        stopLoop();
+        runFEPScan();
+      }
+      break;
+
+    case 'fep-cancel':
+      fepScanCancelled = true;
       break;
   }
 };
