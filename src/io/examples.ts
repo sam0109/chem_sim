@@ -59,8 +59,12 @@ export function waterMolecule(): Atom[] {
  */
 export function methaneMolecule(): Atom[] {
   // Tetrahedral geometry
+  // Standard orientation: vertices of a tetrahedron inscribed in a cube
+  //   H at (1,1,1), (1,-1,-1), (-1,1,-1), (-1,-1,1) scaled to bond length
+  // All H-C-H angles = arccos(-1/3) = 109.47°
+  // Source: simple geometric construction
   const r = 1.09; // C-H bond length in Å
-  const angle = Math.acos(-1 / 3); // tetrahedral angle
+  const s = r / Math.sqrt(3); // scale factor for unit cube vertices
   return [
     {
       id: 0,
@@ -75,7 +79,7 @@ export function methaneMolecule(): Atom[] {
     {
       id: 1,
       elementNumber: 1,
-      position: [r, 0, 0],
+      position: [s, s, s],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
       charge: 0,
@@ -85,11 +89,7 @@ export function methaneMolecule(): Atom[] {
     {
       id: 2,
       elementNumber: 1,
-      position: [
-        -r * Math.cos((Math.PI * 2) / 3) * Math.sin(angle),
-        r * Math.cos(angle),
-        -r * Math.sin((Math.PI * 2) / 3) * Math.sin(angle),
-      ],
+      position: [s, -s, -s],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
       charge: 0,
@@ -99,11 +99,7 @@ export function methaneMolecule(): Atom[] {
     {
       id: 3,
       elementNumber: 1,
-      position: [
-        -r * Math.cos((Math.PI * 4) / 3) * Math.sin(angle),
-        r * Math.cos(angle),
-        -r * Math.sin((Math.PI * 4) / 3) * Math.sin(angle),
-      ],
+      position: [-s, s, -s],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
       charge: 0,
@@ -113,7 +109,7 @@ export function methaneMolecule(): Atom[] {
     {
       id: 4,
       elementNumber: 1,
-      position: [0, -r, 0],
+      position: [-s, -s, s],
       velocity: [0, 0, 0],
       force: [0, 0, 0],
       charge: 0,
