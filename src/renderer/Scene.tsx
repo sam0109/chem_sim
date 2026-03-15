@@ -180,7 +180,9 @@ const CameraTracker: React.FC<{
     cy /= molecules.length;
     cz /= molecules.length;
 
-    // Smoothly interpolate the target (lerp factor per frame)
+    // Smoothly interpolate the target toward the pair COM.
+    // Lerp factor 0.05 per frame (~60fps) gives ~3s to reach 95% of target,
+    // preventing jarring camera jumps during fast encounters.
     targetRef.current.set(cx, cy, cz);
     controls.target.lerp(targetRef.current, 0.05);
     controls.update();

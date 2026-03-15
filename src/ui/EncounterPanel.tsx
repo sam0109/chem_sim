@@ -44,11 +44,17 @@ export const EncounterPanel: React.FC = () => {
 
     const templateAtoms = factory();
 
-    // Compute current system's center of mass (for offset placement)
+    // Use the first molecule's COM from the tracker (mass-weighted)
+    // for accurate placement, with fallback to geometric centroid
     let comX = 0;
     let comY = 0;
     let comZ = 0;
-    if (atoms.length > 0) {
+    if (molecules.length > 0) {
+      const mol = molecules[0];
+      comX = mol.centerOfMass[0];
+      comY = mol.centerOfMass[1];
+      comZ = mol.centerOfMass[2];
+    } else if (atoms.length > 0) {
       for (let i = 0; i < atoms.length; i++) {
         const px =
           positions.length > i * 3 ? positions[i * 3] : atoms[i].position[0];
@@ -157,7 +163,7 @@ export const EncounterPanel: React.FC = () => {
           }}
         >
           <span>Separation</span>
-          <span style={{ color: '#ffaa44' }}>{separation.toFixed(1)} A</span>
+          <span style={{ color: '#ffaa44' }}>{separation.toFixed(1)} Å</span>
         </div>
         <input
           data-testid="separation-slider"
@@ -181,7 +187,7 @@ export const EncounterPanel: React.FC = () => {
           }}
         >
           <span>Approach speed</span>
-          <span style={{ color: '#88ccff' }}>{speed.toFixed(4)} A/fs</span>
+          <span style={{ color: '#88ccff' }}>{speed.toFixed(4)} Å/fs</span>
         </div>
         <input
           data-testid="speed-slider"
@@ -205,7 +211,7 @@ export const EncounterPanel: React.FC = () => {
           }}
         >
           <span>Impact parameter</span>
-          <span style={{ color: '#aaffaa' }}>{impactParam.toFixed(1)} A</span>
+          <span style={{ color: '#aaffaa' }}>{impactParam.toFixed(1)} Å</span>
         </div>
         <input
           data-testid="impact-slider"
