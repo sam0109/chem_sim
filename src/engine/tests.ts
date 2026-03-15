@@ -14,6 +14,7 @@ import {
   getLJParams,
   getUFFAngleK,
   getUFFTorsionParams,
+  getUFFInversionParams,
 } from '../data/uff';
 import { morseBondForce } from './forces/morse';
 import { ljForce } from './forces/lennardJones';
@@ -21,6 +22,7 @@ import { coulombForce } from './forces/coulomb';
 import { harmonicAngleForce } from './forces/harmonic';
 import { pauliRepulsion } from './forces/pauli';
 import { torsionForce } from './forces/torsion';
+import { inversionForce } from './forces/inversion';
 import { detectBonds, buildAngleList, buildDihedralList } from './bondDetector';
 import {
   velocityVerletStep,
@@ -479,6 +481,87 @@ function runGradientTests(): void {
     torsionPos,
     4,
   );
+
+  // GRAD-09: Inversion gradient (sp2 center — planar)
+  // C at origin with 3 neighbors in a slightly distorted trigonal arrangement.
+  // Atom 0 is out-of-plane, atom 1 is center, atoms 2,3 are in-plane.
+  const invSp2Pos = new Float64Array([
+    1.3,
+    0.1,
+    0.0, // atom 0 (OOP, slightly above plane)
+    0.0,
+    0.0,
+    0.0, // atom 1 (C center)
+    -0.65,
+    0.0,
+    1.12, // atom 2 (in plane)
+    -0.65,
+    0.0,
+    -1.12, // atom 3 (in plane)
+  ]);
+  const invSp2P = getUFFInversionParams(6, 'sp2');
+  if (invSp2P) {
+    testGradient(
+      'GRAD-09',
+      'Inversion sp2 C gradient',
+      (p, f) =>
+        inversionForce(
+          p,
+          f,
+          0,
+          1,
+          2,
+          3,
+          invSp2P.K / 3,
+          invSp2P.C0,
+          invSp2P.C1,
+          invSp2P.C2,
+        ),
+      invSp2Pos,
+      4,
+    );
+  }
+
+  // GRAD-10: Inversion gradient (sp3 center — tetrahedral)
+  // Methane-like geometry with one H slightly displaced from ideal position.
+  // Use a subset of methane: C(center) with 3 of its H neighbors.
+  const tetR = 1.09;
+  const invSp3Pos = new Float64Array([
+    tetR,
+    0.1,
+    0.0, // atom 0 (H, slightly perturbed)
+    0.0,
+    0.0,
+    0.0, // atom 1 (C center)
+    -tetR / 3,
+    tetR * Math.sqrt(8 / 9),
+    0.0, // atom 2 (H)
+    -tetR / 3,
+    -tetR * Math.sqrt(2 / 9),
+    tetR * Math.sqrt(2 / 3), // atom 3 (H)
+  ]);
+  const invSp3P = getUFFInversionParams(6, 'sp3');
+  if (invSp3P) {
+    testGradient(
+      'GRAD-10',
+      'Inversion sp3 C gradient (tetrahedral)',
+      (p, f) =>
+        inversionForce(
+          p,
+          f,
+          0,
+          1,
+          2,
+          3,
+          invSp3P.K / 12,
+          invSp3P.C0,
+          invSp3P.C1,
+          invSp3P.C2,
+        ),
+      invSp3Pos,
+      4,
+    );
+  }
 }
 
 // ---- NVE energy conservation tests ----
