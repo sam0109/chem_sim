@@ -55,6 +55,8 @@ export const Toolbar: React.FC = () => {
   const toggleLabels = useUIStore((s) => s.toggleLabels);
   const showLabels = useUIStore((s) => s.showLabels);
   const toggleEnergyPlot = useUIStore((s) => s.toggleEnergyPlot);
+  const colorMode = useUIStore((s) => s.colorMode);
+  const setColorMode = useUIStore((s) => s.setColorMode);
 
   // Keyboard shortcuts
   React.useEffect(() => {
@@ -221,6 +223,32 @@ export const Toolbar: React.FC = () => {
         }}
       >
         E(t)
+      </button>
+      <button
+        data-testid="toggle-molecule-colors"
+        onClick={() =>
+          setColorMode(colorMode === 'element' ? 'molecule' : 'element')
+        }
+        title="Toggle Molecule Coloring"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border:
+            colorMode === 'molecule'
+              ? '2px solid #88ffaa'
+              : '1px solid rgba(255,255,255,0.15)',
+          background:
+            colorMode === 'molecule'
+              ? 'rgba(100,255,150,0.3)'
+              : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        Mol
       </button>
     </div>
   );
