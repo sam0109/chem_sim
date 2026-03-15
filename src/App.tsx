@@ -25,6 +25,7 @@ import { SimulationContext } from './store/SimulationContext';
 import { ReactionLog } from './ui/ReactionLog';
 import { EventLog } from './ui/EventLog';
 import { QuantityDashboard } from './ui/QuantityDashboard';
+import { TimelineControls } from './ui/TimelineControls';
 import { useUIStore } from './store/uiStore';
 import { exampleMolecules } from './io/examples';
 import { parseXYZ } from './io/xyz';
@@ -695,6 +696,7 @@ const App: React.FC = () => {
         <ReactionLog />
         <EventLog />
         <QuantityDashboard />
+        <TimelineControls />
 
         <div
           data-testid="status-bar"

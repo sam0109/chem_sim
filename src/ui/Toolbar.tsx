@@ -81,6 +81,8 @@ export const Toolbar: React.FC = () => {
   const toggleBondColorMode = useUIStore((s) => s.toggleBondColorMode);
   const showExperimentPanel = useUIStore((s) => s.showExperimentPanel);
   const toggleExperimentPanel = useUIStore((s) => s.toggleExperimentPanel);
+  const showTimeline = useUIStore((s) => s.showTimeline);
+  const toggleTimeline = useUIStore((s) => s.toggleTimeline);
 
   // When selecting the place-molecule tool, show the encounter panel
   const handleToolSelect = useCallback(
@@ -513,6 +515,30 @@ export const Toolbar: React.FC = () => {
         }}
       >
         Lab
+      </button>
+
+      {/* Trajectory timeline toggle */}
+      <button
+        data-testid="toggle-timeline"
+        onClick={toggleTimeline}
+        title="Trajectory Timeline"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showTimeline
+            ? '2px solid #88ddff'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showTimeline
+            ? 'rgba(136,221,255,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        Traj
       </button>
     </div>
   );
