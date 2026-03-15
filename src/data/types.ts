@@ -53,6 +53,14 @@ export type ElementCategory =
   | 'lanthanide'
   | 'actinide';
 
+/** Color mode for the periodic table UI — determines cell background coloring */
+export type PeriodicTableColorMode =
+  | 'category'
+  | 'electronegativity'
+  | 'atomicRadius'
+  | 'electronAffinity'
+  | 'ionizationEnergy';
+
 // --------------- Atom / Bond / Molecule ---------------
 
 export interface Atom {

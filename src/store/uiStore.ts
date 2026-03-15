@@ -7,6 +7,7 @@ import type {
   InteractionTool,
   MeasurementResult,
   ColorMode,
+  PeriodicTableColorMode,
 } from '../data/types';
 
 interface UIStore {
@@ -42,6 +43,17 @@ interface UIStore {
   hoveredAtomId: number | null;
   setHoveredAtom: (id: number | null) => void;
 
+  // ---- Periodic table education features ----
+  periodicTableColorMode: PeriodicTableColorMode;
+  setPeriodicTableColorMode: (mode: PeriodicTableColorMode) => void;
+  hoveredElement: number | null;
+  setHoveredElement: (z: number | null) => void;
+  comparedElements: [number, number] | null;
+  setComparedElements: (pair: [number, number] | null) => void;
+  clearComparedElements: () => void;
+  showTrendAnnotations: boolean;
+  toggleTrendAnnotations: () => void;
+
   // ---- Rendering options ----
   renderMode: 'ball-and-stick' | 'space-filling' | 'wireframe';
   setRenderMode: (
@@ -66,6 +78,10 @@ export const useUIStore = create<UIStore>((set, get) => ({
   renderMode: 'ball-and-stick',
   showLabels: true,
   colorMode: 'element' as ColorMode,
+  periodicTableColorMode: 'category' as PeriodicTableColorMode,
+  hoveredElement: null,
+  comparedElements: null,
+  showTrendAnnotations: false,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
   setSelectedElement: (z) => set({ selectedElement: z }),
@@ -98,6 +114,13 @@ export const useUIStore = create<UIStore>((set, get) => ({
     set({ showChallengePanel: !get().showChallengePanel }),
 
   setHoveredAtom: (id) => set({ hoveredAtomId: id }),
+
+  setPeriodicTableColorMode: (mode) => set({ periodicTableColorMode: mode }),
+  setHoveredElement: (z) => set({ hoveredElement: z }),
+  setComparedElements: (pair) => set({ comparedElements: pair }),
+  clearComparedElements: () => set({ comparedElements: null }),
+  toggleTrendAnnotations: () =>
+    set({ showTrendAnnotations: !get().showTrendAnnotations }),
 
   setRenderMode: (mode) => set({ renderMode: mode }),
   toggleLabels: () => set({ showLabels: !get().showLabels }),
