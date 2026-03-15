@@ -249,6 +249,71 @@ export type ColorMode = 'element' | 'molecule';
 /** Color mode for bond rendering */
 export type BondColorMode = 'element' | 'bondType';
 
+// --------------- Nudged Elastic Band (NEB) ---------------
+
+/**
+ * Configuration for the Nudged Elastic Band method.
+ * Reference: Henkelman et al., J. Chem. Phys. 113, 9901 (2000)
+ */
+export interface NEBConfig {
+  /** Number of intermediate images (default: 7) */
+  nImages: number;
+  /** Spring constant connecting images in eV/Å² (default: 0.1) */
+  springK: number;
+  /** Enable climbing-image NEB for accurate saddle point (default: true) */
+  climbingImage: boolean;
+  /** Iteration at which to activate climbing image (default: 20) */
+  ciActivationIter: number;
+  /** Maximum optimization iterations (default: 500) */
+  maxIterations: number;
+  /** Convergence criterion: max perpendicular force in eV/Å (default: 0.05) */
+  forceTolerance: number;
+  /** Initial optimization step size in Å (default: 0.01) */
+  stepSize: number;
+}
+
+/** Default NEB configuration values */
+export const DEFAULT_NEB_CONFIG: NEBConfig = {
+  nImages: 7,
+  springK: 0.1, // eV/Å² — typical value for molecular systems
+  climbingImage: true,
+  ciActivationIter: 20,
+  maxIterations: 500,
+  forceTolerance: 0.05, // eV/Å
+  stepSize: 0.01, // Å
+};
+
+/** A single image along the NEB reaction path */
+export interface NEBImage {
+  /** Atom positions for this image — flat Float64Array [x0,y0,z0,...] */
+  positions: Float64Array;
+  /** Potential energy of this image in eV */
+  energy: number;
+}
+
+/**
+ * Result of a completed NEB calculation.
+ * Contains the minimum energy path from reactant to product.
+ */
+export interface NEBResult {
+  /** All images along the converged path (including endpoints) */
+  images: NEBImage[];
+  /** Whether the optimization converged within tolerance */
+  converged: boolean;
+  /** Number of iterations performed */
+  iterations: number;
+  /** Energy at each image in eV */
+  energyProfile: number[];
+  /** Maximum perpendicular force on any image at final iteration (eV/Å) */
+  maxForce: number;
+  /** Index of the highest-energy image (transition state estimate) */
+  tsImageIndex: number;
+  /** Energy at the transition state in eV */
+  tsEnergy: number;
+  /** Forward reaction barrier in eV (TS energy − reactant energy) */
+  barrier: number;
+}
+
 // --------------- Simulation State ---------------
 
 export interface SimulationBox {
@@ -377,6 +442,20 @@ export interface WorkerTransmuteAtomMessage {
   newElementNumber: number;
 }
 
+export interface WorkerNEBMessage {
+  type: 'neb';
+  /** Reactant (starting) positions — flat Float64Array [x0,y0,z0,...] */
+  reactantPositions: Float64Array;
+  /** Product (ending) positions — flat Float64Array [x0,y0,z0,...] */
+  productPositions: Float64Array;
+  /** NEB configuration */
+  config: NEBConfig;
+}
+
+export interface WorkerNEBCancelMessage {
+  type: 'neb-cancel';
+}
+
 export type WorkerInMessage =
   | WorkerInitMessage
   | WorkerStepMessage
@@ -387,7 +466,9 @@ export type WorkerInMessage =
   | WorkerMinimizeMessage
   | WorkerSetVelocitiesMessage
   | WorkerBoxMessage
-  | WorkerTransmuteAtomMessage;
+  | WorkerTransmuteAtomMessage
+  | WorkerNEBMessage
+  | WorkerNEBCancelMessage;
 
 /** Per-force-type potential energy decomposition (all values in eV) */
 export interface EnergyBreakdown {
@@ -441,7 +522,27 @@ export interface WorkerReadyMessage {
   type: 'ready';
 }
 
-export type WorkerOutMessage = WorkerStateUpdate | WorkerReadyMessage;
+export interface WorkerNEBProgressMessage {
+  type: 'neb-progress';
+  /** Current iteration */
+  iteration: number;
+  /** Energy at each image in eV */
+  energyProfile: number[];
+  /** Maximum perpendicular force across images (eV/Å) */
+  maxForce: number;
+}
+
+export interface WorkerNEBResultMessage {
+  type: 'neb-result';
+  /** Complete NEB calculation result */
+  result: NEBResult;
+}
+
+export type WorkerOutMessage =
+  | WorkerStateUpdate
+  | WorkerReadyMessage
+  | WorkerNEBProgressMessage
+  | WorkerNEBResultMessage;
 
 // --------------- UI State ---------------
 

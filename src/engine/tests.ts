@@ -79,6 +79,15 @@ import {
   computeOrbitalGrid,
 } from '../data/orbital';
 import { marchingCubes } from '../data/marchingCubes';
+import {
+  linearInterpolate,
+  computeTangent,
+  computeNEBForce,
+  computeClimbingImageForce,
+  runNEB,
+  DEFAULT_NEB_CONFIG,
+} from './neb';
+import { steepestDescent } from './minimizer';
 
 // ---- Deterministic PRNG for reproducible tests ----
 // Mulberry32: a simple 32-bit seeded PRNG (public domain)
@@ -3400,6 +3409,304 @@ function runCrystalBuilderTests(): void {
   }
 }
 
+// ---- NEB (Nudged Elastic Band) tests ----
+
+function runNEBTests(): void {
+  console.log('\n=== NUDGED ELASTIC BAND (NEB) TESTS ===\n');
+
+  // NEB-01: Linear interpolation produces correct number of evenly spaced images
+  {
+    // Simple 1-atom system: atom at (0,0,0) → (3,0,0)
+    const reactant = new Float64Array([0, 0, 0]);
+    const product = new Float64Array([3, 0, 0]);
+    const nImages = 5;
+    const images = linearInterpolate(reactant, product, nImages);
+
+    // Should have nImages + 2 total (including endpoints)
+    const correctCount = images.length === nImages + 2;
+
+    // Check spacing is uniform
+    let maxSpacingError = 0;
+    const expectedSpacing = 3.0 / (nImages + 1);
+    for (let i = 1; i < images.length; i++) {
+      const dx = images[i][0] - images[i - 1][0];
+      maxSpacingError = Math.max(
+        maxSpacingError,
+        Math.abs(dx - expectedSpacing),
+      );
+    }
+    const correctSpacing = maxSpacingError < 1e-10;
+
+    // Check endpoints are exact
+    const correctEndpoints =
+      Math.abs(images[0][0] - 0) < 1e-10 &&
+      Math.abs(images[images.length - 1][0] - 3) < 1e-10;
+
+    const passed = correctCount && correctSpacing && correctEndpoints;
+    report(
+      'NEB-01',
+      'Linear interpolation: correct count and uniform spacing',
+      passed,
+      `count=${images.length}, maxSpacingErr=${maxSpacingError.toExponential(3)}, endpoints=[${images[0][0].toFixed(1)},${images[images.length - 1][0].toFixed(1)}]`,
+      `count=${nImages + 2}, spacing uniform, endpoints=[0.0,3.0]`,
+    );
+  }
+
+  // NEB-02: Tangent computation at energy maximum points toward higher-energy neighbor
+  {
+    const prevPos = new Float64Array([0, 0, 0]);
+    const currPos = new Float64Array([1, 0, 0]);
+    const nextPos = new Float64Array([2, 0, 0]);
+
+    // Case: energy increasing (prevE < currE < nextE) — tangent should point forward
+    const tangent1 = computeTangent(prevPos, currPos, nextPos, 0.0, 1.0, 2.0);
+    const forwardDot = tangent1[0]; // should be positive (pointing toward next)
+
+    // Case: at a maximum (currE > prevE, currE > nextE) — weighted blend
+    const tangent2 = computeTangent(prevPos, currPos, nextPos, 0.0, 3.0, 1.0);
+    // Tangent should be normalized
+    const norm2 = Math.sqrt(
+      tangent2[0] * tangent2[0] +
+        tangent2[1] * tangent2[1] +
+        tangent2[2] * tangent2[2],
+    );
+
+    const passed = forwardDot > 0.99 && Math.abs(norm2 - 1.0) < 1e-10;
+    report(
+      'NEB-02',
+      'Tangent estimation: correct direction and normalized',
+      passed,
+      `increasing: τ·x̂=${forwardDot.toFixed(4)}, max: |τ|=${norm2.toFixed(6)}`,
+      'increasing: τ·x̂ > 0.99, |τ| = 1.0',
+    );
+  }
+
+  // NEB-03: NEB force projection removes parallel component of true force
+  {
+    const tangent = new Float64Array([1, 0, 0]); // tangent along x
+    const trueForce = new Float64Array([2, 3, 0]); // force with parallel and perp components
+    const prevPos = new Float64Array([0, 0, 0]);
+    const currPos = new Float64Array([1, 0, 0]);
+    const nextPos = new Float64Array([2, 0, 0]); // equal spacing → zero spring force
+
+    const nebForce = computeNEBForce(
+      trueForce,
+      tangent,
+      prevPos,
+      currPos,
+      nextPos,
+      0.1,
+    );
+
+    // With equal spacing, spring force = k * (1 - 1) * τ = 0
+    // NEB force should be: F_perp = F - (F·τ)τ = (2,3,0) - 2*(1,0,0) = (0,3,0)
+    // Plus spring force (0 here), so NEB force ≈ (0, 3, 0)
+    const perpCorrect = Math.abs(nebForce[1] - 3.0) < 1e-10;
+    // The parallel component should be only the spring contribution (≈0 here)
+    const parallelSmall = Math.abs(nebForce[0]) < 1e-10;
+
+    const passed = perpCorrect && parallelSmall;
+    report(
+      'NEB-03',
+      'NEB force: parallel true force removed, perp force preserved',
+      passed,
+      `F_NEB=[${nebForce[0].toFixed(4)},${nebForce[1].toFixed(4)},${nebForce[2].toFixed(4)}]`,
+      'F_NEB ≈ [0.0000, 3.0000, 0.0000]',
+    );
+  }
+
+  // NEB-04: Climbing image force inverts parallel component
+  {
+    const tangent = new Float64Array([1, 0, 0]);
+    const trueForce = new Float64Array([2, 3, 0]);
+
+    const ciForce = computeClimbingImageForce(trueForce, tangent);
+
+    // F_CI = F - 2(F·τ)τ = (2,3,0) - 2*2*(1,0,0) = (-2, 3, 0)
+    const correct =
+      Math.abs(ciForce[0] - -2.0) < 1e-10 &&
+      Math.abs(ciForce[1] - 3.0) < 1e-10 &&
+      Math.abs(ciForce[2]) < 1e-10;
+
+    report(
+      'NEB-04',
+      'Climbing image: parallel force inverted',
+      correct,
+      `F_CI=[${ciForce[0].toFixed(4)},${ciForce[1].toFixed(4)},${ciForce[2].toFixed(4)}]`,
+      'F_CI = [-2.0000, 3.0000, 0.0000]',
+    );
+  }
+
+  // NEB-05: Full NEB on H₂ bond stretching — finds barrier for dissociation
+  // Set up a simple H₂ system: two H atoms.
+  // Reactant: equilibrium bond distance. Product: stretched apart.
+  // The energy profile along the path should show a monotonic increase
+  // (Morse potential has no barrier for dissociation, but the path energy
+  // must increase from equilibrium to dissociated).
+  {
+    // Create a minimal H₂ system
+    const atomsReactant: Atom[] = [
+      {
+        id: 0,
+        elementNumber: 1,
+        position: [0, 0, 0],
+        velocity: [0, 0, 0],
+        force: [0, 0, 0],
+        charge: 0,
+        hybridization: 'none',
+        fixed: false,
+      },
+      {
+        id: 1,
+        elementNumber: 1,
+        position: [0.74, 0, 0],
+        velocity: [0, 0, 0],
+        force: [0, 0, 0],
+        charge: 0,
+        hybridization: 'none',
+        fixed: false,
+      },
+    ];
+
+    const sReactant = initSim(atomsReactant);
+
+    // Create product: H atoms far apart (4 Å)
+    const reactantPos = new Float64Array([0, 0, 0, 0.74, 0, 0]);
+    const productPos = new Float64Array([0, 0, 0, 4.0, 0, 0]);
+
+    // Minimize reactant first
+    const reactMinForces = new Float64Array(6);
+    steepestDescent(
+      reactantPos,
+      reactMinForces,
+      sReactant.fixed,
+      sReactant.N,
+      (p, f) => calcForces(sReactant, p, f),
+      100,
+      0.01,
+    );
+
+    const nebConfig = {
+      ...DEFAULT_NEB_CONFIG,
+      nImages: 5,
+      maxIterations: 200,
+      climbingImage: false,
+      forceTolerance: 0.1,
+      stepSize: 0.005,
+    };
+
+    const result = runNEB(
+      reactantPos,
+      productPos,
+      sReactant.N,
+      sReactant.fixed,
+      (p, f) => calcForces(sReactant, p, f),
+      nebConfig,
+    );
+
+    // The energy at the product (dissociated) should be higher than reactant (bound)
+    const reactantE = result.energyProfile[0];
+    const productE = result.energyProfile[result.energyProfile.length - 1];
+    const energyIncreased = productE > reactantE;
+
+    // The transition state should be at or near the product end for a
+    // monotonic Morse potential (no barrier for dissociation, just a well)
+    const tsIdx = result.tsImageIndex;
+    const hasValidTS = tsIdx > 0 && tsIdx < result.images.length - 1;
+
+    // Energy profile should be non-negative relative to the starting point
+    // (no image should be below the reactant in energy)
+    const allAboveReactant = result.energyProfile.every(
+      (e) => e >= reactantE - 0.01,
+    );
+
+    const passed = energyIncreased && hasValidTS && allAboveReactant;
+    report(
+      'NEB-05',
+      'NEB on H₂ dissociation: monotonic energy increase along path',
+      passed,
+      `E_reactant=${reactantE.toFixed(3)} eV, E_product=${productE.toFixed(3)} eV, TS_idx=${tsIdx}, iters=${result.iterations}`,
+      'E_product > E_reactant, valid TS index, all images above reactant',
+      `Profile: [${result.energyProfile.map((e) => e.toFixed(3)).join(', ')}]`,
+    );
+  }
+
+  // NEB-06: NEB on water H-O-H angle inversion — finds a path through linear geometry
+  // Reactant: normal water (104.5°). Product: inverted water (mirrored H positions).
+  // The path should go through a near-linear transition state (~180°) which has higher energy.
+  {
+    const waterR = waterMolecule();
+    const sWater = initSim(waterR);
+
+    // Reactant: normal water
+    const reactantWater = new Float64Array(sWater.pos);
+
+    // Minimize reactant
+    const reactMinForces = new Float64Array(sWater.N * 3);
+    steepestDescent(
+      reactantWater,
+      reactMinForces,
+      sWater.fixed,
+      sWater.N,
+      (p, f) => calcForces(sWater, p, f),
+      200,
+      0.01,
+    );
+
+    // Product: mirror the H positions about the O-H bond axis (flip y)
+    // O is at origin, H atoms are at ±(hx, hy, 0)
+    // Mirroring: swap the two H atoms
+    const productWater = new Float64Array(reactantWater);
+    // Swap H1 and H2 positions
+    for (let d = 0; d < 3; d++) {
+      const tmp = productWater[1 * 3 + d];
+      productWater[1 * 3 + d] = productWater[2 * 3 + d];
+      productWater[2 * 3 + d] = tmp;
+    }
+
+    const nebConfig = {
+      ...DEFAULT_NEB_CONFIG,
+      nImages: 7,
+      maxIterations: 300,
+      climbingImage: true,
+      ciActivationIter: 30,
+      forceTolerance: 0.1,
+      stepSize: 0.005,
+    };
+
+    const result = runNEB(
+      reactantWater,
+      productWater,
+      sWater.N,
+      sWater.fixed,
+      (p, f) => calcForces(sWater, p, f),
+      nebConfig,
+    );
+
+    // The barrier should be positive (linear water has higher energy than bent)
+    const barrierPositive = result.barrier > 0.01;
+
+    // TS image should be an intermediate image (not endpoints)
+    const tsIntermediate =
+      result.tsImageIndex > 0 && result.tsImageIndex < result.images.length - 1;
+
+    // The energy profile should be roughly symmetric (same start and end states)
+    const startE = result.energyProfile[0];
+    const endE = result.energyProfile[result.energyProfile.length - 1];
+    const endpointSymmetry = Math.abs(startE - endE) < 0.5;
+
+    const passed = barrierPositive && tsIntermediate && endpointSymmetry;
+    report(
+      'NEB-06',
+      'NEB on water inversion: positive barrier, symmetric path',
+      passed,
+      `barrier=${result.barrier.toFixed(3)} eV, TS_idx=${result.tsImageIndex}, E_start=${startE.toFixed(3)}, E_end=${endE.toFixed(3)}, converged=${result.converged}`,
+      'barrier > 0.01 eV, TS intermediate, |E_start - E_end| < 0.5 eV',
+      `Profile: [${result.energyProfile.map((e) => e.toFixed(3)).join(', ')}]`,
+    );
+  }
+}
+
 // ---- Main ----
 
 console.log('╔══════════════════════════════════════════════════╗');
@@ -3419,6 +3726,7 @@ runBondDetectionTests();
 runOrbitalTests();
 runBondPlacementTests();
 runCrystalBuilderTests();
+runNEBTests();
 
 // Summary
 console.log('\n' + '='.repeat(50));

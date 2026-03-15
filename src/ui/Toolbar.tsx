@@ -129,6 +129,8 @@ export const Toolbar: React.FC = () => {
     (s) => s.toggleAnnotationBondEnergy,
   );
   const toggleAnnotationDipole = useUIStore((s) => s.toggleAnnotationDipole);
+  const showNEBPanel = useUIStore((s) => s.showNEBPanel);
+  const toggleNEBPanel = useUIStore((s) => s.toggleNEBPanel);
 
   // When selecting the place-molecule tool, show the encounter panel
   const handleToolSelect = useCallback(
@@ -668,6 +670,30 @@ export const Toolbar: React.FC = () => {
         }}
       >
         Traj
+      </button>
+
+      {/* NEB reaction path toggle */}
+      <button
+        data-testid="toggle-neb-panel"
+        onClick={toggleNEBPanel}
+        title="Reaction Path (NEB)"
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: 4,
+          border: showNEBPanel
+            ? '2px solid #c4a5fa'
+            : '1px solid rgba(255,255,255,0.15)',
+          background: showNEBPanel
+            ? 'rgba(196,165,250,0.3)'
+            : 'rgba(40,40,60,0.8)',
+          color: '#fff',
+          cursor: 'pointer',
+          fontSize: 9,
+          fontFamily: 'monospace',
+        }}
+      >
+        NEB
       </button>
     </div>
   );

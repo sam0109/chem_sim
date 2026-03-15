@@ -10,6 +10,8 @@ import type {
   Bond,
   EnergyBreakdown,
   MoleculeInfo,
+  NEBConfig,
+  NEBResult,
   ReactionEvent,
   SimulationConfig,
   SimulationBox,
@@ -18,6 +20,7 @@ import type {
   TrajectoryState,
   WorkerStateUpdate,
 } from '../data/types';
+import { DEFAULT_NEB_CONFIG } from '../data/types';
 import elements from '../data/elements';
 import { SimulationWorker } from '../worker-comms';
 import {
@@ -117,6 +120,24 @@ export interface SimulationStoreState {
   toggleRecording: () => void;
   /** Export trajectory as multi-frame XYZ file download */
   exportTrajectoryXYZ: () => void;
+
+  // ---- NEB (Nudged Elastic Band) ----
+  nebResult: NEBResult | null;
+  nebProgress: {
+    iteration: number;
+    maxForce: number;
+    energyProfile: number[];
+  } | null;
+  nebRunning: boolean;
+  /** Captured reactant positions for NEB */
+  nebReactantPositions: Float64Array | null;
+  /** Captured product positions for NEB */
+  nebProductPositions: Float64Array | null;
+  captureNEBReactant: () => void;
+  captureNEBProduct: () => void;
+  runNEB: (config?: Partial<NEBConfig>) => void;
+  cancelNEB: () => void;
+  clearNEBResult: () => void;
 }
 
 const DEFAULT_CONFIG: SimulationConfig = {
@@ -256,12 +277,29 @@ function buildStoreSlice(
       frames: [],
       maxFrames: MAX_TRAJECTORY_FRAMES,
     },
+    nebResult: null,
+    nebProgress: null,
+    nebRunning: false,
+    nebReactantPositions: null,
+    nebProductPositions: null,
 
     async initWorker() {
       const worker = new SimulationWorker();
       await worker.waitReady();
       worker.onStateUpdate((state) => {
         get().handleWorkerState(state);
+      });
+      worker.onNEBProgressUpdate((iteration, energyProfile, maxForce) => {
+        set({
+          nebProgress: { iteration, maxForce, energyProfile },
+        });
+      });
+      worker.onNEBResultUpdate((result) => {
+        set({
+          nebResult: result,
+          nebRunning: false,
+          nebProgress: null,
+        });
       });
       set({ worker });
     },
@@ -763,6 +801,44 @@ function buildStoreSlice(
 
       // Start the simulation
       get().setConfig({ running: true });
+    },
+
+    captureNEBReactant() {
+      const { positions } = get();
+      if (positions.length > 0) {
+        set({ nebReactantPositions: positions.slice() });
+      }
+    },
+
+    captureNEBProduct() {
+      const { positions } = get();
+      if (positions.length > 0) {
+        set({ nebProductPositions: positions.slice() });
+      }
+    },
+
+    runNEB(partialConfig?: Partial<NEBConfig>) {
+      const { worker, nebReactantPositions, nebProductPositions } = get();
+      if (!worker || !nebReactantPositions || !nebProductPositions) return;
+
+      const config: NEBConfig = { ...DEFAULT_NEB_CONFIG, ...partialConfig };
+      set({ nebRunning: true, nebResult: null, nebProgress: null });
+      worker.runNEB(nebReactantPositions, nebProductPositions, config);
+    },
+
+    cancelNEB() {
+      const { worker } = get();
+      worker?.cancelNEB();
+      set({ nebRunning: false, nebProgress: null });
+    },
+
+    clearNEBResult() {
+      set({
+        nebResult: null,
+        nebProgress: null,
+        nebReactantPositions: null,
+        nebProductPositions: null,
+      });
     },
   };
 }

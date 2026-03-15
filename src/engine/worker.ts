@@ -8,10 +8,13 @@ import type {
   EnergyBreakdown,
   Hybridization,
   MoleculeInfo,
+  NEBConfig,
   ReactionEvent,
   SimulationBox,
   SimulationConfig,
   WorkerInMessage,
+  WorkerNEBProgressMessage,
+  WorkerNEBResultMessage,
   WorkerStateUpdate,
 } from '../data/types';
 import elements from '../data/elements';
@@ -46,6 +49,7 @@ import {
 } from './thermostat';
 import type { NoseHooverChainState } from './thermostat';
 import { steepestDescent } from './minimizer';
+import { runNEB } from './neb';
 import {
   detectBonds,
   detectHydrogenBonds,
@@ -1253,6 +1257,47 @@ function minimize(maxSteps: number, tolerance: number): void {
   sendState();
 }
 
+// ---- NEB (Nudged Elastic Band) ----
+let nebCancelled = false;
+
+function runNEBComputation(
+  reactantPositions: Float64Array,
+  productPositions: Float64Array,
+  nebConfig: NEBConfig,
+): void {
+  cachedEnergiesValid = false;
+  nebCancelled = false;
+
+  const result = runNEB(
+    reactantPositions,
+    productPositions,
+    nAtoms,
+    fixed,
+    computeAllForces,
+    nebConfig,
+    (iteration: number, energyProfile: number[], maxForce: number): boolean => {
+      // Post progress update
+      const progressMsg: WorkerNEBProgressMessage = {
+        type: 'neb-progress',
+        iteration,
+        energyProfile,
+        maxForce,
+      };
+      self.postMessage(progressMsg);
+
+      // Return false to cancel if requested
+      return !nebCancelled;
+    },
+  );
+
+  // Post final result
+  const resultMsg: WorkerNEBResultMessage = {
+    type: 'neb-result',
+    result,
+  };
+  self.postMessage(resultMsg);
+}
+
 // ---- Send state back to main thread ----
 function sendState(): void {
   let potentialEnergy: number;
@@ -1435,6 +1480,19 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
         wrapPositions(positions, nAtoms, box.size);
       }
       sendState();
+      break;
+
+    case 'neb':
+      stopLoop();
+      runNEBComputation(
+        msg.reactantPositions,
+        msg.productPositions,
+        msg.config,
+      );
+      break;
+
+    case 'neb-cancel':
+      nebCancelled = true;
       break;
   }
 };

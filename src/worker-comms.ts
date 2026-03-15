@@ -6,6 +6,8 @@
 import type {
   Atom,
   Bond,
+  NEBConfig,
+  NEBResult,
   SimulationBox,
   SimulationConfig,
   WorkerInMessage,
@@ -14,10 +16,18 @@ import type {
 } from './data/types';
 
 export type StateCallback = (state: WorkerStateUpdate) => void;
+export type NEBProgressCallback = (
+  iteration: number,
+  energyProfile: number[],
+  maxForce: number,
+) => void;
+export type NEBResultCallback = (result: NEBResult) => void;
 
 export class SimulationWorker {
   private worker: Worker;
   private onState: StateCallback | null = null;
+  private onNEBProgress: NEBProgressCallback | null = null;
+  private onNEBResult: NEBResultCallback | null = null;
   private readyPromise: Promise<void>;
 
   constructor() {
@@ -37,6 +47,14 @@ export class SimulationWorker {
     this.worker.onmessage = (e: MessageEvent<WorkerOutMessage>) => {
       if (e.data.type === 'state' && this.onState) {
         this.onState(e.data);
+      } else if (e.data.type === 'neb-progress' && this.onNEBProgress) {
+        this.onNEBProgress(
+          e.data.iteration,
+          e.data.energyProfile,
+          e.data.maxForce,
+        );
+      } else if (e.data.type === 'neb-result' && this.onNEBResult) {
+        this.onNEBResult(e.data.result);
       }
     };
   }
@@ -98,6 +116,26 @@ export class SimulationWorker {
 
   updateBox(box: Partial<SimulationBox>): void {
     this.send({ type: 'box', box });
+  }
+
+  runNEB(
+    reactantPositions: Float64Array,
+    productPositions: Float64Array,
+    config: NEBConfig,
+  ): void {
+    this.send({ type: 'neb', reactantPositions, productPositions, config });
+  }
+
+  cancelNEB(): void {
+    this.send({ type: 'neb-cancel' });
+  }
+
+  onNEBProgressUpdate(callback: NEBProgressCallback): void {
+    this.onNEBProgress = callback;
+  }
+
+  onNEBResultUpdate(callback: NEBResultCallback): void {
+    this.onNEBResult = callback;
   }
 
   terminate(): void {
