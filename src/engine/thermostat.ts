@@ -2,7 +2,7 @@
 // Temperature control: Berendsen and Nosé-Hoover thermostats
 // ==============================================================
 
-import { computeTemperature } from './integrator';
+import { computeTemperature, computeDOF } from './integrator';
 
 /**
  * Berendsen thermostat: rescale velocities toward target temperature.
@@ -103,9 +103,7 @@ export function createNoseHooverChainState(
   tau: number,
 ): NoseHooverChainState {
   const kB = 8.617333262e-5; // eV/K — CODATA 2018
-  // Subtract 3 translational DOF for conserved COM momentum.
-  // Guard: for very small systems (N ≤ 1) use Nf = 3 to avoid zero/negative.
-  const Nf = nAtoms > 1 ? 3 * nAtoms - 3 : 3;
+  const Nf = computeDOF(nAtoms);
   const kBT = kB * targetTemp;
 
   const xi = new Float64Array(NH_CHAIN_LENGTH);
