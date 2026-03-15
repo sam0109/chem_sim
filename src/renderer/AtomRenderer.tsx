@@ -83,7 +83,7 @@ export const AtomRenderer: React.FC = () => {
       fragmentShader,
       uniforms: {
         uScale: { value: 1.0 },
-        uLightDir: { value: new THREE.Vector3(0.57, 0.57, 0.57) }, // normalized (1,1,1)
+        uLightDir: { value: new THREE.Vector3(0.5774, 0.5774, 0.5774) }, // normalized (1,1,1): 1/sqrt(3)
         uAmbient: { value: new THREE.Vector3(0.25, 0.25, 0.25) },
         uShininess: { value: 40.0 },
       },

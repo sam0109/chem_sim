@@ -56,13 +56,19 @@ const _bondMaterial = new THREE.ShaderMaterial({
   vertexShader,
   fragmentShader,
   uniforms: {
-    uBondRadius: { value: 0.08 },
-    uLightDir: { value: new THREE.Vector3(0.57, 0.57, 0.57) },
+    uLightDir: { value: new THREE.Vector3(0.5774, 0.5774, 0.5774) }, // normalized (1,1,1)
     uAmbient: { value: new THREE.Vector3(0.25, 0.25, 0.25) },
   },
   depthTest: true,
   depthWrite: true,
   side: THREE.DoubleSide,
+  // Required for gl_FragDepth to work correctly in the fragment shader
+  extensions: {
+    fragDepth: true,
+    derivatives: false,
+    drawBuffers: false,
+    shaderTextureLOD: false,
+  },
 });
 
 export const BondRenderer: React.FC = () => {
@@ -118,7 +124,6 @@ export const BondRenderer: React.FC = () => {
     }
 
     const bondRadius = renderMode === 'wireframe' ? 0.02 : 0.08;
-    _bondMaterial.uniforms.uBondRadius.value = bondRadius;
 
     let instanceIdx = 0;
 
@@ -208,8 +213,8 @@ export const BondRenderer: React.FC = () => {
 
     mesh.count = instanceIdx;
 
-    // The shader uses aStart/aEnd for positioning, so we still need
-    // instanceMatrix for Three.js — set identity matrices
+    // Mark instanceMatrix as needing update (Three.js requires this even
+    // though our shader reads positions from aStart/aEnd, not instanceMatrix)
     mesh.instanceMatrix.needsUpdate = true;
 
     // Mark instanced attributes as needing update
