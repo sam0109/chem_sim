@@ -68,11 +68,6 @@ Math.random = seededRng;
 // Each entry maps a test ID to the issue(s) that will fix it.
 // These tests are skipped (not run) and don't count as pass or fail.
 const KNOWN_FAILURES: Record<string, string> = {
-  'NVE-02':
-    'Methane NVE explodes — needs out-of-plane/improper torsion (no proper dihedrals in CH4)',
-  'GEO-05': 'Methane HCH angle — needs out-of-plane/improper torsion',
-  'GEO-06': 'Methane C-H distance — needs out-of-plane/improper torsion',
-  'GEO-07': 'Methane bond count — needs out-of-plane/improper torsion',
   'GEO-09':
     'CO2 C=O distance — needs double bond params (#3) for correct bond detection',
 };
