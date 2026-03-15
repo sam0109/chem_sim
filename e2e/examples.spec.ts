@@ -31,12 +31,12 @@ test.describe('Example molecule loading', () => {
     });
   });
 
-  test('examples dropdown opens and lists 6 molecules', async ({ page }) => {
+  test('examples dropdown opens and lists 14 molecules', async ({ page }) => {
     await openExamplesDropdown(page);
 
     const dropdown = page.getByTestId('examples-dropdown');
     const items = dropdown.locator('button');
-    await expect(items).toHaveCount(6);
+    await expect(items).toHaveCount(14);
   });
 
   test('default molecule is Water with 3 atoms', async ({ page }) => {
