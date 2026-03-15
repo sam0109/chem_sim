@@ -2241,7 +2241,7 @@ function runBondDetectionTests(): void {
   // BD-02: I₂ bond detected at typical distance
   // I-I single bond: 2.67 Å (CRC Handbook 97th Ed.)
   // covR(I) = 1.39 Å → sum = 2.78 Å → ratio = 2.67/2.78 = 0.96 → single bond
-  // I is a heavy element (Z=53 > 36), so tolerance scaling applies (1.05×)
+  // I is a heavy element (Z=53 > 36), so tolerance scaling applies (1.10× for both heavy)
   {
     const pos = new Float64Array([0, 0, 0, 2.67, 0, 0]);
     const Z = [53, 53]; // I, I
