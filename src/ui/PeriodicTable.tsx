@@ -2,10 +2,10 @@
 // PeriodicTable — interactive element picker with educational features
 // ==============================================================
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
-import type { ChemicalElement } from '../data/types';
+import type { ChemicalElement, PeriodicTableColorMode } from '../data/types';
 
 // Periodic table grid layout: [row][col] = atomic number (0 = empty)
 const GRID: number[][] = [
@@ -47,6 +47,216 @@ const categoryLabels: Record<string, string> = {
   'post-transition-metal': 'Post-Transition Metal',
   lanthanide: 'Lanthanide',
   actinide: 'Actinide',
+};
+
+// ---- Color Mode Utilities ----
+
+/** Human-readable labels for color modes */
+const colorModeLabels: Record<PeriodicTableColorMode, string> = {
+  category: 'Category',
+  electronegativity: 'EN',
+  atomicRadius: 'Radius',
+  electronAffinity: 'EA',
+  ionizationEnergy: 'IE',
+};
+
+/** Unit labels for color mode legends */
+const colorModeUnits: Record<PeriodicTableColorMode, string> = {
+  category: '',
+  electronegativity: 'Pauling',
+  atomicRadius: 'Å',
+  electronAffinity: 'eV',
+  ionizationEnergy: 'eV',
+};
+
+/** Extract the numeric property value for a given color mode */
+function getPropertyValue(
+  el: ChemicalElement,
+  mode: PeriodicTableColorMode,
+): number {
+  switch (mode) {
+    case 'electronegativity':
+      return el.electronegativity;
+    case 'atomicRadius':
+      return el.vdwRadius;
+    case 'electronAffinity':
+      return el.electronAffinity;
+    case 'ionizationEnergy':
+      return el.ionizationEnergy;
+    case 'category':
+      return 0;
+  }
+}
+
+/** Compute min/max of a numeric property across all elements in the grid */
+function computePropertyRange(mode: PeriodicTableColorMode): {
+  min: number;
+  max: number;
+} {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const row of GRID) {
+    for (const z of row) {
+      if (z === 0) continue;
+      const el = elements[z];
+      if (!el) continue;
+      const val = getPropertyValue(el, mode);
+      // Skip zero/unknown values for EN and IE (they indicate missing data)
+      if (
+        val === 0 &&
+        (mode === 'electronegativity' || mode === 'ionizationEnergy')
+      )
+        continue;
+      if (val < min) min = val;
+      if (val > max) max = val;
+    }
+  }
+  return { min, max };
+}
+
+/**
+ * Interpolate between two hex colors.
+ * t ∈ [0, 1]: 0 → colorA, 1 → colorB
+ */
+function lerpColor(colorA: string, colorB: string, t: number): string {
+  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  const parseHex = (hex: string) => ({
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  });
+  const a = parseHex(colorA);
+  const b = parseHex(colorB);
+  const r = clamp(a.r + (b.r - a.r) * t);
+  const g = clamp(a.g + (b.g - a.g) * t);
+  const bl = clamp(a.b + (b.b - a.b) * t);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
+}
+
+/**
+ * Map a value to a 3-stop gradient: low → mid → high.
+ * Uses blue (#3366cc) → white (#f0f0f0) → red (#cc3333)
+ * as a diverging colormap familiar from chemistry heatmaps.
+ */
+const GRAD_LOW = '#3366cc';
+const GRAD_MID = '#f0f0f0';
+const GRAD_HIGH = '#cc3333';
+
+function valueToGradientColor(value: number, min: number, max: number): string {
+  if (max === min) return GRAD_MID;
+  const t = (value - min) / (max - min); // 0..1
+  if (t <= 0.5) {
+    return lerpColor(GRAD_LOW, GRAD_MID, t * 2);
+  }
+  return lerpColor(GRAD_MID, GRAD_HIGH, (t - 0.5) * 2);
+}
+
+/** Get background color for an element cell based on the active color mode */
+function getCellColor(
+  el: ChemicalElement,
+  mode: PeriodicTableColorMode,
+  range: { min: number; max: number },
+): string {
+  if (mode === 'category') {
+    return categoryColors[el.category] || '#555';
+  }
+  const val = getPropertyValue(el, mode);
+  // Show unknown/zero values as dark gray
+  if (
+    val === 0 &&
+    (mode === 'electronegativity' || mode === 'ionizationEnergy')
+  ) {
+    return '#333';
+  }
+  return valueToGradientColor(val, range.min, range.max);
+}
+
+// ---- Color Mode Selector ----
+
+const COLOR_MODES: PeriodicTableColorMode[] = [
+  'category',
+  'electronegativity',
+  'atomicRadius',
+  'electronAffinity',
+  'ionizationEnergy',
+];
+
+const ColorModeSelector: React.FC<{
+  active: PeriodicTableColorMode;
+  onSelect: (mode: PeriodicTableColorMode) => void;
+}> = ({ active, onSelect }) => (
+  <div
+    style={{
+      display: 'flex',
+      gap: 4,
+      justifyContent: 'center',
+      marginBottom: 4,
+    }}
+  >
+    {COLOR_MODES.map((mode) => (
+      <button
+        key={mode}
+        onClick={() => onSelect(mode)}
+        style={{
+          background:
+            active === mode
+              ? 'rgba(100, 140, 255, 0.3)'
+              : 'rgba(255,255,255,0.05)',
+          border:
+            active === mode
+              ? '1px solid rgba(100, 140, 255, 0.6)'
+              : '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 3,
+          color: active === mode ? '#aaccff' : '#888',
+          fontSize: 9,
+          padding: '2px 6px',
+          cursor: 'pointer',
+          fontFamily: 'sans-serif',
+          transition: 'all 0.15s',
+        }}
+      >
+        {colorModeLabels[mode]}
+      </button>
+    ))}
+  </div>
+);
+
+/** Horizontal gradient legend bar for numeric color modes */
+const ColorLegend: React.FC<{
+  mode: PeriodicTableColorMode;
+  range: { min: number; max: number };
+}> = ({ mode, range }) => {
+  if (mode === 'category') return null;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        marginTop: 4,
+        fontSize: 9,
+        fontFamily: 'monospace',
+        color: '#888',
+      }}
+    >
+      <span>
+        {range.min.toFixed(1)} {colorModeUnits[mode]}
+      </span>
+      <div
+        style={{
+          width: 120,
+          height: 8,
+          borderRadius: 4,
+          background: `linear-gradient(to right, ${GRAD_LOW}, ${GRAD_MID}, ${GRAD_HIGH})`,
+          border: '1px solid rgba(255,255,255,0.1)',
+        }}
+      />
+      <span>
+        {range.max.toFixed(1)} {colorModeUnits[mode]}
+      </span>
+    </div>
+  );
 };
 
 // ---- Tooltip ----
@@ -184,11 +394,15 @@ const ElementTooltip: React.FC<{
 const ElementCell: React.FC<{
   el: ChemicalElement;
   selected: boolean;
+  bgColor: string;
   onClick: () => void;
   onHoverStart: () => void;
   onHoverEnd: () => void;
-}> = ({ el, selected, onClick, onHoverStart, onHoverEnd }) => {
-  const bgColor = categoryColors[el.category] || '#555';
+}> = ({ el, selected, bgColor, onClick, onHoverStart, onHoverEnd }) => {
+  // For gradient color modes, use dark text on light backgrounds
+  const isLightBg =
+    bgColor !== '#333' && bgColor !== '#555' && bgColor > '#888888';
+  const textColor = isLightBg ? '#111' : '#fff';
 
   return (
     <button
@@ -202,7 +416,7 @@ const ElementCell: React.FC<{
         border: selected ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)',
         borderRadius: 3,
         background: selected ? bgColor : `${bgColor}99`,
-        color: '#fff',
+        color: textColor,
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
@@ -229,6 +443,14 @@ export const PeriodicTable: React.FC = () => {
   const showPeriodicTable = useUIStore((s) => s.showPeriodicTable);
   const hoveredElement = useUIStore((s) => s.hoveredElement);
   const setHoveredElement = useUIStore((s) => s.setHoveredElement);
+  const ptColorMode = useUIStore((s) => s.periodicTableColorMode);
+  const setPtColorMode = useUIStore((s) => s.setPeriodicTableColorMode);
+
+  // Compute property range for current color mode (memoized)
+  const propertyRange = useMemo(
+    () => computePropertyRange(ptColorMode),
+    [ptColorMode],
+  );
 
   if (!showPeriodicTable) return null;
 
@@ -278,6 +500,9 @@ export const PeriodicTable: React.FC = () => {
         Periodic Table — click to select element
       </div>
 
+      {/* Color mode selector */}
+      <ColorModeSelector active={ptColorMode} onSelect={setPtColorMode} />
+
       {/* Grid container — relative for tooltip positioning */}
       <div style={{ position: 'relative' }}>
         <div
@@ -302,11 +527,13 @@ export const PeriodicTable: React.FC = () => {
                       style={{ width: CELL_W, height: CELL_H }}
                     />
                   );
+                const cellBg = getCellColor(el, ptColorMode, propertyRange);
                 return (
                   <ElementCell
                     key={z}
                     el={el}
                     selected={selectedElement === z}
+                    bgColor={cellBg}
                     onClick={() => setSelectedElement(z)}
                     onHoverStart={() => setHoveredElement(z)}
                     onHoverEnd={() => setHoveredElement(null)}
@@ -326,6 +553,9 @@ export const PeriodicTable: React.FC = () => {
           />
         )}
       </div>
+
+      {/* Color legend */}
+      <ColorLegend mode={ptColorMode} range={propertyRange} />
     </div>
   );
 };
