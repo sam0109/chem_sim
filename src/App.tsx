@@ -52,6 +52,38 @@ const headerButtonStyle: React.CSSProperties = {
   backdropFilter: 'blur(10px)',
 };
 
+// Shared style for items in dropdown menus (examples, share, etc.)
+const dropdownItemStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  padding: '6px 10px',
+  border: 'none',
+  background: 'transparent',
+  color: '#ccc',
+  cursor: 'pointer',
+  fontFamily: 'monospace',
+  fontSize: 11,
+  textAlign: 'left',
+  borderRadius: 3,
+};
+
+const dropdownContainerStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: '100%',
+  marginTop: 4,
+  background: 'rgba(20, 20, 40, 0.98)',
+  borderRadius: 6,
+  border: '1px solid rgba(255,255,255,0.1)',
+  padding: 4,
+  zIndex: 200,
+};
+
+/** Hover handlers for dropdown items */
+const onItemHover = (e: React.MouseEvent<HTMLButtonElement>) =>
+  (e.currentTarget.style.background = 'rgba(100,150,255,0.2)');
+const onItemLeave = (e: React.MouseEvent<HTMLButtonElement>) =>
+  (e.currentTarget.style.background = 'transparent');
+
 const App: React.FC = () => {
   const initWorker = useSimulationStore((s) => s.initWorker);
   const initSimulation = useSimulationStore((s) => s.initSimulation);
@@ -75,9 +107,8 @@ const App: React.FC = () => {
         cutoff: file.config.cutoff,
       });
       setRenderMode(file.ui.renderMode);
-      if (file.ui.showLabels !== useUIStore.getState().showLabels) {
-        useUIStore.getState().toggleLabels();
-      }
+      // Set showLabels directly to avoid read-then-toggle race
+      useUIStore.setState({ showLabels: file.ui.showLabels });
       setColorMode(file.ui.colorMode);
     },
     [initSimulation, setConfig, setRenderMode, setColorMode],
@@ -235,44 +266,16 @@ const App: React.FC = () => {
             {showExamples && (
               <div
                 data-testid="examples-dropdown"
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  marginTop: 4,
-                  background: 'rgba(20, 20, 40, 0.98)',
-                  borderRadius: 6,
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  padding: 4,
-                  minWidth: 180,
-                  zIndex: 200,
-                }}
+                style={{ ...dropdownContainerStyle, left: 0, minWidth: 180 }}
               >
                 {Object.keys(exampleMolecules).map((name) => (
                   <button
                     key={name}
                     data-testid={`example-${name}`}
                     onClick={() => handleLoadExample(name)}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      padding: '6px 10px',
-                      border: 'none',
-                      background: 'transparent',
-                      color: '#ccc',
-                      cursor: 'pointer',
-                      fontFamily: 'monospace',
-                      fontSize: 11,
-                      textAlign: 'left',
-                      borderRadius: 3,
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background =
-                        'rgba(100,150,255,0.2)')
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background = 'transparent')
-                    }
+                    style={dropdownItemStyle}
+                    onMouseEnter={onItemHover}
+                    onMouseLeave={onItemLeave}
                   >
                     {name}
                   </button>
@@ -302,66 +305,23 @@ const App: React.FC = () => {
             {showShareMenu && (
               <div
                 data-testid="share-dropdown"
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  marginTop: 4,
-                  background: 'rgba(20, 20, 40, 0.98)',
-                  borderRadius: 6,
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  padding: 4,
-                  minWidth: 160,
-                  zIndex: 200,
-                }}
+                style={{ ...dropdownContainerStyle, right: 0, minWidth: 160 }}
               >
                 <button
                   data-testid="copy-link-button"
                   onClick={handleCopyLink}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '6px 10px',
-                    border: 'none',
-                    background: 'transparent',
-                    color: '#ccc',
-                    cursor: 'pointer',
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    textAlign: 'left',
-                    borderRadius: 3,
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = 'rgba(100,150,255,0.2)')
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = 'transparent')
-                  }
+                  style={dropdownItemStyle}
+                  onMouseEnter={onItemHover}
+                  onMouseLeave={onItemLeave}
                 >
                   Copy Link
                 </button>
                 <button
                   data-testid="save-chemsim-button"
                   onClick={handleSaveFile}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '6px 10px',
-                    border: 'none',
-                    background: 'transparent',
-                    color: '#ccc',
-                    cursor: 'pointer',
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    textAlign: 'left',
-                    borderRadius: 3,
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = 'rgba(100,150,255,0.2)')
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = 'transparent')
-                  }
+                  style={dropdownItemStyle}
+                  onMouseEnter={onItemHover}
+                  onMouseLeave={onItemLeave}
                 >
                   Save .chemsim
                 </button>

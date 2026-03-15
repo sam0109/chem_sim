@@ -172,8 +172,16 @@ function isVector3Tuple(v: unknown): v is [number, number, number] {
     v.length === 3 &&
     typeof v[0] === 'number' &&
     typeof v[1] === 'number' &&
-    typeof v[2] === 'number'
+    typeof v[2] === 'number' &&
+    Number.isFinite(v[0]) &&
+    Number.isFinite(v[1]) &&
+    Number.isFinite(v[2])
   );
+}
+
+/** Check that a value is a finite number */
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
 }
 
 /** Validate a parsed JSON object as a ChemSimFileV1. Throws on invalid data. */
@@ -196,11 +204,17 @@ export function validateChemSimFile(data: unknown): ChemSimFileV1 {
   }
   for (let i = 0; i < obj.atoms.length; i++) {
     const a = obj.atoms[i] as Record<string, unknown>;
-    if (typeof a.id !== 'number') {
+    if (!isFiniteNumber(a.id)) {
       throw new Error(`Invalid atom[${i}]: missing or invalid id`);
     }
-    if (typeof a.elementNumber !== 'number' || a.elementNumber < 1) {
-      throw new Error(`Invalid atom[${i}]: missing or invalid elementNumber`);
+    // Atomic numbers range from 1 (H) to 118 (Og)
+    if (
+      typeof a.elementNumber !== 'number' ||
+      !Number.isInteger(a.elementNumber) ||
+      a.elementNumber < 1 ||
+      a.elementNumber > 118
+    ) {
+      throw new Error(`Invalid atom[${i}]: elementNumber must be 1-118`);
     }
     if (!isVector3Tuple(a.position)) {
       throw new Error(`Invalid atom[${i}]: position must be [x, y, z]`);
@@ -208,7 +222,7 @@ export function validateChemSimFile(data: unknown): ChemSimFileV1 {
     if (!isVector3Tuple(a.velocity)) {
       throw new Error(`Invalid atom[${i}]: velocity must be [vx, vy, vz]`);
     }
-    if (typeof a.charge !== 'number') {
+    if (!isFiniteNumber(a.charge)) {
       throw new Error(`Invalid atom[${i}]: missing or invalid charge`);
     }
     if (!VALID_HYBRIDIZATIONS.has(a.hybridization as string)) {
@@ -225,10 +239,10 @@ export function validateChemSimFile(data: unknown): ChemSimFileV1 {
   }
   for (let i = 0; i < obj.bonds.length; i++) {
     const b = obj.bonds[i] as Record<string, unknown>;
-    if (typeof b.atomA !== 'number' || typeof b.atomB !== 'number') {
+    if (!isFiniteNumber(b.atomA) || !isFiniteNumber(b.atomB)) {
       throw new Error(`Invalid bond[${i}]: atomA and atomB must be numbers`);
     }
-    if (typeof b.order !== 'number') {
+    if (!isFiniteNumber(b.order)) {
       throw new Error(`Invalid bond[${i}]: order must be a number`);
     }
     if (!VALID_BOND_TYPES.has(b.type as string)) {
@@ -241,10 +255,10 @@ export function validateChemSimFile(data: unknown): ChemSimFileV1 {
   if (typeof cfg !== 'object' || cfg === null) {
     throw new Error('Invalid .chemsim file: config must be an object');
   }
-  if (typeof cfg.timestep !== 'number' || cfg.timestep <= 0) {
+  if (!isFiniteNumber(cfg.timestep) || cfg.timestep <= 0) {
     throw new Error('Invalid config: timestep must be a positive number');
   }
-  if (typeof cfg.temperature !== 'number' || cfg.temperature < 0) {
+  if (!isFiniteNumber(cfg.temperature) || cfg.temperature < 0) {
     throw new Error(
       'Invalid config: temperature must be a non-negative number',
     );
@@ -252,10 +266,10 @@ export function validateChemSimFile(data: unknown): ChemSimFileV1 {
   if (!VALID_THERMOSTATS.has(cfg.thermostat as string)) {
     throw new Error('Invalid config: invalid thermostat type');
   }
-  if (typeof cfg.thermostatTau !== 'number') {
+  if (!isFiniteNumber(cfg.thermostatTau)) {
     throw new Error('Invalid config: thermostatTau must be a number');
   }
-  if (typeof cfg.cutoff !== 'number' || cfg.cutoff <= 0) {
+  if (!isFiniteNumber(cfg.cutoff) || cfg.cutoff <= 0) {
     throw new Error('Invalid config: cutoff must be a positive number');
   }
 
@@ -366,13 +380,26 @@ function fromBase64url(str: string): Uint8Array {
   return bytes;
 }
 
-/** Serialize state → compressed base64url string for URL embedding */
+/** Maximum safe URL parameter length (conservative limit for proxies/servers) */
+const MAX_URL_PARAM_LENGTH = 32_000;
+
+/** Serialize state → compressed base64url string for URL embedding.
+ *  Throws if the compressed result exceeds MAX_URL_PARAM_LENGTH. */
 export async function stateToUrlParam(input: SerializeInput): Promise<string> {
   const state = serializeState(input);
   const json = JSON.stringify(state);
   const encoded = new TextEncoder().encode(json);
   const compressed = await compress(encoded);
-  return toBase64url(compressed);
+  const param = toBase64url(compressed);
+
+  if (param.length > MAX_URL_PARAM_LENGTH) {
+    throw new Error(
+      `Compressed state is too large for URL sharing (${param.length} chars, ` +
+        `max ${MAX_URL_PARAM_LENGTH}). Use "Save .chemsim" for large simulations.`,
+    );
+  }
+
+  return param;
 }
 
 /** Decode a base64url URL parameter → validated ChemSimFileV1 */
