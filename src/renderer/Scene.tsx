@@ -15,6 +15,7 @@ import { OrbitalRenderer } from './OrbitalRenderer';
 import { useSimContextStoreApi } from '../store/SimulationContext';
 import { useUIStore } from '../store/uiStore';
 import elements from '../data/elements';
+import { computeBondedPosition } from '../data/bondPlacement';
 import type { Atom } from '../data/types';
 
 // ---- Interaction handler (inside Canvas) ----
@@ -36,28 +37,8 @@ const Interaction: React.FC = () => {
 
       raycaster.setFromCamera(mouseRef.current, camera);
 
-      if (activeTool === 'place-atom') {
-        // Intersect with ground plane (y=0)
-        const hit = raycaster.ray.intersectPlane(
-          planeRef.current,
-          intersectPoint.current,
-        );
-        if (hit) {
-          const selectedElement = useUIStore.getState().selectedElement;
-          const newAtom: Atom = {
-            id: Date.now(),
-            elementNumber: selectedElement,
-            position: [hit.x, hit.y, hit.z],
-            velocity: [0, 0, 0],
-            force: [0, 0, 0],
-            charge: 0,
-            hybridization: 'sp3',
-            fixed: false,
-          };
-          simStore.getState().addAtom(newAtom);
-        }
-      } else if (activeTool === 'select') {
-        // Try to pick an atom — simple proximity check
+      // Shared helper: pick the closest atom under the cursor via ray-sphere test
+      const pickAtom = (): number => {
         const { atoms, positions } = simStore.getState();
         let closest = -1;
         let closestDist = Infinity;
@@ -83,16 +64,74 @@ const Interaction: React.FC = () => {
           const proj = toAtom.dot(raycaster.ray.direction);
           if (proj < 0) continue;
 
-          const closest_point = raycaster.ray.origin
+          const closestPoint = raycaster.ray.origin
             .clone()
             .add(raycaster.ray.direction.clone().multiplyScalar(proj));
-          const dist = closest_point.distanceTo(atomPos);
+          const dist = closestPoint.distanceTo(atomPos);
 
           if (dist < radius && proj < closestDist) {
             closest = i;
             closestDist = proj;
           }
         }
+
+        return closest;
+      };
+
+      if (activeTool === 'place-atom') {
+        const { selectedElement, selectedBondOrder } = useUIStore.getState();
+
+        // First, try to pick an existing atom to bond to
+        const targetIdx = pickAtom();
+
+        if (targetIdx >= 0) {
+          // Bond-aware placement: compute ideal bonded position
+          const { atoms, bonds, positions } = simStore.getState();
+          const newPos = computeBondedPosition(
+            atoms,
+            bonds,
+            positions,
+            targetIdx,
+            selectedElement,
+            selectedBondOrder,
+          );
+
+          if (newPos) {
+            const newAtom: Atom = {
+              id: Date.now(),
+              elementNumber: selectedElement,
+              position: newPos,
+              velocity: [0, 0, 0],
+              force: [0, 0, 0],
+              charge: 0,
+              hybridization: 'sp3',
+              fixed: false,
+            };
+            simStore.getState().addAtom(newAtom);
+          }
+          // If newPos is null, atom is saturated — do nothing
+        } else {
+          // No atom under cursor — fall back to ground plane placement
+          const hit = raycaster.ray.intersectPlane(
+            planeRef.current,
+            intersectPoint.current,
+          );
+          if (hit) {
+            const newAtom: Atom = {
+              id: Date.now(),
+              elementNumber: selectedElement,
+              position: [hit.x, hit.y, hit.z],
+              velocity: [0, 0, 0],
+              force: [0, 0, 0],
+              charge: 0,
+              hybridization: 'sp3',
+              fixed: false,
+            };
+            simStore.getState().addAtom(newAtom);
+          }
+        }
+      } else if (activeTool === 'select') {
+        const closest = pickAtom();
 
         if (closest >= 0) {
           useUIStore.getState().selectAtom(closest, event.shiftKey);
@@ -100,40 +139,7 @@ const Interaction: React.FC = () => {
           useUIStore.getState().clearSelection();
         }
       } else if (activeTool === 'delete') {
-        // Pick nearest atom and delete
-        const { atoms, positions } = simStore.getState();
-        let closest = -1;
-        let closestDist = Infinity;
-
-        for (let i = 0; i < atoms.length; i++) {
-          const x =
-            positions.length > i * 3 ? positions[i * 3] : atoms[i].position[0];
-          const y =
-            positions.length > i * 3 + 1
-              ? positions[i * 3 + 1]
-              : atoms[i].position[1];
-          const z =
-            positions.length > i * 3 + 2
-              ? positions[i * 3 + 2]
-              : atoms[i].position[2];
-          const atomPos = new THREE.Vector3(x, y, z);
-
-          const toAtom = atomPos.clone().sub(raycaster.ray.origin);
-          const proj = toAtom.dot(raycaster.ray.direction);
-          if (proj < 0) continue;
-
-          const closest_point = raycaster.ray.origin
-            .clone()
-            .add(raycaster.ray.direction.clone().multiplyScalar(proj));
-          const el = elements[atoms[i].elementNumber];
-          const radius = el ? el.covalentRadius * 0.5 : 0.3;
-          const dist = closest_point.distanceTo(atomPos);
-
-          if (dist < radius && proj < closestDist) {
-            closest = i;
-            closestDist = proj;
-          }
-        }
+        const closest = pickAtom();
 
         if (closest >= 0) {
           simStore.getState().removeAtom(closest);

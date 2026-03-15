@@ -4,13 +4,13 @@
 // Computes ideal positions for new atoms bonded to existing atoms,
 // using UFF bond lengths and VSEPR-based coordination geometry.
 //
-// Engine code — no UI/renderer/store imports allowed.
+// Data layer — uses only types, elements, and UFF parameters.
 // ==============================================================
 
-import type { Atom, Bond, Hybridization } from '../data/types';
+import type { Atom, Bond, Hybridization } from './types';
 import type { Vector3Tuple } from 'three';
-import elements from '../data/elements';
-import { getUFFBondLength } from '../data/uff';
+import elements from './elements';
+import { getUFFBondLength } from './uff';
 
 /**
  * Canonical bond direction sets for each hybridization geometry.

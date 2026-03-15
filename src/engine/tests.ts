@@ -63,7 +63,10 @@ import {
   detectReactions,
   estimateReactionEnergy,
 } from './reactionDetector';
-import { computeBondedPosition, getIdealDirections } from './bondPlacement';
+import {
+  computeBondedPosition,
+  getIdealDirections,
+} from '../data/bondPlacement';
 
 // ---- Deterministic PRNG for reproducible tests ----
 // Mulberry32: a simple 32-bit seeded PRNG (public domain)
