@@ -2212,6 +2212,113 @@ function runReactionTests(): void {
   }
 }
 
+// ---- Bond Detection Tests ----
+
+function runBondDetectionTests(): void {
+  console.log('\n=== BOND DETECTION TESTS ===\n');
+
+  // BD-01: NaCl ionic bond detected with order 1
+  // Na (Z=11, EN=0.93) + Cl (Z=17, EN=3.16): EN diff = 2.23 > 1.7 → ionic
+  // Typical NaCl distance: 2.36 Å (gas phase, CRC Handbook 97th Ed.)
+  // covR(Na) + covR(Cl) = 1.66 + 1.02 = 2.68 Å
+  // ratio = 2.36/2.68 = 0.88 → would be double-bond range without ionic fix
+  {
+    const pos = new Float64Array([0, 0, 0, 2.36, 0, 0]);
+    const Z = [11, 17]; // Na, Cl
+    const bonds = detectBonds(pos, Z);
+
+    const passed =
+      bonds.length === 1 && bonds[0].type === 'ionic' && bonds[0].order === 1;
+    report(
+      'BD-01',
+      'NaCl ionic bond detected at 2.36 A with order=1',
+      passed,
+      `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}, order=${bonds[0]?.order ?? 'N/A'}`,
+      'exactly 1 ionic bond with order=1',
+    );
+  }
+
+  // BD-02: I2 bond detected at typical distance
+  // I-I single bond: 2.67 A (CRC Handbook 97th Ed.)
+  // covR(I) = 1.39 A -> sum = 2.78 A -> ratio = 2.67/2.78 = 0.96 -> single bond
+  // I is a heavy element (Z=53 > 36), so tolerance scaling applies (1.10x for both heavy)
+  {
+    const pos = new Float64Array([0, 0, 0, 2.67, 0, 0]);
+    const Z = [53, 53]; // I, I
+    const bonds = detectBonds(pos, Z);
+
+    const passed =
+      bonds.length === 1 &&
+      bonds[0].type === 'covalent' &&
+      bonds[0].order === 1;
+    report(
+      'BD-02',
+      'I2 covalent bond detected at 2.67 A',
+      passed,
+      `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}, order=${bonds[0]?.order ?? 'N/A'}`,
+      'exactly 1 covalent single bond',
+    );
+  }
+
+  // BD-03: Fe-O bond detected at typical distance
+  // Fe-O bond distance in iron oxides: ~2.0 A (Wells, Structural Inorganic Chemistry)
+  // covR(Fe)=1.32 + covR(O)=0.66 = 1.98 A -> ratio = 2.0/1.98 ~ 1.01
+  // At formTolerance=1.2, max = 1.98 * 1.2 * 1.05 (heavy+light) = 2.49 A
+  // Fe is a transition metal -> tolerance scaling applies
+  {
+    const pos = new Float64Array([0, 0, 0, 2.0, 0, 0]);
+    const Z = [26, 8]; // Fe, O
+    const bonds = detectBonds(pos, Z);
+
+    const passed = bonds.length === 1;
+    report(
+      'BD-03',
+      'Fe-O bond detected at 2.0 A',
+      passed,
+      `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}`,
+      'exactly 1 bond detected',
+    );
+  }
+
+  // BD-04: Fe-Fe metallic bond detected
+  // Fe-Fe distance in BCC iron: 2.48 A (nearest neighbor, Kittel Solid State Physics)
+  // covR(Fe)=1.32 -> sum = 2.64 A -> ratio = 2.48/2.64 = 0.94
+  // Both transition metals -> tolerance scale = 1.10
+  // max = 2.64 * 1.2 * 1.10 = 3.48 A (well above 2.48)
+  {
+    const pos = new Float64Array([0, 0, 0, 2.48, 0, 0]);
+    const Z = [26, 26]; // Fe, Fe
+    const bonds = detectBonds(pos, Z);
+
+    const passed = bonds.length === 1 && bonds[0].type === 'metallic';
+    report(
+      'BD-04',
+      'Fe-Fe metallic bond detected at 2.48 A',
+      passed,
+      `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}`,
+      'exactly 1 metallic bond',
+    );
+  }
+
+  // BD-05: Ionic bonds always have order 1, even when distance ratio
+  // would suggest higher order for covalent bonds
+  // KF: K (EN=0.82), F (EN=3.98), diff=3.16 -> ionic
+  // KF distance ~2.17 A (gas phase), covR(K)+covR(F) = 2.03+0.57 = 2.60
+  // ratio = 2.17/2.60 = 0.83 -> would be double-bond in covalent range
+  {
+    const pos = new Float64Array([0, 0, 0, 2.17, 0, 0]);
+    const Z = [19, 9]; // K, F
+    const bonds = detectBonds(pos, Z);
+
+    const passed =
+      bonds.length === 1 && bonds[0].type === 'ionic' && bonds[0].order === 1;
+    report(
+      'BD-05',
+      'KF ionic bond has order=1 despite short distance ratio',
+      passed,
+      `bonds=${bonds.length}, type=${bonds[0]?.type ?? 'none'}, order=${bonds[0]?.order ?? 'N/A'}`,
+      'exactly 1 ionic bond with order=1',
+    );
   }
 }
 
@@ -2484,7 +2591,6 @@ function runOrbitalTests(): void {
         'both true',
       );
     }
->>>>>>> 39270e4 (Add orbital wavefunction and marching cubes physics tests (#11))
   }
 }
 
