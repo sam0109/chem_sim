@@ -452,9 +452,22 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   let ljE = 0;
   let coulombE = 0;
 
+  // PBC minimum image box size — used for both bonded and non-bonded forces.
+  // Reference: Allen & Tildesley, "Computer Simulation of Liquids", Ch. 1.5.2
+  const pbcBoxSize = box.periodic ? box.size : undefined;
+
   // 1. Bonded forces (Morse)
   for (const bp of bondParams) {
-    const e = morseBondForce(pos, frc, bp.i, bp.j, bp.De, bp.alpha, bp.re);
+    const e = morseBondForce(
+      pos,
+      frc,
+      bp.i,
+      bp.j,
+      bp.De,
+      bp.alpha,
+      bp.re,
+      pbcBoxSize,
+    );
     morseE += e;
     potentialEnergy += e;
   }
@@ -469,6 +482,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       ap.k,
       ap.kAngle,
       ap.theta0,
+      pbcBoxSize,
     );
     angleE += e;
     potentialEnergy += e;
@@ -486,6 +500,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       tp.V,
       tp.n,
       tp.phi0,
+      pbcBoxSize,
     );
     torsionE += e;
     potentialEnergy += e;
@@ -504,6 +519,7 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
       ip.C0,
       ip.C1,
       ip.C2,
+      pbcBoxSize,
     );
     inversionE += e;
     potentialEnergy += e;
@@ -513,7 +529,6 @@ function computeAllForces(pos: Float64Array, frc: Float64Array): number {
   // 1-2 and 1-3 pairs are fully excluded; 1-4 pairs get SCALE_14 (0.5×).
   // Source: Cornell et al., JACS 117, 5179 (1995) — AMBER/OPLS convention.
   const cutoff = config.cutoff;
-  const pbcBoxSize = box.periodic ? box.size : undefined;
   const wc = wolfConst;
   const pairCallback = (i: number, j: number): void => {
     // Skip 1-2 (bonded) and 1-3 (angle) pairs

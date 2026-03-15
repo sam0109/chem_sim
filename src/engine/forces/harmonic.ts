@@ -4,6 +4,8 @@
 // Linear case:  V(θ) = kA * (1 + cosθ)   [UFF Eq. 10, n=1]
 // ==============================================================
 
+import type { Vector3Tuple } from '../../data/types';
+
 // Threshold above which θ₀ is treated as linear (radians).
 // 170° ≈ 2.967 rad. Source: Rappé et al., JACS 114, 10024 (1992).
 const LINEAR_THRESHOLD = (170 * Math.PI) / 180;
@@ -30,6 +32,7 @@ const LINEAR_THRESHOLD = (170 * Math.PI) / 180;
  * @param k          terminal atom 2
  * @param k_angle    force constant (eV/rad² for general; eV for linear)
  * @param theta0     equilibrium angle (radians)
+ * @param boxSize    box dimensions for PBC minimum image (undefined = no PBC)
  * @returns potential energy (eV)
  */
 export function harmonicAngleForce(
@@ -40,19 +43,32 @@ export function harmonicAngleForce(
   k: number,
   k_angle: number,
   theta0: number,
+  boxSize?: Vector3Tuple,
 ): number {
   const i3 = i * 3;
   const j3 = j * 3;
   const k3 = k * 3;
 
   // Vectors from central atom j
-  const rji_x = positions[i3] - positions[j3];
-  const rji_y = positions[i3 + 1] - positions[j3 + 1];
-  const rji_z = positions[i3 + 2] - positions[j3 + 2];
+  let rji_x = positions[i3] - positions[j3];
+  let rji_y = positions[i3 + 1] - positions[j3 + 1];
+  let rji_z = positions[i3 + 2] - positions[j3 + 2];
 
-  const rjk_x = positions[k3] - positions[j3];
-  const rjk_y = positions[k3 + 1] - positions[j3 + 1];
-  const rjk_z = positions[k3 + 2] - positions[j3 + 2];
+  let rjk_x = positions[k3] - positions[j3];
+  let rjk_y = positions[k3 + 1] - positions[j3 + 1];
+  let rjk_z = positions[k3 + 2] - positions[j3 + 2];
+
+  // Apply minimum image convention for periodic boundaries
+  // Reference: Allen & Tildesley, "Computer Simulation of Liquids", Ch. 1.5.2
+  if (boxSize) {
+    rji_x -= boxSize[0] * Math.round(rji_x / boxSize[0]);
+    rji_y -= boxSize[1] * Math.round(rji_y / boxSize[1]);
+    rji_z -= boxSize[2] * Math.round(rji_z / boxSize[2]);
+
+    rjk_x -= boxSize[0] * Math.round(rjk_x / boxSize[0]);
+    rjk_y -= boxSize[1] * Math.round(rjk_y / boxSize[1]);
+    rjk_z -= boxSize[2] * Math.round(rjk_z / boxSize[2]);
+  }
 
   const rji2 = rji_x * rji_x + rji_y * rji_y + rji_z * rji_z;
   const rjk2 = rjk_x * rjk_x + rjk_y * rjk_y + rjk_z * rjk_z;
